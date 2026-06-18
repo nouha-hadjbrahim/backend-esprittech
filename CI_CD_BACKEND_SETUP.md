@@ -66,6 +66,9 @@ Set `SONAR_HOST_URL` to your SonarQube server URL, for example:
 https://sonarqube.example.com
 ```
 
+The value must include `http://` or `https://`. `sonarqube.example.com:9000` by itself
+will fail in the Sonar scanner.
+
 ## Run Maven Locally
 
 ```bash

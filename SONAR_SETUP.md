@@ -51,6 +51,9 @@ Recommended values:
 - `SONAR_HOST_URL`: `http://your-sonarqube-host:9000`
 - `SONAR_TOKEN`: the token generated in SonarQube
 
+`SONAR_HOST_URL` must include the scheme. `localhost:9000` is not valid here; use
+`http://localhost:9000` or `https://...`.
+
 ## Notes
 
 - Do not commit tokens or passwords.

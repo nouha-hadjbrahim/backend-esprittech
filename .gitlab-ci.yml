@@ -54,7 +54,26 @@ sonarqube-backend:
     - job: test-backend
       artifacts: true
   script:
-    - mvn verify sonar:sonar -Dsonar.qualitygate.wait=true -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN"
+    - |
+      if [ -z "$SONAR_HOST_URL" ]; then
+        echo "SONAR_HOST_URL is not set."
+        exit 1
+      fi
+
+      case "$SONAR_HOST_URL" in
+        http://*|https://*) ;;
+        *)
+          echo "SONAR_HOST_URL must start with http:// or https://"
+          exit 1
+          ;;
+      esac
+
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "SONAR_TOKEN is not set."
+        exit 1
+      fi
+
+      mvn verify sonar:sonar -Dsonar.qualitygate.wait=true -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
