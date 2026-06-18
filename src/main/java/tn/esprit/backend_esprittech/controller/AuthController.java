@@ -15,9 +15,7 @@ import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.AuthService;
 import tn.esprit.backend_esprittech.service.UserService;
 
-/**
- * Endpoints publics d'authentification + profil de l'utilisateur courant.
- */
+
 @RestController
 @RequestMapping("/api/auth")
 @Tag(name = "Authentification", description = "Inscription, connexion, refresh et profil courant")

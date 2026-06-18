@@ -4,10 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-/**
- * Inscription self-service. La validation métier (correspondance avec le référentiel)
- * est faite dans le service ; ici on ne valide que le format.
- */
+
 public record RegisterRequest(
 
         @NotBlank(message = "Le nom est obligatoire")

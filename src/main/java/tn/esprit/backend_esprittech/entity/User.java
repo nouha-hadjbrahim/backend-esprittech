@@ -45,7 +45,6 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String email;
 
-    /** Identifiant institutionnel (CIN, matricule étudiant, code enseignant...). */
     @Column(nullable = false)
     private String identifiant;
 
@@ -83,7 +82,6 @@ public class User implements UserDetails {
         return List.of(new SimpleGrantedAuthority(role.name()));
     }
 
-    /** Spring Security utilise l'email comme "username". */
     @Override
     public String getUsername() {
         return email;
