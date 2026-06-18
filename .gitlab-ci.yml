@@ -10,6 +10,7 @@ variables:
   SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
   GIT_DEPTH: "0"
   DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
+  SONAR_HOST_URL: "http://sonarqube:9000"
 
 cache:
   key: ${CI_PROJECT_NAME}
@@ -50,9 +51,21 @@ test-backend:
 sonarqube-backend:
   stage: sonar
   extends: .maven-job
+  variables:
+    POSTGRES_DB: sonarqube
+    POSTGRES_USER: sonarqube
+    POSTGRES_PASSWORD: sonarqube
+    SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/sonarqube
+    SONAR_JDBC_USERNAME: sonarqube
+    SONAR_JDBC_PASSWORD: sonarqube
   needs:
     - job: test-backend
       artifacts: true
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+    - name: sonarqube:community
+      alias: sonarqube
   script:
     - |
       if [ -z "$SONAR_HOST_URL" ]; then

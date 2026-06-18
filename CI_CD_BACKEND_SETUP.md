@@ -37,10 +37,13 @@ This repository uses a GitLab CI/CD pipeline for:
 
 Add these variables in GitLab project settings under CI/CD > Variables:
 
-- `SONAR_HOST_URL`
 - `SONAR_TOKEN`
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
+
+`SONAR_HOST_URL` is set in `.gitlab-ci.yml` to `http://sonarqube:9000` for the
+pipeline SonarQube service. Only override it if you switch back to an external
+SonarQube server.
 
 ## How to Create a Docker Hub Access Token
 
@@ -68,6 +71,12 @@ https://sonarqube.example.com
 
 The value must include `http://` or `https://`. `sonarqube.example.com:9000` by itself
 will fail in the Sonar scanner.
+
+If you run SonarQube as a GitLab CI service in the pipeline, use:
+
+```text
+http://sonarqube:9000
+```
 
 ## Run Maven Locally
 
