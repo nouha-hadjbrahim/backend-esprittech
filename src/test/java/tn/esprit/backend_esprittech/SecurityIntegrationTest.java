@@ -22,9 +22,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "jwt.secret=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
-        "jwt.access-expiration=900000",
-        "jwt.refresh-expiration=604800000",
+        "app.jwt.secret=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
+        "app.jwt.expiration-ms=900000",
         "app.admin.email=admin@test.tn",
         "app.admin.password=TestAdmin123",
         "app.cors.allowed-origins=http://localhost:4200"

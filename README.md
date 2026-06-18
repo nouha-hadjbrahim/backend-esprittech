@@ -10,7 +10,7 @@ d'**affiliation** des enseignants.
 - Java 17, Spring Boot **3.4.1**, Spring Security 6
 - Spring Data JPA + **MySQL**
 - JWT via **jjwt 0.12.x** (access + refresh stateless)
-- Secrets dans `.env` (chargé par **spring-dotenv**) — jamais dans `application.yml`
+- Secrets dans `.env` (chargé par **spring-dotenv**) ou variables d'environnement — jamais en dur dans Java
 - Validation Jakarta, BCrypt, Lombok
 - Documentation **OpenAPI / Swagger UI** (springdoc)
 - Import CSV via Apache Commons CSV
@@ -19,7 +19,7 @@ d'**affiliation** des enseignants.
 
 ```
 config/      SecurityConfig, JwtAuthenticationFilter, JwtTokenProvider,
-             DotenvConfig, CorsConfig, CustomUserDetailsService, DataInitializer
+             JwtProperties, CorsConfig, CustomUserDetailsService, DataInitializer
 entity/      User, ReferentielUtilisateur, EquipeRecherche, AffiliationEnseignant
 enums/       Role, TypeUtilisateur, StatutAffiliation
 repository/  *Repository (Spring Data JPA)
@@ -40,14 +40,29 @@ mapper/      UserMapper, EquipeMapper
 ### 2. Configuration
 ```bash
 cp .env.example .env
-# Éditez .env : JWT_SECRET (>= 32 caractères !), identifiants MySQL...
+# Éditez .env : JWT_SECRET (>= 32 octets), JWT_EXPIRATION_MS, identifiants MySQL...
 ```
+`application.properties` mappe `JWT_SECRET` vers `app.jwt.secret` et
+`JWT_EXPIRATION_MS` vers `app.jwt.expiration-ms`. Le vrai `.env` est ignoré par Git ;
+ne committez que `.env.example`.
+
+Windows PowerShell, sans fichier `.env` :
+
+```powershell
+$env:JWT_SECRET = "change-this-to-a-secure-random-secret-at-least-32-characters"
+$env:JWT_EXPIRATION_MS = "86400000"
+```
+
 La base est créée automatiquement (`createDatabaseIfNotExist=true`) et le schéma
 généré par Hibernate (`ddl-auto=update`).
 
+### SonarQube
+See [SONAR_SETUP.md](./SONAR_SETUP.md) for local SonarQube startup, token creation,
+and GitLab CI/CD variable setup.
+
 ### 3. Lancer
 ```bash
-./mvnw spring-boot:run        # Windows : mvnw.cmd spring-boot:run
+./mvnw clean spring-boot:run        # Windows : mvnw.cmd clean spring-boot:run
 ```
 Au premier démarrage, un **compte admin** est créé :
 `ADMIN_EMAIL` / `ADMIN_PASSWORD` (défaut `admin@esprittech.tn` / `Admin@1234`).
@@ -115,6 +130,8 @@ curl -X POST http://localhost:8080/api/auth/register \
   signature/expiration et rejette les refresh tokens pour l'accès aux ressources.
 - Le refresh token est un JWT signé portant le claim `type=refresh` (stratégie
   stateless ; pour une révocation fine, basculer vers une table dédiée).
-- `JWT_SECRET` doit faire **au moins 32 octets** (sinon l'application refuse de démarrer).
+- `JWT_SECRET` doit être non vide et faire **au moins 32 octets** pour HS256.
+  Si la valeur manque ou est trop courte, l'application refuse de démarrer avec
+  un message indiquant de définir `JWT_SECRET` dans l'environnement ou `.env`.
 - En production : remplacer `ddl-auto=update` par une migration (Flyway/Liquibase),
   changer le mot de passe admin, restreindre les origines CORS.

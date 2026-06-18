@@ -38,3 +38,5 @@ build/
 
 ### Claude Code ###
 .claude/
+.sonar/
+.m2/

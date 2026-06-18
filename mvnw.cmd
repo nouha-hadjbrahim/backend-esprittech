@@ -89,10 +89,11 @@ if (-not (Test-Path -Path $MAVEN_M2_PATH)) {
 }
 
 $MAVEN_WRAPPER_DISTS = $null
-if ((Get-Item $MAVEN_M2_PATH).Target[0] -eq $null) {
+$MAVEN_M2_ITEM = Get-Item $MAVEN_M2_PATH
+if ($null -eq $MAVEN_M2_ITEM.Target -or $MAVEN_M2_ITEM.Target.Count -eq 0 -or $null -eq $MAVEN_M2_ITEM.Target[0]) {
   $MAVEN_WRAPPER_DISTS = "$MAVEN_M2_PATH/wrapper/dists"
 } else {
-  $MAVEN_WRAPPER_DISTS = (Get-Item $MAVEN_M2_PATH).Target[0] + "/wrapper/dists"
+  $MAVEN_WRAPPER_DISTS = $MAVEN_M2_ITEM.Target[0] + "/wrapper/dists"
 }
 
 $MAVEN_HOME_PARENT = "$MAVEN_WRAPPER_DISTS/$distributionUrlNameMain"
@@ -175,11 +176,21 @@ if (!$actualDistributionDir) {
 
 Write-Verbose "Found extracted Maven distribution directory: $actualDistributionDir"
 Rename-Item -Path "$TMP_DOWNLOAD_DIR/$actualDistributionDir" -NewName $MAVEN_HOME_NAME | Out-Null
+$MAVEN_HOME_SOURCE = "$TMP_DOWNLOAD_DIR/$MAVEN_HOME_NAME"
 try {
-  Move-Item -Path "$TMP_DOWNLOAD_DIR/$MAVEN_HOME_NAME" -Destination $MAVEN_HOME_PARENT | Out-Null
+  Move-Item -Path "$MAVEN_HOME_SOURCE" -Destination $MAVEN_HOME_PARENT | Out-Null
 } catch {
   if (! (Test-Path -Path "$MAVEN_HOME" -PathType Container)) {
-    Write-Error "fail to move MAVEN_HOME"
+    $moveError = $_.Exception.Message
+    try {
+      New-Item -Itemtype Directory -Path "$MAVEN_HOME" -Force | Out-Null
+      Copy-Item -Path "$MAVEN_HOME_SOURCE/*" -Destination "$MAVEN_HOME" -Recurse -Force | Out-Null
+    } catch {
+      Write-Error "fail to move MAVEN_HOME: $moveError; copy fallback failed: $($_.Exception.Message)"
+    }
+    if (! (Test-Path -Path "$MAVEN_HOME/bin/$MVN_CMD" -PathType Leaf)) {
+      Write-Error "fail to move MAVEN_HOME: $moveError"
+    }
   }
 } finally {
   try { Remove-Item $TMP_DOWNLOAD_DIR -Recurse -Force | Out-Null }
