@@ -67,9 +67,24 @@ docker-build-push:
     - job: package-backend
       artifacts: true
   script:
+    # Create a date-based backend image tag, example: backendSpring-20260618
+    - TODAY_DATE=$(date +%Y%m%d)
+    - BACKEND_DATE_TAG="backendSpring-${TODAY_DATE}"
+    - echo "Backend date image tag is $BACKEND_DATE_TAG"
+
+    # Login to Docker Hub
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - docker build -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -t "$DOCKER_IMAGE_NAME:latest" .
+
+    # Build image with 3 tags: commit SHA, latest, and backendSpring-date
+    - docker build
+      -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+      -t "$DOCKER_IMAGE_NAME:latest"
+      -t "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
+      .
+
+    # Push all tags
     - docker push "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
     - docker push "$DOCKER_IMAGE_NAME:latest"
+    - docker push "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
