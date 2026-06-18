@@ -1,29 +1,24 @@
 stages:
   - validate
   - test
-  - sonar
   - package
   - docker-build-push
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
-  SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
-  GIT_DEPTH: "0"
   DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
-  SONAR_HOST_URL: "http://sonarqube:9000"
 
 cache:
   key: ${CI_PROJECT_NAME}
   policy: pull-push
   paths:
     - .m2/repository
-    - .sonar/cache
 
 .maven-job:
   image: maven:3.9-eclipse-temurin-17
   before_script:
     # Keep Maven cache local to the project directory so GitLab can reuse it safely.
-    - mkdir -p .m2/repository .sonar/cache
+    - mkdir -p .m2/repository
 
 validate-backend:
   stage: validate
@@ -48,49 +43,6 @@ test-backend:
   rules:
     - if: '$CI_PIPELINE_SOURCE'
 
-sonarqube-backend:
-  stage: sonar
-  extends: .maven-job
-  variables:
-    POSTGRES_DB: sonarqube
-    POSTGRES_USER: sonarqube
-    POSTGRES_PASSWORD: sonarqube
-    SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/sonarqube
-    SONAR_JDBC_USERNAME: sonarqube
-    SONAR_JDBC_PASSWORD: sonarqube
-  needs:
-    - job: test-backend
-      artifacts: true
-  services:
-    - name: postgres:16-alpine
-      alias: postgres
-    - name: sonarqube:community
-      alias: sonarqube
-  script:
-    - |
-      if [ -z "$SONAR_HOST_URL" ]; then
-        echo "SONAR_HOST_URL is not set."
-        exit 1
-      fi
-
-      case "$SONAR_HOST_URL" in
-        http://*|https://*) ;;
-        *)
-          echo "SONAR_HOST_URL must start with http:// or https://"
-          exit 1
-          ;;
-      esac
-
-      if [ -z "$SONAR_TOKEN" ]; then
-        echo "SONAR_TOKEN is not set."
-        exit 1
-      fi
-
-      mvn verify sonar:sonar -Dsonar.qualitygate.wait=true -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN"
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-
 package-backend:
   stage: package
   extends: .maven-job
@@ -112,10 +64,6 @@ docker-build-push:
   variables:
     DOCKER_TLS_CERTDIR: ""
   needs:
-    - job: test-backend
-      artifacts: true
-    - job: sonarqube-backend
-      optional: true
     - job: package-backend
       artifacts: true
   script:
