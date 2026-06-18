@@ -1,0 +1,75 @@
+stages:
+  - validate
+  - test
+  - package
+  - docker-build-push
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
+
+cache:
+  key: ${CI_PROJECT_NAME}
+  policy: pull-push
+  paths:
+    - .m2/repository
+
+.maven-job:
+  image: maven:3.9-eclipse-temurin-17
+  before_script:
+    # Keep Maven cache local to the project directory so GitLab can reuse it safely.
+    - mkdir -p .m2/repository
+
+validate-backend:
+  stage: validate
+  extends: .maven-job
+  script:
+    - mvn validate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE'
+
+test-backend:
+  stage: test
+  extends: .maven-job
+  script:
+    - mvn clean verify
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - target/
+    reports:
+      junit: target/surefire-reports/*.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE'
+
+package-backend:
+  stage: package
+  extends: .maven-job
+  script:
+    - mvn clean package -DskipTests
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - target/*.jar
+  rules:
+    - if: '$CI_PIPELINE_SOURCE'
+
+docker-build-push:
+  stage: docker-build-push
+  image: docker:27
+  services:
+    - name: docker:27-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  needs:
+    - job: package-backend
+      artifacts: true
+  script:
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -t "$DOCKER_IMAGE_NAME:latest" .
+    - docker push "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+    - docker push "$DOCKER_IMAGE_NAME:latest"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
