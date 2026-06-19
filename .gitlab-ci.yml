@@ -11,9 +11,9 @@ stages:
   - validate
   - test
   - dependency-scan
+  - coverage-gate
   - sonarqube
   - package
-  # Docker publishing stays disabled until image delivery is ready.
   # - docker-build-push
 
 variables:
@@ -74,17 +74,58 @@ dependency-check-maven:
     paths:
       - target/dependency-check-report/
 
+coverage-gate:
+  stage: coverage-gate
+  extends: .maven-job
+  dependencies:
+    - test-backend
+  script:
+    - |
+      echo "Checking JaCoCo coverage threshold: minimum 80%"
+
+      REPORT="target/site/jacoco/jacoco.xml"
+
+      if [ ! -f "$REPORT" ]; then
+        echo "ERROR: JaCoCo report not found at $REPORT"
+        exit 1
+      fi
+
+      COUNTER=$(grep -o '<counter type="INSTRUCTION" missed="[0-9]*" covered="[0-9]*"' "$REPORT" | tail -1)
+
+      MISSED=$(echo "$COUNTER" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
+      COVERED=$(echo "$COUNTER" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
+
+      TOTAL=$((MISSED + COVERED))
+
+      if [ "$TOTAL" -eq 0 ]; then
+        echo "ERROR: No coverage data found."
+        exit 1
+      fi
+
+      COVERAGE=$(awk "BEGIN { printf \"%.2f\", ($COVERED / $TOTAL) * 100 }")
+
+      echo "Instruction coverage: $COVERAGE%"
+
+      awk "BEGIN { exit !($COVERAGE >= 80) }" || {
+        echo "ERROR: Coverage is below 80%. Merge blocked."
+        exit 1
+      }
+
+      echo "Coverage is >= 80%. OK."
+
 sonarqube-analysis:
   stage: sonarqube
   extends: .maven-job
   dependencies:
     - test-backend
   script:
-    # The Quality Gate threshold, including coverage >= 80%, is configured in SonarQube.
+    # SonarCloud checks its available Quality Gate. The custom coverage >= 80% rule is enforced separately by the coverage-gate job.
     - >
       mvn sonar:sonar
       -Dsonar.host.url="$SONAR_HOST_URL"
       -Dsonar.token="$SONAR_TOKEN"
+      -Dsonar.projectKey="$SONAR_PROJECT_KEY"
+      -Dsonar.organization="$SONAR_ORGANIZATION"
       -Dsonar.qualitygate.wait=true
       -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
