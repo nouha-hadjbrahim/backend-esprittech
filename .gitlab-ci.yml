@@ -22,13 +22,12 @@ cache:
   policy: pull-push
   paths:
     - .m2/repository
-    - .dependency-check-data
+    - .trivycache
 
 .maven-job:
   image: maven:3.9-eclipse-temurin-17
   before_script:
     - mkdir -p .m2/repository
-    - mkdir -p .dependency-check-data
 
 validate-backend:
   stage: validate
@@ -49,33 +48,27 @@ test-backend:
     reports:
       junit: target/surefire-reports/*.xml
 
-dependency-check-maven:
+dependency-scan-backend:
   stage: dependency-scan
-  extends: .maven-job
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+    TRIVY_NO_PROGRESS: "true"
   script:
-    # OWASP Dependency-Check scans Maven dependencies.
-    # failBuildOnCVSS=7 blocks HIGH and CRITICAL vulnerable dependencies.
-    # NVD_API_KEY must be stored in GitLab CI/CD variables, not in this file.
-    # Extra NVD options reduce timeout/rate-limit failures during the first database update.
-    - mkdir -p target/dependency-check-report
-    - >
-      mvn -DskipTests
-      org.owasp:dependency-check-maven:12.1.0:check
-      -DfailBuildOnCVSS=7
-      -Dformats=HTML,JSON,XML
-      -Dodc.outputDirectory=target/dependency-check-report
-      -DdataDirectory="$CI_PROJECT_DIR/.dependency-check-data"
-      -DnvdApiKeyEnvironmentVariable=NVD_API_KEY
-      -DnvdValidForHours=24
-      -DnvdMaxRetryCount=20
-      -DnvdApiDelay=6000
-      -DnvdApiResultsPerPage=1000
-      -DprettyPrint=true
+    # Trivy scans Maven dependency manifests and the checked-out backend filesystem.
+    # HIGH and CRITICAL dependency vulnerabilities block the pipeline.
+    - mkdir -p target/trivy
+    - trivy --version
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --format table --output target/trivy/dependency-scan.txt .
+    - cat target/trivy/dependency-scan.txt
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table .
   artifacts:
     when: always
     expire_in: 1 week
     paths:
-      - target/dependency-check-report/
+      - target/trivy/
 
 coverage-gate:
   stage: coverage-gate
