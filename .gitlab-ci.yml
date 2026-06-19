@@ -27,7 +27,8 @@ cache:
 .maven-job:
   image: maven:3.9-eclipse-temurin-17
   before_script:
-    - mkdir -p .m2/repository .dependency-check-data
+    - mkdir -p .m2/repository
+    - mkdir -p .dependency-check-data
 
 validate-backend:
   stage: validate
@@ -52,14 +53,23 @@ dependency-check-maven:
   stage: dependency-scan
   extends: .maven-job
   script:
+    # OWASP Dependency-Check scans Maven dependencies.
+    # failBuildOnCVSS=7 blocks HIGH and CRITICAL vulnerable dependencies.
+    # NVD_API_KEY must be stored in GitLab CI/CD variables, not in this file.
+    # Extra NVD options reduce timeout/rate-limit failures during the first database update.
+    - mkdir -p target/dependency-check-report
     - >
       mvn -DskipTests
       org.owasp:dependency-check-maven:12.1.0:check
       -DfailBuildOnCVSS=7
-      -DnvdApiKeyEnvironmentVariable=NVD_API_KEY
-      -DdataDirectory="$CI_PROJECT_DIR/.dependency-check-data"
-      -DoutputDirectory=target/dependency-check-report
       -Dformats=HTML,JSON,XML
+      -Dodc.outputDirectory=target/dependency-check-report
+      -DdataDirectory="$CI_PROJECT_DIR/.dependency-check-data"
+      -DnvdApiKeyEnvironmentVariable=NVD_API_KEY
+      -DnvdValidForHours=24
+      -DnvdMaxRetryCount=20
+      -DnvdApiDelay=6000
+      -DnvdApiResultsPerPage=1000
       -DprettyPrint=true
   artifacts:
     when: always
