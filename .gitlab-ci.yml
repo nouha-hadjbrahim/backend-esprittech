@@ -10,7 +10,7 @@ workflow:
 stages:
   - validate
   - test
-  - xray
+  - dependency-scan
   - sonarqube
   - package
   # Docker publishing stays disabled until image delivery is ready.
@@ -56,30 +56,23 @@ test-backend:
     reports:
       junit: target/surefire-reports/*.xml
 
-xray-dependency-scan:
-  stage: xray
+dependency-check-maven:
+  stage: dependency-scan
   extends: .maven-job
   script:
-    # These GitLab CI/CD variables must be configured in project/group settings.
-    - |
-      if [ -z "$JF_URL" ] || [ -z "$JF_ACCESS_TOKEN" ] || [ -z "$XRAY_WATCHES" ]; then
-        echo "JF_URL, JF_ACCESS_TOKEN, and XRAY_WATCHES GitLab CI variables are required."
-        exit 1
-      fi
-    # Install JFrog CLI in the Maven image, then scan Maven dependencies with the configured Xray watches.
-    - |
-      if ! command -v curl >/dev/null 2>&1; then
-        apt-get update
-        apt-get install -y --no-install-recommends curl ca-certificates
-      fi
-      if ! command -v jf >/dev/null 2>&1; then
-        curl -fL https://install-cli.jfrog.io | sh
-      fi
-    - jf --version
-    - jf config add gitlab-ci --url="$JF_URL" --access-token="$JF_ACCESS_TOKEN" --interactive=false
-    - mvn -DskipTests dependency:go-offline
-    # --fail=true makes matching Xray watch/fail-rule violations block the pipeline.
-    - jf audit --mvn --server-id=gitlab-ci --watches="$XRAY_WATCHES" --fail=true
+    # failBuildOnCVSS=7 blocks HIGH and CRITICAL vulnerable dependencies.
+    - >
+      mvn -DskipTests
+      org.owasp:dependency-check-maven:12.1.0:check
+      -DfailBuildOnCVSS=7
+      -Dformat=HTML,JSON,XML
+      -Dodc.outputDirectory=target/dependency-check-report
+      -DprettyPrint=true
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - target/dependency-check-report/
 
 sonarqube-analysis:
   stage: sonarqube
