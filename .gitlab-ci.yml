@@ -48,22 +48,33 @@ test-backend:
     reports:
       junit: target/surefire-reports/*.xml
 
-dependency-scan-backend:
+dependency-scan-trivy:
   stage: dependency-scan
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
+  extends: .maven-job
   variables:
     TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
-    TRIVY_NO_PROGRESS: "true"
-  script:
-    # Trivy scans Maven dependency manifests and the checked-out backend filesystem.
-    # HIGH and CRITICAL dependency vulnerabilities block the pipeline.
+  before_script:
+    - mkdir -p .m2/repository
+    - mkdir -p .trivycache
     - mkdir -p target/trivy
-    - trivy --version
-    - trivy fs --scanners vuln --severity HIGH,CRITICAL --format table --output target/trivy/dependency-scan.txt .
-    - cat target/trivy/dependency-scan.txt
-    - trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table .
+    - apt-get update
+    - apt-get install -y wget
+    - wget -qO- https://github.com/aquasecurity/trivy/releases/download/v0.57.1/trivy_0.57.1_Linux-64bit.tar.gz | tar zx
+    - chmod +x trivy
+    - ./trivy --version
+  script:
+    # Populate Maven local cache first so Trivy does not call Maven Central directly during scan.
+    - mvn -DskipTests dependency:go-offline dependency:copy-dependencies
+
+    # Make Maven local cache visible from the default Maven user path too.
+    - mkdir -p "$HOME/.m2"
+    - ln -sfn "$CI_PROJECT_DIR/.m2/repository" "$HOME/.m2/repository"
+
+    # Generate a readable report without contacting Maven repositories.
+    - ./trivy fs --scanners vuln --severity HIGH,CRITICAL --offline-scan --format table --output target/trivy/dependency-scan.txt .
+
+    # Block the pipeline if HIGH or CRITICAL vulnerabilities are found.
+    - ./trivy fs --scanners vuln --severity HIGH,CRITICAL --offline-scan --exit-code 1 --no-progress .
   artifacts:
     when: always
     expire_in: 1 week
