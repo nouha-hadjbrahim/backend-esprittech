@@ -1,6 +1,3 @@
-# Run CI only where it protects main:
-# - Merge Request pipelines targeting main
-# - Push pipelines created by commits merged/pushed to main
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
@@ -17,24 +14,20 @@ stages:
   # - docker-build-push
 
 variables:
-  # Reuse Maven dependencies between jobs and pipelines.
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
-  # SonarQube needs full history for accurate blame and MR decoration.
   GIT_DEPTH: "0"
-  # Keep the Docker image name for the future disabled job.
-  # DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
 
 cache:
   key: ${CI_PROJECT_NAME}
   policy: pull-push
   paths:
     - .m2/repository
+    - .dependency-check-data
 
 .maven-job:
   image: maven:3.9-eclipse-temurin-17
   before_script:
-    # Keep Maven cache local to the project directory so GitLab can reuse it.
-    - mkdir -p .m2/repository
+    - mkdir -p .m2/repository .dependency-check-data
 
 validate-backend:
   stage: validate
@@ -46,7 +39,6 @@ test-backend:
   stage: test
   extends: .maven-job
   script:
-    # JaCoCo is bound to Maven verify in pom.xml and writes target/site/jacoco/jacoco.xml.
     - mvn clean verify
   artifacts:
     when: always
@@ -60,13 +52,14 @@ dependency-check-maven:
   stage: dependency-scan
   extends: .maven-job
   script:
-    # failBuildOnCVSS=7 blocks HIGH and CRITICAL vulnerable dependencies.
     - >
       mvn -DskipTests
       org.owasp:dependency-check-maven:12.1.0:check
       -DfailBuildOnCVSS=7
-      -Dformat=HTML,JSON,XML
-      -Dodc.outputDirectory=target/dependency-check-report
+      -DnvdApiKeyEnvironmentVariable=NVD_API_KEY
+      -DdataDirectory="$CI_PROJECT_DIR/.dependency-check-data"
+      -DoutputDirectory=target/dependency-check-report
+      -Dformats=HTML,JSON,XML
       -DprettyPrint=true
   artifacts:
     when: always
@@ -81,7 +74,7 @@ coverage-gate:
     - test-backend
   script:
     - |
-      echo "Checking JaCoCo coverage threshold: minimum 80%"
+      echo "Checking JaCoCo instruction coverage threshold: minimum 80%"
 
       REPORT="target/site/jacoco/jacoco.xml"
 
@@ -90,15 +83,14 @@ coverage-gate:
         exit 1
       fi
 
-      COUNTER=$(grep -o '<counter type="INSTRUCTION" missed="[0-9]*" covered="[0-9]*"' "$REPORT" | tail -1)
+      COUNTER=$(grep -o '<counter type="INSTRUCTION" missed="[0-9]*" covered="[0-9]*"' "$REPORT" | tail -n 1)
 
       MISSED=$(echo "$COUNTER" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
       COVERED=$(echo "$COUNTER" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
-
       TOTAL=$((MISSED + COVERED))
 
       if [ "$TOTAL" -eq 0 ]; then
-        echo "ERROR: No coverage data found."
+        echo "ERROR: No JaCoCo instruction coverage data found."
         exit 1
       fi
 
@@ -119,7 +111,7 @@ sonarqube-analysis:
   dependencies:
     - test-backend
   script:
-    # SonarCloud checks its available Quality Gate. The custom coverage >= 80% rule is enforced separately by the coverage-gate job.
+    # SonarCloud checks its available Quality Gate. Coverage >= 80% is enforced by coverage-gate.
     - >
       mvn sonar:sonar
       -Dsonar.host.url="$SONAR_HOST_URL"
@@ -147,27 +139,19 @@ package-backend:
 #       command: ["--tls=false"]
 #   variables:
 #     DOCKER_TLS_CERTDIR: ""
+#     DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
 #   dependencies:
 #     - package-backend
 #   script:
-#     # Create a date-based backend image tag, example: backendSpring-20260618.
 #     - TODAY_DATE=$(date +%Y%m%d)
 #     - BACKEND_DATE_TAG="backendSpring-${TODAY_DATE}"
 #     - echo "Backend date image tag is $BACKEND_DATE_TAG"
-#
-#     # Login to Docker Hub.
 #     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-#
-#     # Build image with 3 tags: commit SHA, latest, and backendSpring-date.
 #     - docker build
 #       -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
 #       -t "$DOCKER_IMAGE_NAME:latest"
 #       -t "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
 #       .
-#
-#     # Push all tags.
 #     - docker push "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
 #     - docker push "$DOCKER_IMAGE_NAME:latest"
 #     - docker push "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
-#   rules:
-#     - if: '$CI_COMMIT_BRANCH == "main"'
