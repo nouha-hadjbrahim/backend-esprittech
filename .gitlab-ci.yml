@@ -1,12 +1,28 @@
+# Run CI only where it protects main:
+# - Merge Request pipelines targeting main
+# - Push pipelines created by commits merged/pushed to main
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - when: never
+
 stages:
   - validate
   - test
+  - xray
+  - sonarqube
   - package
-  - docker-build-push
+  # Docker publishing stays disabled until image delivery is ready.
+  # - docker-build-push
 
 variables:
+  # Reuse Maven dependencies between jobs and pipelines.
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
-  DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
+  # SonarQube needs full history for accurate blame and MR decoration.
+  GIT_DEPTH: "0"
+  # Keep the Docker image name for the future disabled job.
+  # DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
 
 cache:
   key: ${CI_PROJECT_NAME}
@@ -17,7 +33,7 @@ cache:
 .maven-job:
   image: maven:3.9-eclipse-temurin-17
   before_script:
-    # Keep Maven cache local to the project directory so GitLab can reuse it safely.
+    # Keep Maven cache local to the project directory so GitLab can reuse it.
     - mkdir -p .m2/repository
 
 validate-backend:
@@ -25,13 +41,12 @@ validate-backend:
   extends: .maven-job
   script:
     - mvn validate
-  rules:
-    - if: '$CI_PIPELINE_SOURCE'
 
 test-backend:
   stage: test
   extends: .maven-job
   script:
+    # JaCoCo is bound to Maven verify in pom.xml and writes target/site/jacoco/jacoco.xml.
     - mvn clean verify
   artifacts:
     when: always
@@ -40,8 +55,45 @@ test-backend:
       - target/
     reports:
       junit: target/surefire-reports/*.xml
-  rules:
-    - if: '$CI_PIPELINE_SOURCE'
+
+xray-dependency-scan:
+  stage: xray
+  extends: .maven-job
+  script:
+    # These GitLab CI/CD variables must be configured in project/group settings.
+    - |
+      if [ -z "$JF_URL" ] || [ -z "$JF_ACCESS_TOKEN" ] || [ -z "$XRAY_WATCHES" ]; then
+        echo "JF_URL, JF_ACCESS_TOKEN, and XRAY_WATCHES GitLab CI variables are required."
+        exit 1
+      fi
+    # Install JFrog CLI in the Maven image, then scan Maven dependencies with the configured Xray watches.
+    - |
+      if ! command -v curl >/dev/null 2>&1; then
+        apt-get update
+        apt-get install -y --no-install-recommends curl ca-certificates
+      fi
+      if ! command -v jf >/dev/null 2>&1; then
+        curl -fL https://install-cli.jfrog.io | sh
+      fi
+    - jf --version
+    - jf config add gitlab-ci --url="$JF_URL" --access-token="$JF_ACCESS_TOKEN" --interactive=false
+    - mvn -DskipTests dependency:go-offline
+    # --fail=true makes matching Xray watch/fail-rule violations block the pipeline.
+    - jf audit --mvn --server-id=gitlab-ci --watches="$XRAY_WATCHES" --fail=true
+
+sonarqube-analysis:
+  stage: sonarqube
+  extends: .maven-job
+  dependencies:
+    - test-backend
+  script:
+    # The Quality Gate threshold, including coverage >= 80%, is configured in SonarQube.
+    - >
+      mvn sonar:sonar
+      -Dsonar.host.url="$SONAR_HOST_URL"
+      -Dsonar.token="$SONAR_TOKEN"
+      -Dsonar.qualitygate.wait=true
+      -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
 package-backend:
   stage: package
@@ -52,39 +104,36 @@ package-backend:
     expire_in: 1 week
     paths:
       - target/*.jar
-  rules:
-    - if: '$CI_PIPELINE_SOURCE'
 
-docker-build-push:
-  stage: docker-build-push
-  image: docker:27
-  services:
-    - name: docker:27-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-  needs:
-    - job: package-backend
-      artifacts: true
-  script:
-    # Create a date-based backend image tag, example: backendSpring-20260618
-    - TODAY_DATE=$(date +%Y%m%d)
-    - BACKEND_DATE_TAG="backendSpring-${TODAY_DATE}"
-    - echo "Backend date image tag is $BACKEND_DATE_TAG"
-
-    # Login to Docker Hub
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-
-    # Build image with 3 tags: commit SHA, latest, and backendSpring-date
-    - docker build
-      -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
-      -t "$DOCKER_IMAGE_NAME:latest"
-      -t "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
-      .
-
-    # Push all tags
-    - docker push "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
-    - docker push "$DOCKER_IMAGE_NAME:latest"
-    - docker push "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+# docker-build-push:
+#   stage: docker-build-push
+#   image: docker:27
+#   services:
+#     - name: docker:27-dind
+#       command: ["--tls=false"]
+#   variables:
+#     DOCKER_TLS_CERTDIR: ""
+#   dependencies:
+#     - package-backend
+#   script:
+#     # Create a date-based backend image tag, example: backendSpring-20260618.
+#     - TODAY_DATE=$(date +%Y%m%d)
+#     - BACKEND_DATE_TAG="backendSpring-${TODAY_DATE}"
+#     - echo "Backend date image tag is $BACKEND_DATE_TAG"
+#
+#     # Login to Docker Hub.
+#     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+#
+#     # Build image with 3 tags: commit SHA, latest, and backendSpring-date.
+#     - docker build
+#       -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+#       -t "$DOCKER_IMAGE_NAME:latest"
+#       -t "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
+#       .
+#
+#     # Push all tags.
+#     - docker push "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+#     - docker push "$DOCKER_IMAGE_NAME:latest"
+#     - docker push "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "main"'
