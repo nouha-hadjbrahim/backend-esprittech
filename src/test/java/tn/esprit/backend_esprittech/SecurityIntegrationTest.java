@@ -17,17 +17,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+        "DB_URL=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+        "DB_USERNAME=sa",
+        "DB_PASSWORD=",
+        "SERVER_PORT=0",
+        "JWT_SECRET=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
+        "JWT_ACCESS_EXPIRATION=900000",
+        "JWT_REFRESH_EXPIRATION=604800000",
+        "ADMIN_EMAIL=admin@test.tn",
+        "ADMIN_PASSWORD=TestAdmin123",
+        "CORS_ALLOWED_ORIGINS=http://localhost:4200",
         "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "jwt.secret=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
-        "jwt.access-expiration=900000",
-        "jwt.refresh-expiration=604800000",
-        "app.admin.email=admin@test.tn",
-        "app.admin.password=TestAdmin123",
-        "app.cors.allowed-origins=http://localhost:4200"
+        "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 class SecurityIntegrationTest {
 
