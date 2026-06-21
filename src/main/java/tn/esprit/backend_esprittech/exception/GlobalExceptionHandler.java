@@ -37,6 +37,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Requête invalide", ex.getMessage());
     }
 
+    @ExceptionHandler(BusinessException.class)
+    public ProblemDetail handleBusiness(BusinessException ex) {
+        return build(HttpStatus.BAD_REQUEST, "Règle métier violée", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new LinkedHashMap<>();

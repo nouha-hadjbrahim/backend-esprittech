@@ -81,4 +81,26 @@ class GlobalExceptionHandlerTest {
         assertEquals("Erreur interne", pd.getTitle());
         assertEquals("boom", pd.getDetail());
     }
+
+    @Test
+    void handleBusiness_returns400() {
+        BusinessException ex = new BusinessException("business error");
+
+        ProblemDetail pd = handler.handleBusiness(ex);
+
+        assertEquals(400, pd.getStatus());
+        assertEquals("Règle métier violée", pd.getTitle());
+        assertEquals("business error", pd.getDetail());
+    }
+
+    @Test
+    void handleNotFound_returns404() {
+        ResourceNotFoundException ex = new ResourceNotFoundException("not found error");
+
+        ProblemDetail pd = handler.handleNotFound(ex);
+
+        assertEquals(404, pd.getStatus());
+        assertEquals("Ressource introuvable", pd.getTitle());
+        assertEquals("not found error", pd.getDetail());
+    }
 }
