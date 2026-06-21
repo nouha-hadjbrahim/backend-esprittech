@@ -20,7 +20,12 @@ public class JwtProperties {
     private String secret;
 
     /**
-     * Token lifetime in milliseconds.
+     * Access token lifetime in milliseconds (short-lived, e.g. 15 min).
      */
-    private long expirationMs = 86_400_000L;
+    private long expirationMs = 900_000L;
+
+    /**
+     * Refresh token lifetime in milliseconds (long-lived, e.g. 7 days).
+     */
+    private long refreshExpirationMs = 604_800_000L;
 }

@@ -21,7 +21,8 @@ public class UserMapper {
                 user.getRole(),
                 user.getTypeUtilisateur(),
                 user.getDepartement(),
-                user.isEnabled()
+                user.isEnabled(),
+                user.getCreatedAt()
         );
     }
 }

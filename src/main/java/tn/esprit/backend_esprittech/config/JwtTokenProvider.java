@@ -32,11 +32,13 @@ public class JwtTokenProvider {
 
     private final SecretKey key;
     private final long expirationMs;
+    private final long refreshExpirationMs;
 
     public JwtTokenProvider(JwtProperties properties) {
         byte[] secretBytes = validateSecret(properties.getSecret());
         this.key = Keys.hmacShaKeyFor(secretBytes);
         this.expirationMs = properties.getExpirationMs();
+        this.refreshExpirationMs = properties.getRefreshExpirationMs();
     }
 
     public String generateAccessToken(User user) {
@@ -44,7 +46,7 @@ public class JwtTokenProvider {
     }
 
     public String generateRefreshToken(User user) {
-        return buildToken(user, TYPE_REFRESH, expirationMs);
+        return buildToken(user, TYPE_REFRESH, refreshExpirationMs);
     }
 
     private byte[] validateSecret(String secret) {
