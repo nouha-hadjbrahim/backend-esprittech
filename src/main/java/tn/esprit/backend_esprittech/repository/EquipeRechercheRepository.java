@@ -1,0 +1,13 @@
+package tn.esprit.backend_esprittech.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import tn.esprit.backend_esprittech.entity.EquipeRecherche;
+
+@Repository
+public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche, Long> {
+
+    boolean existsByNom(String nom);
+
+    boolean existsByChefId(Long chefId);
+}

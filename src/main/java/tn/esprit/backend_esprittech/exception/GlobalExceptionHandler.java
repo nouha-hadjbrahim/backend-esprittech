@@ -22,6 +22,21 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
     }
 
+    @ExceptionHandler(ReferentielNotFoundException.class)
+    public ProblemDetail handleReferentielNotFound(ReferentielNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "Référentiel", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+    }
+
+    @ExceptionHandler(java.util.NoSuchElementException.class)
+    public ProblemDetail handleNoSuchElement(java.util.NoSuchElementException ex) {
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+    }
+
     @ExceptionHandler({BadCredentialsException.class, AuthenticationException.class})
     public ProblemDetail handleAuth(Exception ex) {
         return build(HttpStatus.UNAUTHORIZED, "Authentification", "Identifiants invalides");

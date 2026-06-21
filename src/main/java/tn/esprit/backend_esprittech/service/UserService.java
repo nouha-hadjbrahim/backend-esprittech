@@ -1,9 +1,19 @@
 package tn.esprit.backend_esprittech.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
+import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
+import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.util.NoSuchElementException;
@@ -12,9 +22,76 @@ import java.util.NoSuchElementException;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    /** Création directe d'un compte par l'admin (sans validation contre le référentiel). */
+    @Transactional
+    public User create(CreateUserRequest request) {
+        if (userRepository.existsByEmail(request.email())) {
+            throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
+        }
+        if (userRepository.existsByIdentifiant(request.identifiant())) {
+            throw new EmailAlreadyExistsException("Un compte existe déjà pour cet identifiant");
+        }
+
+        // ROLE_ETUDIANT -> ETUDIANT ; tous les autres rôles sont des profils enseignant
+        TypeUtilisateur type = (request.role() == Role.ROLE_ETUDIANT)
+                ? TypeUtilisateur.ETUDIANT : TypeUtilisateur.ENSEIGNANT;
+
+        User user = User.builder()
+                .nom(request.nom())
+                .prenom(request.prenom())
+                .email(request.email())
+                .identifiant(request.identifiant())
+                .password(passwordEncoder.encode(request.password()))
+                .role(request.role())
+                .typeUtilisateur(type)
+                .enabled(request.enabled())
+                .build();
+        return userRepository.save(user);
+    }
+
+    /** Liste paginée des utilisateurs, filtrée par recherche libre si fournie. */
+    public Page<User> list(String search, Pageable pageable) {
+        if (StringUtils.hasText(search)) {
+            return userRepository.search(search.trim(), pageable);
+        }
+        return userRepository.findAll(pageable);
+    }
+
+    /** Met à jour l'identité, le rôle et l'état d'activation d'un utilisateur. */
+    @Transactional
+    public User update(Long id, UpdateUserRequest request) {
+        User user = findById(id);
+
+        // L'email doit rester unique s'il change
+        if (!user.getEmail().equalsIgnoreCase(request.email())
+                && userRepository.existsByEmail(request.email())) {
+            throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
+        }
+
+        user.setNom(request.nom());
+        user.setPrenom(request.prenom());
+        user.setEmail(request.email());
+        user.setRole(request.role());
+        user.setEnabled(request.enabled());
+        return userRepository.save(user);
+    }
+
+    /** Supprime un utilisateur ; un admin ne peut pas supprimer son propre compte. */
+    @Transactional
+    public void delete(Long id) {
+        User user = findById(id);
+        User current = getCurrentUser();
+        if (current.getId().equals(user.getId())) {
+            throw new IllegalArgumentException("Vous ne pouvez pas supprimer votre propre compte");
+        }
+        userRepository.delete(user);
     }
 
     public User findById(Long id) {
