@@ -7,7 +7,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Équipe de recherche créée par l'admin. Chaque équipe possède un chef
@@ -22,7 +26,10 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EquipeRecherche {
+public class EquipeRecherche implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,13 +38,18 @@ public class EquipeRecherche {
     @Column(nullable = false)
     private String nom;
 
-    @Column(length = 1000)
+    @Column(nullable = false, length = 1000)
     private String description;
 
     /** Chef de l'équipe : un enseignant promu au rôle CHEF_EQUIPE. */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "chef_id", foreignKey = @ForeignKey(name = "fk_equipe_chef"))
     private User chef;
+
+    /** Membres de l'équipe. */
+    @Builder.Default
+    @OneToMany(mappedBy = "equipeRecherche", fetch = FetchType.LAZY)
+    private List<User> members = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -46,6 +58,24 @@ public class EquipeRecherche {
     void onCreate() {
         if (createdAt == null) {
             createdAt = Instant.now();
+        }
+    }
+
+    public void addMember(User user) {
+        if (user == null) {
+            return;
+        }
+        members.add(user);
+        user.setEquipeRecherche(this);
+    }
+
+    public void removeMember(User user) {
+        if (user == null) {
+            return;
+        }
+        members.remove(user);
+        if (user.getEquipeRecherche() == this) {
+            user.setEquipeRecherche(null);
         }
     }
 }

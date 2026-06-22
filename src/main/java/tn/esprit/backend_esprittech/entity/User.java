@@ -9,6 +9,9 @@ import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 
@@ -17,8 +20,10 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Compte applicatif créé par l'utilisateur lui-même après validation contre le référentiel.
- * Implémente {@link UserDetails} pour être directement exploitable par Spring Security.
+ * Compte applicatif créé par l'utilisateur lui-même après validation contre le
+ * référentiel.
+ * Implémente {@link UserDetails} pour être directement exploitable par Spring
+ * Security.
  */
 @Entity
 @Table(name = "users", uniqueConstraints = {
@@ -67,6 +72,11 @@ public class User implements UserDetails {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "equipe_id")
+    private EquipeRecherche equipeRecherche;
 
     @PrePersist
     void onCreate() {

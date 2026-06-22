@@ -1,92 +1,377 @@
 package tn.esprit.backend_esprittech.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import tn.esprit.backend_esprittech.dto.request.AssignChefRequest;
+import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
-import tn.esprit.backend_esprittech.enums.Role;
-import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
+import tn.esprit.backend_esprittech.exception.BusinessException;
+import tn.esprit.backend_esprittech.exception.GlobalExceptionHandler;
+import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.mapper.EquipeMapper;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.EquipeRechercheService;
 
+import java.util.Collections;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
 class EquipeControllerTest {
 
-    @Mock private EquipeRechercheService equipeService;
-    @Mock private EquipeMapper equipeMapper;
-    @Mock private UserMapper userMapper;
+    private MockMvc mockMvc;
 
-    @InjectMocks private EquipeController equipeController;
+    @Mock
+    private EquipeRechercheService equipeService;
 
-    private EquipeRecherche equipe;
-    private EquipeResponse equipeResponse;
-    private User membre;
-    private UserResponse userResponse;
+    @Mock
+    private EquipeMapper equipeMapper;
+
+    @Mock
+    private UserMapper userMapper;
+
+    @InjectMocks
+    private EquipeController controller;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
-    void setUp() {
-        equipe = EquipeRecherche.builder().id(1L).nom("AI Lab").build();
-        equipeResponse = new EquipeResponse(1L, "AI Lab", "desc", null, 1, null);
-        membre = User.builder()
-                .id(5L).nom("Prof").prenom("Test")
-                .email("prof@esprit.tn").identifiant("EA-5")
-                .role(Role.ROLE_CHEF_EQUIPE).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
-                .enabled(true).build();
-        userResponse = new UserResponse(5L, "Prof", "Test", "prof@esprit.tn",
-                "EA-5", Role.ROLE_CHEF_EQUIPE, TypeUtilisateur.ENSEIGNANT, null, true, null);
+    void setup() {
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+    }
+
+    // ================================================================
+    // GET /api/equipes  — listerEquipes
+    // ================================================================
+
+    @Test
+    void listerEquipes_withMultipleEquipes_returns200() throws Exception {
+        EquipeRecherche e1 = new EquipeRecherche();
+        EquipeRecherche e2 = new EquipeRecherche();
+        EquipeResponse r1 = mock(EquipeResponse.class);
+        EquipeResponse r2 = mock(EquipeResponse.class);
+
+        when(equipeService.listerToutes()).thenReturn(List.of(e1, e2));
+        when(equipeService.compterMembres(e1)).thenReturn(3);
+        when(equipeService.compterMembres(e2)).thenReturn(5);
+        when(equipeMapper.toResponse(e1, 3)).thenReturn(r1);
+        when(equipeMapper.toResponse(e2, 5)).thenReturn(r2);
+
+        mockMvc.perform(get("/api/equipes"))
+                .andExpect(status().isOk());
+
+        verify(equipeService).listerToutes();
+        verify(equipeService).compterMembres(e1);
+        verify(equipeService).compterMembres(e2);
+        verify(equipeMapper).toResponse(e1, 3);
+        verify(equipeMapper).toResponse(e2, 5);
     }
 
     @Test
-    void listerEquipes_returns200WithList() {
-        when(equipeService.listerToutes()).thenReturn(List.of(equipe));
-        when(equipeService.compterMembres(equipe)).thenReturn(1);
-        when(equipeMapper.toResponse(eq(equipe), anyInt())).thenReturn(equipeResponse);
+    void listerEquipes_withEmptyList_returns200AndEmptyBody() throws Exception {
+        when(equipeService.listerToutes()).thenReturn(Collections.emptyList());
 
-        ResponseEntity<List<EquipeResponse>> resp = equipeController.listerEquipes();
+        mockMvc.perform(get("/api/equipes"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
 
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertNotNull(resp.getBody());
-        assertEquals(1, resp.getBody().size());
-        assertEquals(equipeResponse, resp.getBody().get(0));
+        verify(equipeService).listerToutes();
+        verifyNoInteractions(equipeMapper);
     }
 
     @Test
-    void getEquipe_returns200() {
+    void listerEquipes_serviceThrows_returns500() throws Exception {
+        when(equipeService.listerToutes())
+                .thenThrow(new RuntimeException("DB error"));
+
+        mockMvc.perform(get("/api/equipes"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    // ================================================================
+    // GET /api/equipes/{id}  — getEquipe
+    // ================================================================
+
+    @Test
+    void getEquipe_existingId_returns200() throws Exception {
+        EquipeRecherche equipe = new EquipeRecherche();
+        EquipeResponse response = mock(EquipeResponse.class);
+
         when(equipeService.getEntite(1L)).thenReturn(equipe);
-        when(equipeService.compterMembres(equipe)).thenReturn(1);
-        when(equipeMapper.toResponse(eq(equipe), anyInt())).thenReturn(equipeResponse);
+        when(equipeService.compterMembres(equipe)).thenReturn(3);
+        when(equipeMapper.toResponse(equipe, 3)).thenReturn(response);
 
-        ResponseEntity<EquipeResponse> resp = equipeController.getEquipe(1L);
+        mockMvc.perform(get("/api/equipes/1"))
+                .andExpect(status().isOk());
 
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertEquals(equipeResponse, resp.getBody());
+        verify(equipeService).getEntite(1L);
+        verify(equipeService).compterMembres(equipe);
+        verify(equipeMapper).toResponse(equipe, 3);
     }
 
     @Test
-    void getMembres_returns200WithUsers() {
-        when(equipeService.getMembres(1L)).thenReturn(List.of(membre));
-        when(userMapper.toResponse(membre)).thenReturn(userResponse);
+    void getEquipe_notFound_returns404() throws Exception {
+        when(equipeService.getEntite(99L))
+                .thenThrow(new ResourceNotFoundException("Equipe introuvable"));
 
-        ResponseEntity<List<UserResponse>> resp = equipeController.getMembres(1L);
+        mockMvc.perform(get("/api/equipes/99"))
+                .andExpect(status().isNotFound());
 
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertNotNull(resp.getBody());
-        assertEquals(1, resp.getBody().size());
-        assertEquals(userResponse, resp.getBody().get(0));
+        verify(equipeService).getEntite(99L);
+    }
+
+    // ================================================================
+    // GET /api/equipes/{id}/membres  — getMembres
+    // ================================================================
+
+    @Test
+    void getMembres_existingId_returns200() throws Exception {
+        User u1 = new User();
+        User u2 = new User();
+        UserResponse ur1 = mock(UserResponse.class);
+        UserResponse ur2 = mock(UserResponse.class);
+
+        when(equipeService.getMembres(1L)).thenReturn(List.of(u1, u2));
+        when(userMapper.toResponse(u1)).thenReturn(ur1);
+        when(userMapper.toResponse(u2)).thenReturn(ur2);
+
+        mockMvc.perform(get("/api/equipes/1/membres"))
+                .andExpect(status().isOk());
+
+        verify(equipeService).getMembres(1L);
+        verify(userMapper).toResponse(u1);
+        verify(userMapper).toResponse(u2);
+    }
+
+    @Test
+    void getMembres_emptyTeam_returns200AndEmptyList() throws Exception {
+        when(equipeService.getMembres(1L)).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/equipes/1/membres"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(equipeService).getMembres(1L);
+        verifyNoInteractions(userMapper);
+    }
+
+    @Test
+    void getMembres_teamNotFound_returns404() throws Exception {
+        when(equipeService.getMembres(99L))
+                .thenThrow(new ResourceNotFoundException("Equipe introuvable"));
+
+        mockMvc.perform(get("/api/equipes/99/membres"))
+                .andExpect(status().isNotFound());
+
+        verify(equipeService).getMembres(99L);
+    }
+
+    // ================================================================
+    // POST /api/equipes  — create
+    // ================================================================
+
+    @Test
+    void create_validRequest_returns201() throws Exception {
+        CreateEquipeRechercheRequest request =
+                new CreateEquipeRechercheRequest("AI Lab", "Research on AI", null, null);
+        EquipeResponse response = mock(EquipeResponse.class);
+
+        when(equipeService.create(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/equipes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        verify(equipeService).create(any());
+    }
+
+    @Test
+    void create_duplicateName_returns400() throws Exception {
+        CreateEquipeRechercheRequest request =
+                new CreateEquipeRechercheRequest("AI Lab", "Desc", null, null);
+
+        when(equipeService.create(any()))
+                .thenThrow(new BusinessException("Nom déjà utilisé"));
+
+        mockMvc.perform(post("/api/equipes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(equipeService).create(any());
+    }
+
+    @Test
+    void create_serviceThrows_returns500() throws Exception {
+        CreateEquipeRechercheRequest request =
+                new CreateEquipeRechercheRequest("AI Lab", "Desc", null, null);
+
+        when(equipeService.create(any()))
+                .thenThrow(new RuntimeException("Unexpected error"));
+
+        mockMvc.perform(post("/api/equipes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError());
+
+        verify(equipeService).create(any());
+    }
+
+    // ================================================================
+    // PUT /api/equipes/{id}  — update
+    // ================================================================
+
+    @Test
+    void update_validRequest_returns200() throws Exception {
+        UpdateEquipeRechercheRequest request =
+                new UpdateEquipeRechercheRequest("AI Lab v2", "Updated desc", null, null);
+        EquipeResponse response = mock(EquipeResponse.class);
+
+        when(equipeService.update(eq(1L), any())).thenReturn(response);
+
+        mockMvc.perform(put("/api/equipes/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(equipeService).update(eq(1L), any());
+    }
+
+    @Test
+    void update_notFound_returns404() throws Exception {
+        UpdateEquipeRechercheRequest request =
+                new UpdateEquipeRechercheRequest("AI Lab v2", "Desc", null, null);
+
+        when(equipeService.update(eq(99L), any()))
+                .thenThrow(new ResourceNotFoundException("Equipe introuvable"));
+
+        mockMvc.perform(put("/api/equipes/99")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+
+        verify(equipeService).update(eq(99L), any());
+    }
+
+    @Test
+    void update_invalidBusiness_returns400() throws Exception {
+        UpdateEquipeRechercheRequest request =
+                new UpdateEquipeRechercheRequest("AI Lab v2", "Desc", null, null);
+
+        when(equipeService.update(eq(1L), any()))
+                .thenThrow(new BusinessException("Règle métier violée"));
+
+        mockMvc.perform(put("/api/equipes/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(equipeService).update(eq(1L), any());
+    }
+
+    // ================================================================
+    // DELETE /api/equipes/{id}  — delete
+    // ================================================================
+
+    @Test
+    void delete_existingId_returns204() throws Exception {
+        doNothing().when(equipeService).delete(1L);
+
+        mockMvc.perform(delete("/api/equipes/1"))
+                .andExpect(status().isNoContent());
+
+        verify(equipeService).delete(1L);
+    }
+
+    @Test
+    void delete_notFound_returns404() throws Exception {
+        doThrow(new ResourceNotFoundException("Equipe introuvable"))
+                .when(equipeService).delete(99L);
+
+        mockMvc.perform(delete("/api/equipes/99"))
+                .andExpect(status().isNotFound());
+
+        verify(equipeService).delete(99L);
+    }
+
+    // ================================================================
+    // PUT /api/equipes/{id}/chef  — assignerChef
+    // ================================================================
+
+    @Test
+    void assignerChef_validRequest_returns200() throws Exception {
+        EquipeRecherche equipe = new EquipeRecherche();
+        EquipeResponse response = mock(EquipeResponse.class);
+
+        when(equipeService.assignerChef(1L, 2L)).thenReturn(equipe);
+        when(equipeService.compterMembres(equipe)).thenReturn(10);
+        when(equipeMapper.toResponse(equipe, 10)).thenReturn(response);
+
+        mockMvc.perform(put("/api/equipes/1/chef")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AssignChefRequest(2L))))
+                .andExpect(status().isOk());
+
+        verify(equipeService).assignerChef(1L, 2L);
+        verify(equipeService).compterMembres(equipe);
+        verify(equipeMapper).toResponse(equipe, 10);
+    }
+
+    @Test
+    void assignerChef_teamNotFound_returns404() throws Exception {
+        when(equipeService.assignerChef(99L, 2L))
+                .thenThrow(new ResourceNotFoundException("Equipe introuvable"));
+
+        mockMvc.perform(put("/api/equipes/99/chef")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AssignChefRequest(2L))))
+                .andExpect(status().isNotFound());
+
+        verify(equipeService).assignerChef(99L, 2L);
+    }
+
+    @Test
+    void assignerChef_userNotFound_returns404() throws Exception {
+        when(equipeService.assignerChef(1L, 999L))
+                .thenThrow(new ResourceNotFoundException("Utilisateur introuvable"));
+
+        mockMvc.perform(put("/api/equipes/1/chef")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AssignChefRequest(999L))))
+                .andExpect(status().isNotFound());
+
+        verify(equipeService).assignerChef(1L, 999L);
+    }
+
+    @Test
+    void assignerChef_invalidBusiness_returns400() throws Exception {
+        when(equipeService.assignerChef(1L, 2L))
+                .thenThrow(new BusinessException("L'utilisateur n'est pas éligible"));
+
+        mockMvc.perform(put("/api/equipes/1/chef")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AssignChefRequest(2L))))
+                .andExpect(status().isBadRequest());
+
+        verify(equipeService).assignerChef(1L, 2L);
     }
 }
