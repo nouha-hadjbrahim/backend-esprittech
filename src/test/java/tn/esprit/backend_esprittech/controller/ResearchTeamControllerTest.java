@@ -47,7 +47,7 @@ class ResearchTeamControllerTest {
         @Test
         void createTeam_returns201() throws Exception {
                 CreateResearchTeamRequest request = new CreateResearchTeamRequest("AI", "Intelligence artificielle",
-                                "Research team", 1L, List.of());
+                                "Research team", null, List.of());
                 ResearchTeamResponse response = new ResearchTeamResponse(
                                 10L,
                                 "AI",
@@ -58,7 +58,7 @@ class ResearchTeamControllerTest {
 
                 when(researchTeamService.create(request)).thenReturn(response);
 
-                mockMvc.perform(post("/api/research-teams")
+                mockMvc.perform(post("/api/equipes")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
@@ -78,7 +78,7 @@ class ResearchTeamControllerTest {
 
                 when(researchTeamService.findById(10L)).thenReturn(response);
 
-                mockMvc.perform(get("/api/research-teams/10"))
+                mockMvc.perform(get("/api/equipes/10"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(10L));
         }
@@ -95,7 +95,7 @@ class ResearchTeamControllerTest {
 
                 when(researchTeamService.findAll()).thenReturn(List.of(response));
 
-                mockMvc.perform(get("/api/research-teams"))
+                mockMvc.perform(get("/api/equipes"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$[0].id").value(10L));
         }
@@ -112,7 +112,7 @@ class ResearchTeamControllerTest {
                 when(researchTeamService.update(eq(id), any(UpdateResearchTeamRequest.class)))
                                 .thenReturn(response);
 
-                mockMvc.perform(put("/api/research-teams/{id}", id)
+                mockMvc.perform(put("/api/equipes/{id}", id)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isOk());
@@ -125,7 +125,7 @@ class ResearchTeamControllerTest {
 
                 doNothing().when(researchTeamService).delete(id);
 
-                mockMvc.perform(delete("/api/research-teams/{id}", id))
+                mockMvc.perform(delete("/api/equipes/{id}", id))
                                 .andExpect(status().isNoContent());
         }
 }

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Objects;
 
 @Service
 public class ResearchTeamService {
@@ -36,12 +37,15 @@ public class ResearchTeamService {
 
     @Transactional
     public ResearchTeamResponse create(CreateResearchTeamRequest request) {
-        if (researchTeamRepository.existsByDomaineRecherche(request.domaineRecherche())) {
-            throw new BusinessException("Le domaine de recherche existe déjà");
+        if (researchTeamRepository.existsByNom(request.nom())) {
+            throw new BusinessException("Le nom de l'équipe existe déjà");
         }
 
-        User leader = findEnseignant(request.chefId(), "Chef introuvable");
-        ensureUserIsAvailableAsLeader(leader, null);
+        User leader = null;
+        if (request.chefId() != null) {
+            leader = findEnseignant(request.chefId(), "Chef introuvable");
+            ensureUserIsAvailableAsLeader(leader, null);
+        }
 
         ResearchTeam researchTeam = researchTeamMapper.toEntity(request);
         researchTeam.setLeader(leader);
@@ -55,8 +59,8 @@ public class ResearchTeamService {
     public ResearchTeamResponse update(Long id, UpdateResearchTeamRequest request) {
         ResearchTeam researchTeam = findTeam(id);
 
-        if (request.domaineRecherche() != null && researchTeamRepository.existsByDomaineRechercheAndIdNot(request.domaineRecherche(), id)) {
-            throw new BusinessException("Le domaine de recherche existe déjà");
+        if (request.nom() != null && researchTeamRepository.existsByNomAndIdNot(request.nom(), id)) {
+            throw new BusinessException("Le nom de l'équipe existe déjà");
         }
 
         User currentLeader = researchTeam.getLeader();
@@ -97,16 +101,18 @@ public class ResearchTeamService {
     public void delete(Long id) {
         ResearchTeam researchTeam = findTeam(id);
         clearMembers(researchTeam);
-        researchTeamRepository.delete(researchTeam);
+        researchTeamRepository.delete(Objects.requireNonNull(researchTeam, "researchTeam"));
     }
 
     private ResearchTeam findTeam(Long id) {
-        return researchTeamRepository.findById(id)
+        Long teamId = Objects.requireNonNull(id, "id");
+        return researchTeamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Equipe introuvable (id=" + id + ")"));
     }
 
     private User findEnseignant(Long id, String notFoundMessage) {
-        User user = userRepository.findById(id)
+        Long userId = Objects.requireNonNull(id, "id");
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + " (id=" + id + ")"));
         if (user.getRole() != Role.ROLE_ENSEIGNANT) {
             throw new BusinessException("Le chef et les membres doivent avoir le rôle ENSEIGNANT");
@@ -129,7 +135,7 @@ public class ResearchTeamService {
         }
 
         Set<Long> uniqueIds = new LinkedHashSet<>(memberIds);
-        if (uniqueIds.contains(leader.getId())) {
+        if (leader != null && uniqueIds.contains(leader.getId())) {
             throw new BusinessException("Le chef ne peut pas figurer dans la liste des membres");
         }
 
@@ -153,7 +159,7 @@ public class ResearchTeamService {
     }
 
     private void clearMembers(ResearchTeam researchTeam) {
-        List<User> existingMembers = new ArrayList<>(researchTeam.getMembers());
+        List<User> existingMembers = new ArrayList<>(Objects.requireNonNull(researchTeam, "researchTeam").getMembers());
         for (User user : existingMembers) {
             researchTeam.removeMember(user);
         }

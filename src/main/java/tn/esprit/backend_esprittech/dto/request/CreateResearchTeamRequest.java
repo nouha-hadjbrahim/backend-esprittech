@@ -1,8 +1,6 @@
 package tn.esprit.backend_esprittech.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-
 import java.util.List;
 
 public record CreateResearchTeamRequest(
@@ -16,7 +14,6 @@ public record CreateResearchTeamRequest(
         @NotBlank(message = "La description est obligatoire")
         String description,
 
-        @NotNull(message = "Le chef est obligatoire")
         Long chefId,
 
         List<Long> memberIds

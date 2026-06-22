@@ -21,7 +21,7 @@ import tn.esprit.backend_esprittech.service.ResearchTeamService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/research-teams")
+@RequestMapping("/api/equipes")
 @Tag(name = "Equipes de recherche", description = "Création, consultation, mise à jour et suppression des équipes")
 public class ResearchTeamController {
 

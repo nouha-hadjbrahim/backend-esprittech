@@ -22,7 +22,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "research_teams", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_research_teams_domaine_recherche", columnNames = "domaine_recherche")
+    @UniqueConstraint(name = "uk_research_teams_nom", columnNames = "nom")
 })
 @Getter
 @Setter
@@ -45,7 +45,7 @@ public class ResearchTeam {
     private String description;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "leader_id", nullable = false, unique = true)
+    @JoinColumn(name = "leader_id", unique = true)
     private User leader;
 
     @Builder.Default

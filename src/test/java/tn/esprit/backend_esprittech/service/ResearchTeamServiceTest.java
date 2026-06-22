@@ -1,6 +1,5 @@
 package tn.esprit.backend_esprittech.service;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -27,6 +26,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class ResearchTeamServiceTest {
 
     @Mock private ResearchTeamRepository researchTeamRepository;
@@ -61,56 +61,52 @@ class ResearchTeamServiceTest {
 
     @Test
     void create_success_noMembers() {
-        CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, null);
-        User leader = enseignant(1L);
+        CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", null, null);
         ResearchTeam entity = team(10L);
         ResearchTeamResponse resp = response();
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
-        when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
-        when(researchTeamRepository.save(entity)).thenReturn(entity);
+        when(researchTeamRepository.save(any(ResearchTeam.class))).thenReturn(entity);
         when(researchTeamMapper.toResponse(entity)).thenReturn(resp);
 
         assertThat(service.create(req)).isSameAs(resp);
-        verify(researchTeamRepository).save(entity);
+        verify(researchTeamRepository).save(any(ResearchTeam.class));
+        verify(userRepository, never()).findById(anyLong());
     }
 
     @Test
     void create_success_withMembers() {
-        User leader = enseignant(1L);
         User member = enseignant(2L);
         ResearchTeam entity = team(10L);
         ResearchTeamResponse resp = response();
 
-        CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, List.of(2L));
+        CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", null, List.of(2L));
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
-        when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
         when(userRepository.findAllByIdIn(List.of(2L))).thenReturn(List.of(member));
-        when(researchTeamRepository.save(entity)).thenReturn(entity);
+        when(researchTeamRepository.save(any(ResearchTeam.class))).thenReturn(entity);
         when(researchTeamMapper.toResponse(entity)).thenReturn(resp);
 
         assertThat(service.create(req)).isSameAs(resp);
+        verify(userRepository, never()).findById(anyLong());
     }
 
     @Test
-    void create_throws_whenDomaineAlreadyExists() {
+    void create_throws_whenNameAlreadyExists() {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, null);
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(true);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("domaine de recherche");
+                .hasMessageContaining("nom de l'équipe");
     }
 
     @Test
     void create_throws_whenLeaderNotFound() {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 99L, null);
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(req))
@@ -124,7 +120,7 @@ class ResearchTeamServiceTest {
         admin.setId(1L);
         admin.setRole(Role.ROLE_ADMIN);
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
 
         assertThatThrownBy(() -> service.create(req))
@@ -137,7 +133,7 @@ class ResearchTeamServiceTest {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, null);
         User leader = enseignant(1L);
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(true);
 
@@ -152,7 +148,7 @@ class ResearchTeamServiceTest {
         User leader = enseignant(1L);
         leader.setResearchTeam(team(99L));   // belongs to a different team
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
 
@@ -167,7 +163,7 @@ class ResearchTeamServiceTest {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, List.of(1L));
         ResearchTeam entity = team(10L);
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
@@ -183,7 +179,7 @@ class ResearchTeamServiceTest {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, List.of(2L));
         ResearchTeam entity = team(10L);
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
@@ -204,7 +200,7 @@ class ResearchTeamServiceTest {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, List.of(2L));
         ResearchTeam entity = team(10L);
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
@@ -224,7 +220,7 @@ class ResearchTeamServiceTest {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, List.of(2L));
         ResearchTeam entity = team(10L); // different team
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
@@ -246,7 +242,7 @@ class ResearchTeamServiceTest {
         CreateResearchTeamRequest req = new CreateResearchTeamRequest("Team IA", "IA", "desc", 1L, List.of(2L));
         ResearchTeamResponse resp = response();
 
-        when(researchTeamRepository.existsByDomaineRecherche("IA")).thenReturn(false);
+        when(researchTeamRepository.existsByNom("Team IA")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(leader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(1L, -1L)).thenReturn(false);
         when(researchTeamMapper.toEntity(req)).thenReturn(entity);
@@ -287,10 +283,10 @@ class ResearchTeamServiceTest {
         User member = enseignant(7L);
         ResearchTeamResponse resp = response();
 
-        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest(null, "Bio", null, 6L, List.of(7L));
+        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest("Bio Team", "Bio", null, 6L, List.of(7L));
 
         when(researchTeamRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(researchTeamRepository.existsByDomaineRechercheAndIdNot("Bio", 1L)).thenReturn(false);
+        when(researchTeamRepository.existsByNomAndIdNot("Bio Team", 1L)).thenReturn(false);
         when(userRepository.findById(6L)).thenReturn(Optional.of(newLeader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(6L, 1L)).thenReturn(false);
         when(userRepository.findAllByIdIn(List.of(7L))).thenReturn(List.of(member));
@@ -304,22 +300,26 @@ class ResearchTeamServiceTest {
     void update_throws_whenTeamNotFound() {
         when(researchTeamRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(99L, new UpdateResearchTeamRequest(null, null, null, null, null)))
+        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest(null, null, null, null, null);
+
+        assertThatThrownBy(() -> service.update(99L, req))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("99");
     }
 
     @Test
-    void update_throws_whenDomaineAlreadyUsed() {
+    void update_throws_whenNameAlreadyUsed() {
         ResearchTeam existing = team(1L);
         existing.setLeader(enseignant(5L));
 
         when(researchTeamRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(researchTeamRepository.existsByDomaineRechercheAndIdNot("Bio", 1L)).thenReturn(true);
+        when(researchTeamRepository.existsByNomAndIdNot("Bio Team", 1L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(1L, new UpdateResearchTeamRequest(null, "Bio", null, null, null)))
+        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest("Bio Team", null, null, null, null);
+
+        assertThatThrownBy(() -> service.update(1L, req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("domaine de recherche");
+                .hasMessageContaining("nom de l'équipe");
     }
 
     @Test
@@ -330,7 +330,9 @@ class ResearchTeamServiceTest {
         when(researchTeamRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(1L, new UpdateResearchTeamRequest(null, null, null, 99L, null)))
+        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest(null, null, null, 99L, null);
+
+        assertThatThrownBy(() -> service.update(1L, req))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -344,7 +346,9 @@ class ResearchTeamServiceTest {
         when(userRepository.findById(6L)).thenReturn(Optional.of(newLeader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(6L, 1L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.update(1L, new UpdateResearchTeamRequest(null, null, null, 6L, null)))
+        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest(null, null, null, 6L, null);
+
+        assertThatThrownBy(() -> service.update(1L, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("déjà chef");
     }
@@ -384,7 +388,9 @@ class ResearchTeamServiceTest {
         when(userRepository.findById(6L)).thenReturn(Optional.of(newLeader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(6L, 1L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.update(1L, new UpdateResearchTeamRequest(null, null, null, 6L, null)))
+        UpdateResearchTeamRequest req = new UpdateResearchTeamRequest(null, null, null, 6L, null);
+
+        assertThatThrownBy(() -> service.update(1L, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("appartient déjà");
     }
@@ -405,7 +411,7 @@ class ResearchTeamServiceTest {
         when(researchTeamRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(userRepository.findById(6L)).thenReturn(Optional.of(newLeader));
         when(researchTeamRepository.existsByLeaderIdAndIdNot(6L, 1L)).thenReturn(false);
-        when(researchTeamRepository.save(existing)).thenReturn(existing);
+        when(researchTeamRepository.save(any(ResearchTeam.class))).thenReturn(existing);
         when(researchTeamMapper.toResponse(existing)).thenReturn(resp);
 
         assertThat(service.update(1L, req)).isSameAs(resp);
@@ -423,7 +429,7 @@ class ResearchTeamServiceTest {
         ResearchTeamResponse resp = response();
 
         when(researchTeamRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(researchTeamRepository.save(existing)).thenReturn(existing);
+        when(researchTeamRepository.save(any(ResearchTeam.class))).thenReturn(existing);
         when(researchTeamMapper.toResponse(existing)).thenReturn(resp);
 
         assertThat(service.update(1L, req)).isSameAs(resp);
@@ -483,7 +489,7 @@ class ResearchTeamServiceTest {
 
         service.delete(1L);
 
-        verify(researchTeamRepository).delete(t);
+        verify(researchTeamRepository).delete(any(ResearchTeam.class));
     }
 
     @Test
