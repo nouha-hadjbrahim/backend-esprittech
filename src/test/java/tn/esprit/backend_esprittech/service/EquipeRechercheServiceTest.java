@@ -25,11 +25,15 @@ import static org.mockito.Mockito.*;
 
 class EquipeRechercheServiceTest {
 
-    @Mock private EquipeRechercheRepository equipeRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private EquipeMapper equipeMapper;
+    @Mock
+    private EquipeRechercheRepository equipeRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private EquipeMapper equipeMapper;
 
-    @InjectMocks private EquipeRechercheService service;
+    @InjectMocks
+    private EquipeRechercheService service;
 
     @BeforeEach
     void setUp() {
@@ -145,6 +149,55 @@ class EquipeRechercheServiceTest {
         when(equipeRepository.existsByChefIdAndIdNot(10L, -1L)).thenReturn(false);
 
         assertThrows(BusinessException.class, () -> service.create(req));
+    }
+
+    // Branch: ensureChefDisponible() → chef.getEquipeRecherche() != null
+    // AND currentEquipeId != null
+    // AND currentEquipeId != chef.getEquipeRecherche().getId() → exception
+    @Test
+    void update_chefBelongsToAnotherTeam_throwsBusinessException() {
+        EquipeRecherche currentEquipe = equipeVide(); // id = 1L
+
+        EquipeRecherche autreEquipe = new EquipeRecherche();
+        autreEquipe.setId(99L); // different team
+
+        User chef = enseignant(10L);
+        chef.setEquipeRecherche(autreEquipe); // chef belongs to team 99L, not 1L
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(currentEquipe));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(chef));
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeRepository.existsByChefIdAndIdNot(10L, 1L)).thenReturn(false);
+        // existsByChefIdAndIdNot = false so we pass that guard,
+        // then hit the getEquipeRecherche() != null AND 1L != 99L → exception
+
+        UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn(null);
+        when(req.chefId()).thenReturn(10L);
+        when(req.memberIds()).thenReturn(null);
+
+        assertThrows(BusinessException.class, () -> service.update(1L, req));
+    }
+
+    // Branch: assignerChef() → ensureChefDisponible() → chef.getEquipeRecherche()
+    // != null
+    // AND equipeId (2L) != chef.getEquipeRecherche().getId() (99L) → exception
+    @Test
+    void assignerChef_chefBelongsToAnotherTeam_throwsBusinessException() {
+        EquipeRecherche equipe = equipeVide(); // id = 1L
+
+        EquipeRecherche autreEquipe = new EquipeRecherche();
+        autreEquipe.setId(99L);
+
+        User chef = enseignant(2L);
+        chef.setEquipeRecherche(autreEquipe); // belongs to team 99L, not 1L
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(equipe));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(chef));
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeRepository.existsByChefIdAndIdNot(2L, 1L)).thenReturn(false);
+
+        assertThrows(BusinessException.class, () -> service.assignerChef(1L, 2L));
     }
 
     @Test
@@ -554,8 +607,8 @@ class EquipeRechercheServiceTest {
         assertEquals(1, service.compterMembres(e));
     }
 
-
-    // Branch: update() → request.nom() != null but name is NOT duplicate (existsByNomAndIdNot = false)
+    // Branch: update() → request.nom() != null but name is NOT duplicate
+    // (existsByNomAndIdNot = false)
     @Test
     void update_nomNotDuplicate_proceedsNormally() {
         EquipeRecherche e = equipeVide();
@@ -572,7 +625,8 @@ class EquipeRechercheServiceTest {
         assertDoesNotThrow(() -> service.update(1L, req));
     }
 
-    // Branch: update() → chefId != null but chef is NOT in members (contains = false)
+    // Branch: update() → chefId != null but chef is NOT in members (contains =
+    // false)
     @Test
     void update_newChef_notInMembers_doesNotRemove() {
         User chef = enseignant(10L);
@@ -598,7 +652,8 @@ class EquipeRechercheServiceTest {
     }
 
     // Branch: ensureChefDisponible() → chef.getEquipeRecherche() != null
-    //         but currentEquipeId.equals(chef.getEquipeRecherche().getId()) → same team → no exception
+    // but currentEquipeId.equals(chef.getEquipeRecherche().getId()) → same team →
+    // no exception
     @Test
     void update_chefAlreadyInSameTeam_noException() {
         EquipeRecherche e = equipeVide(); // id = 1L
@@ -639,7 +694,8 @@ class EquipeRechercheServiceTest {
         verifyNoInteractions(userRepository); // no member lookup
     }
 
-    // Branch: assignerMembres() → chef != null but chef.getId() NOT in uniqueIds → no exception
+    // Branch: assignerMembres() → chef != null but chef.getId() NOT in uniqueIds →
+    // no exception
     @Test
     void create_membersDoNotIncludeChef_success() {
         CreateEquipeRechercheRequest req = mock(CreateEquipeRechercheRequest.class);
@@ -684,7 +740,8 @@ class EquipeRechercheServiceTest {
         assertDoesNotThrow(() -> service.create(req));
     }
 
-    // Branch: assignerMembres() → member.getEquipeRecherche() == same equipe → no conflict
+    // Branch: assignerMembres() → member.getEquipeRecherche() == same equipe → no
+    // conflict
     @Test
     void update_memberAlreadyInSameTeam_noException() {
         EquipeRecherche e = equipeVide();

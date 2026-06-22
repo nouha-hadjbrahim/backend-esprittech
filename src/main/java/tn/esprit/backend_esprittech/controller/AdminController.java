@@ -12,19 +12,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import tn.esprit.backend_esprittech.dto.request.AssignChefRequest;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
+
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
 import tn.esprit.backend_esprittech.dto.response.MessageResponse;
 import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
-import tn.esprit.backend_esprittech.mapper.EquipeMapper;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
-import tn.esprit.backend_esprittech.service.EquipeRechercheService;
 import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
 
@@ -39,19 +34,13 @@ import tn.esprit.backend_esprittech.service.UserService;
 public class AdminController {
 
         private final ReferentielService referentielService;
-        private final EquipeRechercheService equipeService;
-        private final EquipeMapper equipeMapper;
         private final UserService userService;
         private final UserMapper userMapper;
 
         public AdminController(ReferentielService referentielService,
-                        EquipeRechercheService equipeService,
-                        EquipeMapper equipeMapper,
                         UserService userService,
                         UserMapper userMapper) {
                 this.referentielService = referentielService;
-                this.equipeService = equipeService;
-                this.equipeMapper = equipeMapper;
                 this.userService = userService;
                 this.userMapper = userMapper;
         }
@@ -64,21 +53,6 @@ public class AdminController {
                                 .body(MessageResponse.of(importes + " utilisateur(s) importé(s) dans le référentiel"));
         }
 
-        @PostMapping("/equipes")
-        @Operation(summary = "Créer une équipe", description = "Crée une équipe de recherche et promeut le chef désigné au rôle CHEF_EQUIPE.")
-        public ResponseEntity<EquipeResponse> creerEquipe(@Valid @RequestBody CreateEquipeRechercheRequest request) {
-                EquipeResponse response = equipeService.create(request);
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        }
-
-        @PutMapping("/equipes/{id}/chef")
-        @Operation(summary = "Assigner un chef", description = "Assigne (ou change) le chef d'une équipe existante. Le chef doit être un ENSEIGNANT.")
-        public ResponseEntity<EquipeResponse> assignerChef(@PathVariable Long id,
-                        @Valid @RequestBody AssignChefRequest request) {
-                EquipeRecherche equipe = equipeService.assignerChef(id, request.chefId());
-                EquipeResponse body = equipeMapper.toResponse(equipe, equipeService.compterMembres(equipe));
-                return ResponseEntity.ok(body);
-        }
 
         // ----- Gestion des utilisateurs -----
 

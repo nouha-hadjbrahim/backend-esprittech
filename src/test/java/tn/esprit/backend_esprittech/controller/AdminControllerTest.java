@@ -11,20 +11,14 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.context.annotation.Import;
 import tn.esprit.backend_esprittech.config.CustomUserDetailsService;
 import tn.esprit.backend_esprittech.config.JwtTokenProvider;
 import tn.esprit.backend_esprittech.config.SecurityConfig;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
-import tn.esprit.backend_esprittech.mapper.EquipeMapper;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
-import tn.esprit.backend_esprittech.service.EquipeRechercheService;
 import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.enums.Role;
@@ -57,11 +51,6 @@ class AdminControllerTest {
     @MockBean
     private ReferentielService referentielService;
 
-    @MockBean
-    private EquipeRechercheService equipeService;
-
-    @MockBean
-    private EquipeMapper equipeMapper;
 
     @MockBean
     private UserService userService;
@@ -93,56 +82,6 @@ class AdminControllerTest {
         verify(referentielService).importerCsv(any());
     }
 
-    // ---------------- CREATE EQUIPE ----------------
-
-    @Test
-    @WithMockUser(roles = "ADMIN")
-    void creerEquipe_validRequest_returnsCreated() throws Exception {
-
-        CreateEquipeRechercheRequest request = new CreateEquipeRechercheRequest("AI", "Desc", null, null);
-
-        EquipeResponse response = mock(EquipeResponse.class);
-
-        when(equipeService.create(any())).thenReturn(response);
-
-        mockMvc.perform(post("/api/admin/equipes")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
-
-        verify(equipeService).create(any());
-    }
-
-    // ---------------- ASSIGN CHEF ----------------
-
-    @Test
-    @WithMockUser(roles = "ADMIN")
-    void assignerChef_validRequest_returnsOk() throws Exception {
-
-        EquipeRecherche equipe = new EquipeRecherche();
-
-        when(equipeService.assignerChef(1L,2L)).thenReturn(equipe);
-        when(equipeService.compterMembres(equipe)).thenReturn(10);
-        when(equipeMapper.toResponse(equipe, 10))
-                .thenReturn(mock(EquipeResponse.class));
-
-        String body = """
-                {
-                    "chefId": 2
-                }
-                """;
-
-        mockMvc.perform(put("/api/admin/equipes/1/chef")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
-                .andExpect(status().isOk());
-
-        verify(equipeService).assignerChef(1L, 2L);
-        verify(equipeService).compterMembres(equipe);
-        verify(equipeMapper).toResponse(equipe, 10);
-    }
 
     // ---------------- CREATE USER ----------------
 
