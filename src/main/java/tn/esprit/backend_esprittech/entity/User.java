@@ -20,8 +20,10 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Compte applicatif créé par l'utilisateur lui-même après validation contre le référentiel.
- * Implémente {@link UserDetails} pour être directement exploitable par Spring Security.
+ * Compte applicatif créé par l'utilisateur lui-même après validation contre le
+ * référentiel.
+ * Implémente {@link UserDetails} pour être directement exploitable par Spring
+ * Security.
  */
 @Entity
 @Table(name = "users", uniqueConstraints = {
@@ -73,8 +75,8 @@ public class User implements UserDetails {
 
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "research_team_id")
-    private ResearchTeam researchTeam;
+    @JoinColumn(name = "equipe_id")
+    private EquipeRecherche equipeRecherche;
 
     @PrePersist
     void onCreate() {

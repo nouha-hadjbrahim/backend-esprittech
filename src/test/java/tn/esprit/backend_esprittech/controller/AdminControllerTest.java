@@ -1,156 +1,283 @@
 package tn.esprit.backend_esprittech.controller;
 
-import org.junit.jupiter.api.BeforeEach;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.*;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.multipart.MultipartFile;
-import tn.esprit.backend_esprittech.dto.request.AssignChefRequest;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRequest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.Import;
+import tn.esprit.backend_esprittech.config.CustomUserDetailsService;
+import tn.esprit.backend_esprittech.config.JwtTokenProvider;
+import tn.esprit.backend_esprittech.config.SecurityConfig;
+import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
-import tn.esprit.backend_esprittech.dto.response.MessageResponse;
-import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
-import tn.esprit.backend_esprittech.enums.Role;
-import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.mapper.EquipeMapper;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.EquipeRechercheService;
 import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.enums.Role;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(AdminController.class)
+@Import(SecurityConfig.class)
 class AdminControllerTest {
 
-    @Mock private ReferentielService referentielService;
-    @Mock private EquipeRechercheService equipeService;
-    @Mock private EquipeMapper equipeMapper;
-    @Mock private UserService userService;
-    @Mock private UserMapper userMapper;
+    @Autowired
+    private MockMvc mockMvc;
 
-    @InjectMocks private AdminController adminController;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-    private User user;
-    private UserResponse userResponse;
-    private EquipeResponse equipeResponse;
+    // Mock JWT infrastructure so Security filter chain can be satisfied
+    @MockBean
+    private JwtTokenProvider jwtTokenProvider;
 
-    @BeforeEach
-    void setUp() {
-        user = User.builder()
-                .id(1L).nom("Test").prenom("User")
-                .email("test@esprit.tn").identifiant("ETU-001")
-                .role(Role.ROLE_ETUDIANT).typeUtilisateur(TypeUtilisateur.ETUDIANT)
-                .enabled(true).build();
-        userResponse = new UserResponse(1L, "Test", "User", "test@esprit.tn",
-                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null);
-        equipeResponse = new EquipeResponse(1L, "AI Lab", "desc", null, 1, null);
+    @MockBean
+    private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private ReferentielService referentielService;
+
+    @MockBean
+    private EquipeRechercheService equipeService;
+
+    @MockBean
+    private EquipeMapper equipeMapper;
+
+    @MockBean
+    private UserService userService;
+
+    @MockBean
+    private UserMapper userMapper;
+
+    // ---------------- IMPORT REFERENTIEL ----------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void importerReferentiel_validFile_returnsCreated() throws Exception {
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "users.csv",
+                "text/csv",
+                "a,b,c".getBytes());
+
+        when(referentielService.importerCsv(any())).thenReturn(5);
+
+        mockMvc.perform(multipart("/api/admin/import-referentiel")
+                .file(file)
+                .with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message")
+                        .value("5 utilisateur(s) importé(s) dans le référentiel"));
+
+        verify(referentielService).importerCsv(any());
+    }
+
+    // ---------------- CREATE EQUIPE ----------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void creerEquipe_validRequest_returnsCreated() throws Exception {
+
+        CreateEquipeRechercheRequest request = new CreateEquipeRechercheRequest("AI", "Desc", null, null);
+
+        EquipeResponse response = mock(EquipeResponse.class);
+
+        when(equipeService.create(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/admin/equipes")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        verify(equipeService).create(any());
+    }
+
+    // ---------------- ASSIGN CHEF ----------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void assignerChef_validRequest_returnsOk() throws Exception {
+
+        EquipeRecherche equipe = new EquipeRecherche();
+
+        when(equipeService.assignerChef(1L,2L)).thenReturn(equipe);
+        when(equipeService.compterMembres(equipe)).thenReturn(10);
+        when(equipeMapper.toResponse(equipe, 10))
+                .thenReturn(mock(EquipeResponse.class));
+
+        String body = """
+                {
+                    "chefId": 2
+                }
+                """;
+
+        mockMvc.perform(put("/api/admin/equipes/1/chef")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isOk());
+
+        verify(equipeService).assignerChef(1L, 2L);
+        verify(equipeService).compterMembres(equipe);
+        verify(equipeMapper).toResponse(equipe, 10);
+    }
+
+    // ---------------- CREATE USER ----------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void createUser_validRequest_returnsCreated() throws Exception {
+
+        CreateUserRequest request = new CreateUserRequest(
+                "Raed",
+                "Bettaher",
+                "raed@esprit.tn",
+                "raed123",
+                "Password1",
+                Role.ROLE_ADMIN,
+                true
+        );
+
+        User user = new User();
+        UserResponse response = mock(UserResponse.class);
+
+        when(userService.create(any())).thenReturn(user);
+        when(userMapper.toResponse(user)).thenReturn(response);
+
+        mockMvc.perform(post("/api/admin/users")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        verify(userService).create(any());
+        verify(userMapper).toResponse(user);
+    }
+
+    // ---------------- LIST USERS ----------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void listerUsers_withoutSearch_returnsPage() throws Exception {
+
+        Page<User> page = new PageImpl<>(List.of(new User()));
+
+        when(userService.list(isNull(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/users"))
+                .andExpect(status().isOk());
+
+        verify(userService).list(isNull(), any(Pageable.class));
     }
 
     @Test
-    void importerReferentiel_returns201WithCount() {
-        MultipartFile file = new MockMultipartFile("file", "ref.csv", "text/csv",
-                "data".getBytes(StandardCharsets.UTF_8));
-        when(referentielService.importerCsv(file)).thenReturn(5);
+    @WithMockUser(roles = "ADMIN")
+    void listerUsers_withSearch_returnsPage() throws Exception {
 
-        ResponseEntity<MessageResponse> resp = adminController.importerReferentiel(file);
+        Page<User> page = new PageImpl<>(List.of(new User()));
 
-        assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        assertNotNull(resp.getBody());
-        assertTrue(resp.getBody().message().contains("5"));
+        when(userService.list(eq("raed"), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/users")
+                .param("search", "raed")
+                .param("page", "1")
+                .param("size", "5"))
+                .andExpect(status().isOk());
+
+        verify(userService).list(eq("raed"), any(Pageable.class));
     }
 
+    // ---------------- UPDATE USER ----------------
+
     @Test
-    void creerEquipe_returns201() {
-        var request = new CreateEquipeRequest("AI Lab", "desc", 5L);
-        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("AI Lab").build();
-        when(equipeService.creerEquipe(request)).thenReturn(equipe);
-        when(equipeService.compterMembres(equipe)).thenReturn(1);
-        when(equipeMapper.toResponse(equipe, 1)).thenReturn(equipeResponse);
+    @WithMockUser(roles = "ADMIN")
+    void updateUser_validRequest_returnsOk() throws Exception {
 
-        ResponseEntity<EquipeResponse> resp = adminController.creerEquipe(request);
+        UpdateUserRequest request = new UpdateUserRequest(
+                "Raed",
+                "Bettaher",
+                "raed@test.com",
+                Role.ROLE_ADMIN,
+                true
+        );
 
-        assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        assertEquals(equipeResponse, resp.getBody());
+        User user = new User();
+        UserResponse response = mock(UserResponse.class);
+
+        when(userService.update(eq(1L), any())).thenReturn(user);
+        when(userMapper.toResponse(user)).thenReturn(response);
+
+        mockMvc.perform(put("/api/admin/users/1")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(userService).update(eq(1L), any());
+        verify(userMapper).toResponse(user);
     }
 
-    @Test
-    void assignerChef_returns200() {
-        var request = new AssignChefRequest(5L);
-        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("AI Lab").build();
-        when(equipeService.assignerChef(1L, 5L)).thenReturn(equipe);
-        when(equipeService.compterMembres(equipe)).thenReturn(1);
-        when(equipeMapper.toResponse(equipe, 1)).thenReturn(equipeResponse);
-
-        ResponseEntity<EquipeResponse> resp = adminController.assignerChef(1L, request);
-
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertEquals(equipeResponse, resp.getBody());
-    }
+    // ---------------- DELETE USER ----------------
 
     @Test
-    void createUser_returns201() {
-        var request = new CreateUserRequest("Test", "User", "test@esprit.tn",
-                "ETU-001", "Passw0rd1", Role.ROLE_ETUDIANT, true);
-        when(userService.create(request)).thenReturn(user);
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
+    @WithMockUser(roles = "ADMIN")
+    void deleteUser_validId_returnsOk() throws Exception {
 
-        ResponseEntity<UserResponse> resp = adminController.createUser(request);
+        mockMvc.perform(delete("/api/admin/users/1")
+                .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("Utilisateur supprimé"));
 
-        assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        assertEquals(userResponse, resp.getBody());
-    }
-
-    @Test
-    void listerUsers_returns200WithPagedBody() {
-        Page<User> page = new PageImpl<>(List.of(user), PageRequest.of(0, 10), 1);
-        when(userService.list(any(), any(Pageable.class))).thenReturn(page);
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
-
-        ResponseEntity<PagedResponse<UserResponse>> resp = adminController.listerUsers(0, 10, null);
-
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertNotNull(resp.getBody());
-        assertEquals(1, resp.getBody().totalElements());
-        assertEquals(userResponse, resp.getBody().content().get(0));
-    }
-
-    @Test
-    void updateUser_returns200() {
-        var request = new UpdateUserRequest("Test", "User", "test@esprit.tn", Role.ROLE_ETUDIANT, true);
-        when(userService.update(1L, request)).thenReturn(user);
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
-
-        ResponseEntity<UserResponse> resp = adminController.updateUser(1L, request);
-
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertEquals(userResponse, resp.getBody());
-    }
-
-    @Test
-    void deleteUser_returns200AndDelegates() {
-        ResponseEntity<MessageResponse> resp = adminController.deleteUser(1L);
-
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
         verify(userService).delete(1L);
+    }
+
+    // ---------------- SECURITY TEST ----------------
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void createUser_nonAdmin_returnsForbidden() throws Exception {
+
+        CreateUserRequest request = new CreateUserRequest(
+                "Raed",
+                "Bettaher",
+                "raed@esprit.tn",
+                "raed123",
+                "Password1",
+                Role.ROLE_ADMIN,
+                true
+        );
+
+        mockMvc.perform(post("/api/admin/users")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(userService);
     }
 }

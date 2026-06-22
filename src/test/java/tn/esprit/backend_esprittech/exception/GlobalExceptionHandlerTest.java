@@ -3,6 +3,7 @@ package tn.esprit.backend_esprittech.exception;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -11,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -102,5 +104,30 @@ class GlobalExceptionHandlerTest {
         assertEquals(404, pd.getStatus());
         assertEquals("Ressource introuvable", pd.getTitle());
         assertEquals("not found error", pd.getDetail());
+    }
+    @Test
+    void handleReferentielNotFound_returnsProblemDetail() {
+        ReferentielNotFoundException ex =
+                new ReferentielNotFoundException("Référentiel introuvable");
+
+        ProblemDetail result = handler.handleReferentielNotFound(ex);
+
+        assertNotNull(result);
+        assertEquals(HttpStatus.NOT_FOUND.value(), result.getStatus());
+        assertEquals("Référentiel", result.getTitle());
+        assertEquals("Référentiel introuvable", result.getDetail());
+    }
+
+    @Test
+    void handleNoSuchElement_returnsProblemDetail() {
+        NoSuchElementException ex =
+                new NoSuchElementException("Utilisateur non trouvé");
+
+        ProblemDetail result = handler.handleNoSuchElement(ex);
+
+        assertNotNull(result);
+        assertEquals(HttpStatus.NOT_FOUND.value(), result.getStatus());
+        assertEquals("Ressource introuvable", result.getTitle());
+        assertEquals("Utilisateur non trouvé", result.getDetail());
     }
 }
