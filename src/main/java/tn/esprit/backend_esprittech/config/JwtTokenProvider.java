@@ -8,6 +8,7 @@ import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import tn.esprit.backend_esprittech.entity.User;
 
 import javax.crypto.SecretKey;
@@ -27,27 +28,44 @@ public class JwtTokenProvider {
     private static final String CLAIM_TYPE = "type";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
+    private static final int MIN_HS256_SECRET_BYTES = 32;
 
     private final SecretKey key;
-    private final long accessExpiration;
-    private final long refreshExpiration;
+    private final long expirationMs;
+    private final long refreshExpirationMs;
 
-    public JwtTokenProvider(DotenvConfig config) {
-        if (config.getSecret() == null || config.getSecret().getBytes(StandardCharsets.UTF_8).length < 32) {
-            throw new IllegalStateException(
-                    "JWT_SECRET manquant ou trop court (< 32 octets requis pour HS256). Vérifiez votre .env");
-        }
-        this.key = Keys.hmacShaKeyFor(config.getSecret().getBytes(StandardCharsets.UTF_8));
-        this.accessExpiration = config.getAccessExpiration();
-        this.refreshExpiration = config.getRefreshExpiration();
+    public JwtTokenProvider(JwtProperties properties) {
+        byte[] secretBytes = validateSecret(properties.getSecret());
+        this.key = Keys.hmacShaKeyFor(secretBytes);
+        this.expirationMs = properties.getExpirationMs();
+        this.refreshExpirationMs = properties.getRefreshExpirationMs();
     }
 
     public String generateAccessToken(User user) {
-        return buildToken(user, TYPE_ACCESS, accessExpiration);
+        return buildToken(user, TYPE_ACCESS, expirationMs);
     }
 
     public String generateRefreshToken(User user) {
-        return buildToken(user, TYPE_REFRESH, refreshExpiration);
+        return buildToken(user, TYPE_REFRESH, refreshExpirationMs);
+    }
+
+    private byte[] validateSecret(String secret) {
+        if (!StringUtils.hasText(secret)) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is missing or empty. Set a secure random secret through the JWT_SECRET "
+                            + "environment variable or create a local .env file from .env.example. "
+                            + "The Spring property app.jwt.secret is resolved from ${JWT_SECRET:}.");
+        }
+
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < MIN_HS256_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is too short for HS256. It must be at least "
+                            + MIN_HS256_SECRET_BYTES + " UTF-8 bytes, but the configured value is "
+                            + secretBytes.length + " bytes. Generate a secure random secret, set it as "
+                            + "JWT_SECRET in your environment or local .env file, and do not commit the real value.");
+        }
+        return secretBytes;
     }
 
     private String buildToken(User user, String type, long ttlMillis) {

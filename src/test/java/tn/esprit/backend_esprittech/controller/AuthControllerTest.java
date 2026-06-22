@@ -38,7 +38,7 @@ class AuthControllerTest {
     @BeforeEach
     void setUp() {
         userResponse = new UserResponse(1L, "Test", "User", "test@esprit.tn",
-                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true);
+                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null);
         authResponse = AuthResponse.of("access-token", "refresh-token", userResponse);
     }
 

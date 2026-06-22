@@ -10,6 +10,7 @@ import tn.esprit.backend_esprittech.config.JwtTokenProvider;
 import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
+import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
@@ -25,21 +26,29 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
     private final AuthenticationManager authenticationManager;
     private final UserMapper userMapper;
+    private final ReferentielService referentielService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider,
                        AuthenticationManager authenticationManager,
-                       UserMapper userMapper) {
+                       UserMapper userMapper,
+                       ReferentielService referentielService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.authenticationManager = authenticationManager;
         this.userMapper = userMapper;
+        this.referentielService = referentielService;
     }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        // 1. L'email/identifiant doit correspondre à une entrée du référentiel (source de vérité)
+        ReferentielUtilisateur reference =
+                referentielService.trouverCorrespondance(request.email(), request.identifiant());
+
+        // 2. Unicité du compte applicatif
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
         }
@@ -47,14 +56,19 @@ public class AuthService {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet identifiant");
         }
 
+        // 3. Le rôle découle du type déclaré dans le référentiel
+        TypeUtilisateur type = reference.getType();
+        Role role = (type == TypeUtilisateur.ENSEIGNANT) ? Role.ROLE_ENSEIGNANT : Role.ROLE_ETUDIANT;
+
         User user = User.builder()
                 .nom(request.nom())
                 .prenom(request.prenom())
                 .email(request.email())
                 .identifiant(request.identifiant())
                 .password(passwordEncoder.encode(request.password()))
-                .role(Role.ROLE_ETUDIANT)
-                .typeUtilisateur(TypeUtilisateur.ETUDIANT)
+                .role(role)
+                .typeUtilisateur(type)
+                .departement(reference.getDepartement())
                 .enabled(true)
                 .build();
 

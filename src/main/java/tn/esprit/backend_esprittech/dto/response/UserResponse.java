@@ -3,6 +3,8 @@ package tn.esprit.backend_esprittech.dto.response;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 
+import java.time.Instant;
+
 public record UserResponse(
         Long id,
         String nom,
@@ -12,6 +14,7 @@ public record UserResponse(
         Role role,
         TypeUtilisateur typeUtilisateur,
         String departement,
-        boolean enabled
+        boolean enabled,
+        Instant createdAt
 ) {
 }

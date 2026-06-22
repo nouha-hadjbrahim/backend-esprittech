@@ -15,11 +15,10 @@ class JwtTokenProviderTest {
 
     @BeforeEach
     void setUp() {
-        DotenvConfig config = new DotenvConfig();
-        config.setSecret("unit-test-secret-key-that-is-at-least-32-bytes-long!");
-        config.setAccessExpiration(900000);
-        config.setRefreshExpiration(604800000);
-        tokenProvider = new JwtTokenProvider(config);
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret("unit-test-secret-key-that-is-at-least-32-bytes-long!");
+        properties.setExpirationMs(900000);
+        tokenProvider = new JwtTokenProvider(properties);
 
         user = User.builder()
                 .id(1L).nom("Test").prenom("User")
@@ -46,11 +45,10 @@ class JwtTokenProviderTest {
 
     @Test
     void validateToken_expired_returnsFalse() {
-        DotenvConfig config = new DotenvConfig();
-        config.setSecret("unit-test-secret-key-that-is-at-least-32-bytes-long!");
-        config.setAccessExpiration(-1000);
-        config.setRefreshExpiration(604800000);
-        JwtTokenProvider expiredProvider = new JwtTokenProvider(config);
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret("unit-test-secret-key-that-is-at-least-32-bytes-long!");
+        properties.setExpirationMs(-1000);
+        JwtTokenProvider expiredProvider = new JwtTokenProvider(properties);
 
         String token = expiredProvider.generateAccessToken(user);
         assertFalse(expiredProvider.validateToken(token));
@@ -68,21 +66,27 @@ class JwtTokenProviderTest {
 
     @Test
     void constructor_nullSecret_throws() {
-        DotenvConfig config = new DotenvConfig();
-        config.setSecret(null);
-        config.setAccessExpiration(900000);
-        config.setRefreshExpiration(604800000);
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret(null);
+        properties.setExpirationMs(900000);
 
-        assertThrows(IllegalStateException.class, () -> new JwtTokenProvider(config));
+        IllegalStateException exception =
+                assertThrows(IllegalStateException.class, () -> new JwtTokenProvider(properties));
+
+        assertTrue(exception.getMessage().contains("JWT_SECRET is missing or empty"));
+        assertTrue(exception.getMessage().contains(".env.example"));
     }
 
     @Test
     void constructor_shortSecret_throws() {
-        DotenvConfig config = new DotenvConfig();
-        config.setSecret("short");
-        config.setAccessExpiration(900000);
-        config.setRefreshExpiration(604800000);
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret("short");
+        properties.setExpirationMs(900000);
 
-        assertThrows(IllegalStateException.class, () -> new JwtTokenProvider(config));
+        IllegalStateException exception =
+                assertThrows(IllegalStateException.class, () -> new JwtTokenProvider(properties));
+
+        assertTrue(exception.getMessage().contains("JWT_SECRET is too short for HS256"));
+        assertTrue(exception.getMessage().contains("at least 32 UTF-8 bytes"));
     }
 }

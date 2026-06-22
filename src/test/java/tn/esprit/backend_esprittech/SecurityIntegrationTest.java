@@ -1,5 +1,6 @@
 package tn.esprit.backend_esprittech;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -8,7 +9,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.backend_esprittech.config.JwtTokenProvider;
+import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
+import tn.esprit.backend_esprittech.repository.ReferentielUtilisateurRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -17,23 +21,43 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+        "DB_URL=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+        "DB_USERNAME=sa",
+        "DB_PASSWORD=",
+        "SERVER_PORT=0",
+        "JWT_SECRET=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
+        "JWT_ACCESS_EXPIRATION=900000",
+        "JWT_REFRESH_EXPIRATION=604800000",
+        "ADMIN_EMAIL=admin@test.tn",
+        "ADMIN_PASSWORD=TestAdmin123",
+        "CORS_ALLOWED_ORIGINS=http://localhost:4200",
         "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "jwt.secret=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
-        "jwt.access-expiration=900000",
-        "jwt.refresh-expiration=604800000",
-        "app.admin.email=admin@test.tn",
-        "app.admin.password=TestAdmin123",
-        "app.cors.allowed-origins=http://localhost:4200"
+        "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 class SecurityIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtTokenProvider tokenProvider;
     @Autowired private UserRepository userRepository;
+    @Autowired private ReferentielUtilisateurRepository referentielRepository;
+
+    /** Alimente le référentiel (source de vérité) de façon idempotente avant chaque test. */
+    @BeforeEach
+    void seedReferentiel() {
+        // L'email doit se terminer par @esprit.tn (contrainte du RegisterRequest)
+        seed("new@esprit.tn", "ETU-999", TypeUtilisateur.ETUDIANT);
+        seed("dup@esprit.tn", "ETU-DUP", TypeUtilisateur.ETUDIANT);
+    }
+
+    private void seed(String email, String identifiant, TypeUtilisateur type) {
+        if (!referentielRepository.existsByEmail(email)) {
+            referentielRepository.save(ReferentielUtilisateur.builder()
+                    .nom("Seed").prenom("User")
+                    .email(email).identifiant(identifiant)
+                    .type(type)
+                    .build());
+        }
+    }
 
     @Test
     void login_validCredentials_returnsTokens() throws Exception {
@@ -113,16 +137,26 @@ class SecurityIntegrationTest {
     void register_success_returns201() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nom\":\"New\",\"prenom\":\"User\",\"email\":\"new@test.tn\",\"identifiant\":\"ETU-999\",\"password\":\"password123\"}"))
+                        .content("{\"nom\":\"New\",\"prenom\":\"User\",\"email\":\"new@esprit.tn\",\"identifiant\":\"ETU-999\",\"password\":\"Password123\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty());
     }
 
     @Test
     void register_duplicateEmail_returns409() throws Exception {
+        String body = "{\"nom\":\"Dup\",\"prenom\":\"User\",\"email\":\"dup@esprit.tn\","
+                + "\"identifiant\":\"ETU-DUP\",\"password\":\"Password123\"}";
+
+        // 1er enregistrement : le compte est créé
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nom\":\"Dup\",\"prenom\":\"User\",\"email\":\"admin@test.tn\",\"identifiant\":\"ETU-DUP\",\"password\":\"password123\"}"))
+                        .content(body))
+                .andExpect(status().isCreated());
+
+        // 2e enregistrement avec le même email : conflit
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isConflict());
     }
 

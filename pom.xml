@@ -21,8 +21,10 @@
 
         <spring-dotenv.version>4.0.0</spring-dotenv.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <sonar.projectKey>sonarQubeTest</sonar.projectKey>
+        <sonar.projectName>sonarQubeTest</sonar.projectName>
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
-        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <dependencies>
@@ -150,7 +152,7 @@
                     </execution>
                     <execution>
                         <id>report</id>
-                        <phase>test</phase>
+                        <phase>verify</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>
