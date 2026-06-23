@@ -65,6 +65,10 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html").permitAll()
+                        // Sujets de projet : fonctionnalité encore basée sur un encadrant mock
+                        // (pas encore branchée sur l'auth réelle). Public en attendant que
+                        // l'encadrant courant soit dérivé du SecurityContext.
+                        .requestMatchers("/api/sujet-projets/**").permitAll()
                         // Le reste exige une authentification (les rôles sont
                         // contrôlés finement par @PreAuthorize sur les controllers)
                         .anyRequest().authenticated())
