@@ -9,5 +9,9 @@ public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche
 
     boolean existsByNom(String nom);
 
+    boolean existsByNomAndIdNot(String nom, Long id);
+
     boolean existsByChefId(Long chefId);
+
+    boolean existsByChefIdAndIdNot(Long chefId, Long id);
 }

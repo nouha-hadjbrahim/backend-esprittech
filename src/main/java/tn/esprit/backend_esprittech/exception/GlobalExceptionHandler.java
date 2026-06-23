@@ -27,11 +27,6 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "Référentiel", ex.getMessage());
     }
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
-    }
-
     @ExceptionHandler(java.util.NoSuchElementException.class)
     public ProblemDetail handleNoSuchElement(java.util.NoSuchElementException ex) {
         return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
@@ -50,6 +45,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
         return build(HttpStatus.BAD_REQUEST, "Requête invalide", ex.getMessage());
+    }
+
+    @ExceptionHandler(BusinessException.class)
+    public ProblemDetail handleBusiness(BusinessException ex) {
+        return build(HttpStatus.BAD_REQUEST, "Règle métier violée", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
