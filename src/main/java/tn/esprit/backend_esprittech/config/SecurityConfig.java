@@ -57,7 +57,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login",
-                                "/api/auth/refresh").permitAll()
+                                "/api/auth/refresh",
+                                "/api/sujet-projets/**").permitAll()
                         // Documentation OpenAPI / Swagger
                         .requestMatchers(
                                 "/v3/api-docs/**",
