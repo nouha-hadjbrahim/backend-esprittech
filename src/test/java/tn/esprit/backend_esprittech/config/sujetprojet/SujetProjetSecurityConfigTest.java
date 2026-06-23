@@ -22,5 +22,6 @@ class SujetProjetSecurityConfigTest {
         assertNotNull(result);
         assertEquals(filterChain, result);
         verify(http).securityMatcher("/api/sujet-projets/**");
+        verify(http).build();
     }
 }
