@@ -88,7 +88,7 @@ public class EquipeController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN','CHEF_EQUIPE')")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF_EQUIPE')")
     @Operation(summary = "Mettre à jour une équipe")
     public ResponseEntity<EquipeResponse> update(
             @PathVariable Long id,
