@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CategorieSujetTest {
 
+
+    
+
     @Test
     void values_containsAllCategories() {
         CategorieSujet[] values = CategorieSujet.values();
