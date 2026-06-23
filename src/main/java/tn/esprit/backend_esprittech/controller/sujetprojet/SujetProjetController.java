@@ -3,8 +3,10 @@ package tn.esprit.backend_esprittech.controller.sujetprojet;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.MockEncadrantResponse;
@@ -15,6 +17,7 @@ import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 import java.util.List;
 
+@Validated
 @RestController
 @RequestMapping("/api/sujet-projets")
 @Tag(name = "Sujets de projet", description = "Dépôt et consultation des sujets par l'encadrant")
@@ -42,14 +45,15 @@ public class SujetProjetController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Détail d'un sujet")
-    public ResponseEntity<SujetProjetResponse> getSujet(@PathVariable Long id) {
+    public ResponseEntity<SujetProjetResponse> getSujet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
         return ResponseEntity.ok(sujetProjetService.getSujetById(id));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Modifier un sujet", description = "Met à jour un sujet déposé par l'encadrant mock.")
     public ResponseEntity<SujetProjetResponse> modifierSujet(
-            @PathVariable Long id,
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
             @Valid @RequestBody SujetProjetRequest request) {
         return ResponseEntity.ok(sujetProjetService.modifierSujet(id, request));
     }
