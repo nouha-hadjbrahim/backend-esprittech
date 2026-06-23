@@ -42,8 +42,9 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                // CSRF is ignored only for stateless REST API endpoints authenticated with JWT Bearer tokens.
-                // JWT is sent in the Authorization header, not in cookies, so browser CSRF attacks cannot automatically attach credentials.
+                // CSRF is ignored for the stateless REST API. The JWT now lives in an HttpOnly cookie,
+                // but that cookie is declared SameSite=Strict (see AuthCookieFactory), so the browser
+                // never attaches it to cross-site requests — which is what neutralises CSRF here.
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
                         new AntPathRequestMatcher("/api/**")))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -58,12 +59,16 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/login",
                                 "/api/auth/refresh",
-                                "/api/sujet-projets/**").permitAll()
+                                "/api/auth/logout").permitAll()
                         // Documentation OpenAPI / Swagger
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html").permitAll()
+                        // Sujets de projet : fonctionnalité encore basée sur un encadrant mock
+                        // (pas encore branchée sur l'auth réelle). Public en attendant que
+                        // l'encadrant courant soit dérivé du SecurityContext.
+                        .requestMatchers("/api/sujet-projets/**").permitAll()
                         // Le reste exige une authentification (les rôles sont
                         // contrôlés finement par @PreAuthorize sur les controllers)
                         .anyRequest().authenticated())

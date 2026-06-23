@@ -1,5 +1,6 @@
 package tn.esprit.backend_esprittech;
 
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,14 +61,20 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void login_validCredentials_returnsTokens() throws Exception {
+    void login_validCredentials_setsHttpOnlyCookies_andUserBody() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"admin@test.tn\",\"password\":\"TestAdmin123\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.tokenType").value("Bearer"));
+                // Le corps ne contient QUE les infos utilisateur, plus aucun token.
+                .andExpect(jsonPath("$.email").value("admin@test.tn"))
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                // Les tokens sont déposés dans des cookies HttpOnly.
+                .andExpect(cookie().exists("access_token"))
+                .andExpect(cookie().httpOnly("access_token", true))
+                .andExpect(cookie().exists("refresh_token"))
+                .andExpect(cookie().httpOnly("refresh_token", true));
     }
 
     @Test
@@ -104,6 +111,17 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void me_validAccessTokenCookie_returns200() throws Exception {
+        User admin = userRepository.findByEmail("admin@test.tn").orElseThrow();
+        String token = tokenProvider.generateAccessToken(admin);
+
+        mockMvc.perform(get("/api/auth/me")
+                        .cookie(new Cookie("access_token", token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("admin@test.tn"));
+    }
+
+    @Test
     void me_refreshTokenAsAccess_returns401() throws Exception {
         User admin = userRepository.findByEmail("admin@test.tn").orElseThrow();
         String refreshToken = tokenProvider.generateRefreshToken(admin);
@@ -134,12 +152,15 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void register_success_returns201() throws Exception {
+    void register_success_returns201_withUserBodyAndCookies() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nom\":\"New\",\"prenom\":\"User\",\"email\":\"new@esprit.tn\",\"identifiant\":\"ETU-999\",\"password\":\"Password123\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+                .andExpect(jsonPath("$.email").value("new@esprit.tn"))
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(cookie().exists("access_token"))
+                .andExpect(cookie().exists("refresh_token"));
     }
 
     @Test
@@ -169,22 +190,35 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void refresh_validToken_returnsNewTokens() throws Exception {
+    void refresh_validCookie_setsNewCookies() throws Exception {
         User admin = userRepository.findByEmail("admin@test.tn").orElseThrow();
         String refreshToken = tokenProvider.generateRefreshToken(admin);
 
         mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+                        .cookie(new Cookie("refresh_token", refreshToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+                .andExpect(jsonPath("$.email").value("admin@test.tn"))
+                .andExpect(cookie().exists("access_token"));
     }
 
     @Test
-    void refresh_invalidToken_returns401() throws Exception {
+    void refresh_invalidCookie_returns401() throws Exception {
         mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"refreshToken\":\"not-valid\"}"))
+                        .cookie(new Cookie("refresh_token", "not-valid")))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refresh_missingCookie_returns401() throws Exception {
+        mockMvc.perform(post("/api/auth/refresh"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logout_clearsCookies_returns204() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge("access_token", 0))
+                .andExpect(cookie().maxAge("refresh_token", 0));
     }
 }

@@ -2,6 +2,7 @@ package tn.esprit.backend_esprittech.config;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,11 +14,14 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
- * Extrait le JWT du header {@code Authorization: Bearer <token>}, le valide,
- * et peuple le SecurityContext si tout est correct. Un access token est requis
- * (les refresh tokens sont rejetés pour l'authentification des requêtes).
+ * Extrait le JWT, le valide, et peuple le SecurityContext si tout est correct.
+ * <p>Le token est lu en priorité dans le cookie HttpOnly {@code access_token}
+ * (déposé par le backend, invisible au JavaScript), avec repli sur le header
+ * {@code Authorization: Bearer <token>} pour Postman / les tests. Un access token
+ * est requis (les refresh tokens sont rejetés pour l'authentification des requêtes).</p>
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -61,10 +65,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String resolveToken(HttpServletRequest request) {
+        String fromCookie = resolveTokenFromCookie(request);
+        if (fromCookie != null) {
+            return fromCookie;
+        }
         String header = request.getHeader(HEADER);
         if (StringUtils.hasText(header) && header.startsWith(PREFIX)) {
             return header.substring(PREFIX.length());
         }
         return null;
+    }
+
+    private String resolveTokenFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        return Arrays.stream(cookies)
+                .filter(c -> AuthCookieFactory.ACCESS_TOKEN_COOKIE.equals(c.getName()))
+                .map(Cookie::getValue)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse(null);
     }
 }
