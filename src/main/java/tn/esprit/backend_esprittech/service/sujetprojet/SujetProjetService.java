@@ -99,4 +99,14 @@ public class SujetProjetService {
                 MockEncadrantContext.DEPARTEMENT
         );
     }
+
+    @Transactional(readOnly = true)
+    public List<SujetProjetResponse> getProjetsEvaluables() {
+        List<SujetProjet> sujets = sujetProjetRepository.findByStatutOrderByDateCreationDesc(
+                StatutSujet.REALISATION_TERMINEE
+        );
+        return sujets.stream()
+                .map(sujetProjetMapper::toResponse)
+                .toList();
+    }
 }

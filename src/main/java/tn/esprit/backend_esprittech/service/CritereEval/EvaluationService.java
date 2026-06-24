@@ -122,7 +122,6 @@ public class EvaluationService {
         projet.setScoreFinalEvaluation(scoreFinal);
         projet.setEligibleIndustrialisation(eligibleIndustrialisation);
         projet.setBloqueParEliminatoire(bloqueParEliminatoire);
-        projet.setStatut(StatutSujet.REALISATION_TERMINEE);
 
         sujetProjetRepository.save(projet);
 
@@ -170,6 +169,14 @@ public class EvaluationService {
             throw new BadRequestException("La note obtenue est obligatoire pour le critère id: " + critere.getId());
         }
 
+        if (critere.getBareme() == null || critere.getBareme() <= 0) {
+            throw new BadRequestException("Le barème du critère doit être supérieur à 0.");
+        }
+
+        if (critere.getPoids() == null || critere.getPoids() <= 0) {
+            throw new BadRequestException("Le poids du critère doit être supérieur à 0.");
+        }
+
         if (noteObtenue < 0) {
             throw new BadRequestException("La note obtenue ne peut pas être négative.");
         }
@@ -178,14 +185,6 @@ public class EvaluationService {
             throw new BadRequestException(
                     "La note obtenue ne peut pas dépasser le barème du critère id: " + critere.getId()
             );
-        }
-
-        if (critere.getBareme() == null || critere.getBareme() <= 0) {
-            throw new BadRequestException("Le barème du critère doit être supérieur à 0.");
-        }
-
-        if (critere.getPoids() == null || critere.getPoids() <= 0) {
-            throw new BadRequestException("Le poids du critère doit être supérieur à 0.");
         }
     }
 
