@@ -170,7 +170,7 @@ class EquipeControllerTest {
     @Test
     void create_validRequest_returns201() throws Exception {
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("AI Lab", "Research on AI", null, null);
+                new CreateEquipeRechercheRequest("AI Lab", "Research on AI", "Informatique", null, null);
         EquipeResponse response = mock(EquipeResponse.class);
 
         when(equipeService.create(any())).thenReturn(response);
@@ -186,7 +186,7 @@ class EquipeControllerTest {
     @Test
     void create_duplicateName_returns400() throws Exception {
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("AI Lab", "Desc", null, null);
+                new CreateEquipeRechercheRequest("AI Lab", "Desc", "Informatique", null, null);
 
         when(equipeService.create(any()))
                 .thenThrow(new BusinessException("Nom déjà utilisé"));
@@ -202,7 +202,7 @@ class EquipeControllerTest {
     @Test
     void create_serviceThrows_returns500() throws Exception {
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("AI Lab", "Desc", null, null);
+                new CreateEquipeRechercheRequest("AI Lab", "Desc", "Informatique", null, null);
 
         when(equipeService.create(any()))
                 .thenThrow(new RuntimeException("Unexpected error"));
@@ -222,7 +222,7 @@ class EquipeControllerTest {
     @Test
     void update_validRequest_returns200() throws Exception {
         UpdateEquipeRechercheRequest request =
-                new UpdateEquipeRechercheRequest("AI Lab v2", "Updated desc", null, null);
+                new UpdateEquipeRechercheRequest("AI Lab v2", "Updated desc", null, null, null);
         EquipeResponse response = mock(EquipeResponse.class);
 
         when(equipeService.update(eq(1L), any())).thenReturn(response);
@@ -238,7 +238,7 @@ class EquipeControllerTest {
     @Test
     void update_notFound_returns404() throws Exception {
         UpdateEquipeRechercheRequest request =
-                new UpdateEquipeRechercheRequest("AI Lab v2", "Desc", null, null);
+                new UpdateEquipeRechercheRequest("AI Lab v2", "Desc", null, null, null);
 
         when(equipeService.update(eq(99L), any()))
                 .thenThrow(new ResourceNotFoundException("Equipe introuvable"));
@@ -254,7 +254,7 @@ class EquipeControllerTest {
     @Test
     void update_invalidBusiness_returns400() throws Exception {
         UpdateEquipeRechercheRequest request =
-                new UpdateEquipeRechercheRequest("AI Lab v2", "Desc", null, null);
+                new UpdateEquipeRechercheRequest("AI Lab v2", "Desc", null, null, null);
 
         when(equipeService.update(eq(1L), any()))
                 .thenThrow(new BusinessException("Règle métier violée"));

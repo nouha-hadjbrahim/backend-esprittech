@@ -602,6 +602,26 @@ class EquipeRechercheServiceTest {
         assertDoesNotThrow(() -> service.update(1L, req));
     }
 
+    @Test
+    void update_domaineProvided_updatesEntity() {
+        EquipeRecherche e = equipeVide();
+        e.setDomaine("OldDomaine");
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn(null);
+        when(req.description()).thenReturn(null);
+        when(req.domaine()).thenReturn("NewDomaine");
+        when(req.chefId()).thenReturn(null);
+        when(req.memberIds()).thenReturn(null);
+
+        service.update(1L, req);
+
+        verify(equipeMapper).updateEntity(req, e);
+    }
+
     // Branch: update() → chefId != null but chef is NOT in members (contains =
     // false)
     @Test

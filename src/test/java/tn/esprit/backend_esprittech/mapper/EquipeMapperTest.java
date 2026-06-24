@@ -38,12 +38,14 @@ class EquipeMapperTest {
         CreateEquipeRechercheRequest request = mock(CreateEquipeRechercheRequest.class);
         when(request.nom()).thenReturn("AI Team");
         when(request.description()).thenReturn("Research");
+        when(request.domaine()).thenReturn("Informatique");
 
         EquipeRecherche result = mapper.toEntity(request);
 
         assertNotNull(result);
         assertEquals("AI Team", result.getNom());
         assertEquals("Research", result.getDescription());
+        assertEquals("Informatique", result.getDomaine());
     }
 
     // ---------------- updateEntity ----------------
@@ -68,15 +70,18 @@ class EquipeMapperTest {
 
         when(request.nom()).thenReturn(null);
         when(request.description()).thenReturn(null);
+        when(request.domaine()).thenReturn(null);
 
         EquipeRecherche equipe = new EquipeRecherche();
         equipe.setNom("Old");
         equipe.setDescription("OldDesc");
+        equipe.setDomaine("OldDomaine");
 
         mapper.updateEntity(request, equipe);
 
         assertEquals("Old", equipe.getNom());
         assertEquals("OldDesc", equipe.getDescription());
+        assertEquals("OldDomaine", equipe.getDomaine());
     }
 
     @Test
@@ -84,6 +89,7 @@ class EquipeMapperTest {
         UpdateEquipeRechercheRequest request = mock(UpdateEquipeRechercheRequest.class);
         when(request.nom()).thenReturn("NewName");
         when(request.description()).thenReturn(null);
+        when(request.domaine()).thenReturn(null);
 
         EquipeRecherche equipe = new EquipeRecherche();
         equipe.setNom("Old");
@@ -98,6 +104,7 @@ class EquipeMapperTest {
         UpdateEquipeRechercheRequest request = mock(UpdateEquipeRechercheRequest.class);
         when(request.nom()).thenReturn(null);
         when(request.description()).thenReturn("NewDesc");
+        when(request.domaine()).thenReturn(null);
 
         EquipeRecherche equipe = new EquipeRecherche();
         equipe.setDescription("OldDesc");
@@ -108,10 +115,26 @@ class EquipeMapperTest {
     }
 
     @Test
-    void updateEntity_fullUpdate_updatesBoth() {
+    void updateEntity_domaineOnly_updatesDomaine() {
+        UpdateEquipeRechercheRequest request = mock(UpdateEquipeRechercheRequest.class);
+        when(request.nom()).thenReturn(null);
+        when(request.description()).thenReturn(null);
+        when(request.domaine()).thenReturn("NewDomaine");
+
+        EquipeRecherche equipe = new EquipeRecherche();
+        equipe.setDomaine("OldDomaine");
+
+        mapper.updateEntity(request, equipe);
+
+        assertEquals("NewDomaine", equipe.getDomaine());
+    }
+
+    @Test
+    void updateEntity_fullUpdate_updatesAll() {
         UpdateEquipeRechercheRequest request = mock(UpdateEquipeRechercheRequest.class);
         when(request.nom()).thenReturn("AI");
         when(request.description()).thenReturn("Research");
+        when(request.domaine()).thenReturn("Informatique");
 
         EquipeRecherche equipe = new EquipeRecherche();
 
@@ -119,6 +142,7 @@ class EquipeMapperTest {
 
         assertEquals("AI", equipe.getNom());
         assertEquals("Research", equipe.getDescription());
+        assertEquals("Informatique", equipe.getDomaine());
     }
 
     // ---------------- toResponse ----------------
@@ -134,6 +158,7 @@ class EquipeMapperTest {
         equipe.setId(1L);
         equipe.setNom("AI");
         equipe.setDescription("Research");
+        equipe.setDomaine("Informatique");
         equipe.setCreatedAt(Instant.now());
 
         User chef = new User();
@@ -152,6 +177,7 @@ class EquipeMapperTest {
         assertNotNull(response);
         assertEquals("AI", response.nom());
         assertEquals("Research", response.description());
+        assertEquals("Informatique", response.domaine());
 
         verify(userMapper).toResponse(chef);
     }

@@ -62,6 +62,7 @@ public class EquipeRechercheService {
         EquipeRecherche equipe = EquipeRecherche.builder()
                 .nom(request.nom())
                 .description(request.description())
+                .domaine(request.domaine())
                 .chef(chef)
                 .build();
 
