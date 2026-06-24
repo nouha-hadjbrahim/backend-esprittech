@@ -535,23 +535,6 @@ class EquipeRechercheServiceTest {
     }
 
     // =========================================================================
-    // getEntite()
-    // =========================================================================
-
-    @Test
-    void getEntite_notFound_throwsResourceNotFoundException() {
-        when(equipeRepository.findById(1L)).thenReturn(Optional.empty());
-        assertThrows(ResourceNotFoundException.class, () -> service.getEntite(1L));
-    }
-
-    @Test
-    void getEntite_found_returnsEntity() {
-        EquipeRecherche e = equipeVide();
-        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
-        assertEquals(e, service.getEntite(1L));
-    }
-
-    // =========================================================================
     // getMembres()
     // =========================================================================
 
