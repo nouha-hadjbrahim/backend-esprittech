@@ -138,8 +138,7 @@ public class EquipeRechercheService {
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
 
-    @Transactional(readOnly = true)
-    public EquipeRecherche getEntite(Long equipeId) {
+    private EquipeRecherche getEntite(Long equipeId) {
         Long tid = Objects.requireNonNull(equipeId, "equipeId");
         return equipeRepository.findById(tid)
                 .orElseThrow(() -> new ResourceNotFoundException("Équipe introuvable (id=" + equipeId + ")"));
