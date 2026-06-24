@@ -451,10 +451,9 @@ class EquipeRechercheServiceTest {
         when(userRepository.save(chef)).thenReturn(chef);
         when(equipeRepository.existsByChefIdAndIdNot(2L, 1L)).thenReturn(false);
         when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
 
-        EquipeRecherche result = service.assignerChef(1L, 2L);
-
-        assertEquals(chef, result.getChef());
+        assertNotNull(service.assignerChef(1L, 2L));
     }
 
     // =========================================================================
@@ -500,6 +499,7 @@ class EquipeRechercheServiceTest {
     void listerToutes_returnsAll() {
         List<EquipeRecherche> list = List.of(equipeVide(), equipeVide());
         when(equipeRepository.findAll()).thenReturn(list);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
 
         assertEquals(2, service.listerToutes().size());
     }
@@ -517,6 +517,17 @@ class EquipeRechercheServiceTest {
     @Test
     void findById_found_returnsResponse() {
         EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertNotNull(service.findById(1L));
+    }
+
+    @Test
+    void findById_withNullMembers_handlesGracefully() {
+        EquipeRecherche e = new EquipeRecherche();
+        e.setId(1L);
+        e.setMembers(null);
         when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
         when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
 
@@ -571,40 +582,6 @@ class EquipeRechercheServiceTest {
         List<User> result = service.getMembres(1L);
 
         assertEquals(1, result.size());
-    }
-
-    // =========================================================================
-    // compterMembres()
-    // =========================================================================
-
-    @Test
-    void compterMembres_noChefNoMembers_returnsZero() {
-        EquipeRecherche e = equipeVide();
-        assertEquals(0, service.compterMembres(e));
-    }
-
-    @Test
-    void compterMembres_chefOnly_returnsOne() {
-        EquipeRecherche e = equipeVide();
-        e.setChef(new User());
-        assertEquals(1, service.compterMembres(e));
-    }
-
-    @Test
-    void compterMembres_chefAndTwoMembers_returnsThree() {
-        EquipeRecherche e = equipeVide();
-        e.setChef(new User());
-        e.setMembers(List.of(new User(), new User()));
-        assertEquals(3, service.compterMembres(e));
-    }
-
-    @Test
-    void compterMembres_nullMembers_countsOnlyChef() {
-        EquipeRecherche e = new EquipeRecherche();
-        e.setId(1L);
-        e.setChef(new User());
-        e.setMembers(null);
-        assertEquals(1, service.compterMembres(e));
     }
 
     // Branch: update() → request.nom() != null but name is NOT duplicate

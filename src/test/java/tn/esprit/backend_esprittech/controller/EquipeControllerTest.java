@@ -15,12 +15,10 @@ import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.GlobalExceptionHandler;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
-import tn.esprit.backend_esprittech.mapper.EquipeMapper;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.EquipeRechercheService;
 
@@ -39,9 +37,6 @@ class EquipeControllerTest {
 
     @Mock
     private EquipeRechercheService equipeService;
-
-    @Mock
-    private EquipeMapper equipeMapper;
 
     @Mock
     private UserMapper userMapper;
@@ -64,25 +59,15 @@ class EquipeControllerTest {
 
     @Test
     void listerEquipes_withMultipleEquipes_returns200() throws Exception {
-        EquipeRecherche e1 = new EquipeRecherche();
-        EquipeRecherche e2 = new EquipeRecherche();
         EquipeResponse r1 = mock(EquipeResponse.class);
         EquipeResponse r2 = mock(EquipeResponse.class);
 
-        when(equipeService.listerToutes()).thenReturn(List.of(e1, e2));
-        when(equipeService.compterMembres(e1)).thenReturn(3);
-        when(equipeService.compterMembres(e2)).thenReturn(5);
-        when(equipeMapper.toResponse(e1, 3)).thenReturn(r1);
-        when(equipeMapper.toResponse(e2, 5)).thenReturn(r2);
+        when(equipeService.listerToutes()).thenReturn(List.of(r1, r2));
 
         mockMvc.perform(get("/api/equipes"))
                 .andExpect(status().isOk());
 
         verify(equipeService).listerToutes();
-        verify(equipeService).compterMembres(e1);
-        verify(equipeService).compterMembres(e2);
-        verify(equipeMapper).toResponse(e1, 3);
-        verify(equipeMapper).toResponse(e2, 5);
     }
 
     @Test
@@ -94,7 +79,6 @@ class EquipeControllerTest {
                 .andExpect(content().json("[]"));
 
         verify(equipeService).listerToutes();
-        verifyNoInteractions(equipeMapper);
     }
 
     @Test
@@ -112,30 +96,25 @@ class EquipeControllerTest {
 
     @Test
     void getEquipe_existingId_returns200() throws Exception {
-        EquipeRecherche equipe = new EquipeRecherche();
         EquipeResponse response = mock(EquipeResponse.class);
 
-        when(equipeService.getEntite(1L)).thenReturn(equipe);
-        when(equipeService.compterMembres(equipe)).thenReturn(3);
-        when(equipeMapper.toResponse(equipe, 3)).thenReturn(response);
+        when(equipeService.findById(1L)).thenReturn(response);
 
         mockMvc.perform(get("/api/equipes/1"))
                 .andExpect(status().isOk());
 
-        verify(equipeService).getEntite(1L);
-        verify(equipeService).compterMembres(equipe);
-        verify(equipeMapper).toResponse(equipe, 3);
+        verify(equipeService).findById(1L);
     }
 
     @Test
     void getEquipe_notFound_returns404() throws Exception {
-        when(equipeService.getEntite(99L))
+        when(equipeService.findById(99L))
                 .thenThrow(new ResourceNotFoundException("Equipe introuvable"));
 
         mockMvc.perform(get("/api/equipes/99"))
                 .andExpect(status().isNotFound());
 
-        verify(equipeService).getEntite(99L);
+        verify(equipeService).findById(99L);
     }
 
     // ================================================================
@@ -319,12 +298,9 @@ class EquipeControllerTest {
 
     @Test
     void assignerChef_validRequest_returns200() throws Exception {
-        EquipeRecherche equipe = new EquipeRecherche();
         EquipeResponse response = mock(EquipeResponse.class);
 
-        when(equipeService.assignerChef(1L, 2L)).thenReturn(equipe);
-        when(equipeService.compterMembres(equipe)).thenReturn(10);
-        when(equipeMapper.toResponse(equipe, 10)).thenReturn(response);
+        when(equipeService.assignerChef(1L, 2L)).thenReturn(response);
 
         mockMvc.perform(put("/api/equipes/1/chef")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -332,8 +308,6 @@ class EquipeControllerTest {
                 .andExpect(status().isOk());
 
         verify(equipeService).assignerChef(1L, 2L);
-        verify(equipeService).compterMembres(equipe);
-        verify(equipeMapper).toResponse(equipe, 10);
     }
 
     @Test

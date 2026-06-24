@@ -103,12 +103,13 @@ public class EquipeRechercheService {
 
     /** (Ré)assigne uniquement le chef d'une équipe existante. */
     @Transactional
-    public EquipeRecherche assignerChef(Long equipeId, Long chefId) {
+    public EquipeResponse assignerChef(Long equipeId, Long chefId) {
         EquipeRecherche equipe = getEntite(equipeId);
         User chef = promouvoirChef(chefId);
         ensureChefDisponible(chef, equipeId);
         equipe.setChef(chef);
-        return equipeRepository.save(equipe);
+        equipe = equipeRepository.save(equipe);
+        return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
 
     /** Supprime une équipe après avoir dissocié tous ses membres. */
@@ -124,8 +125,10 @@ public class EquipeRechercheService {
     // -------------------------------------------------------------------------
 
     @Transactional(readOnly = true)
-    public List<EquipeRecherche> listerToutes() {
-        return equipeRepository.findAll();
+    public List<EquipeResponse> listerToutes() {
+        return equipeRepository.findAll().stream()
+                .map(e -> equipeMapper.toResponse(e, compterMembres(e)))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +137,7 @@ public class EquipeRechercheService {
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
 
+    @Transactional(readOnly = true)
     public EquipeRecherche getEntite(Long equipeId) {
         Long tid = Objects.requireNonNull(equipeId, "equipeId");
         return equipeRepository.findById(tid)
@@ -144,6 +148,7 @@ public class EquipeRechercheService {
      * Membres d'une équipe : le chef + les enseignants affiliés.
      * Le chef est toujours placé en tête de liste.
      */
+    @Transactional(readOnly = true)
     public List<User> getMembres(Long equipeId) {
         EquipeRecherche equipe = getEntite(equipeId);
         List<User> membres = new ArrayList<>();
@@ -155,7 +160,7 @@ public class EquipeRechercheService {
     }
 
     /** Nombre total de membres (chef + membres) utilisé pour l'exposition API. */
-    public int compterMembres(EquipeRecherche equipe) {
+    private int compterMembres(EquipeRecherche equipe) {
         int count = equipe.getChef() != null ? 1 : 0;
         count += equipe.getMembers() != null ? equipe.getMembers().size() : 0;
         return count;
