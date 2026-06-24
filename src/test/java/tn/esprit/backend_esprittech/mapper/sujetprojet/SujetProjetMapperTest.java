@@ -92,7 +92,7 @@ class SujetProjetMapperTest {
                 .technologies("Java, Python")
                 .capaciteAccueil(2)
                 .statut(StatutSujet.VALIDE)
-                .scoreFinal(9.0)
+                .scoreFinalEvaluation(9.0)
                 .eligibleIndustrialisation(true)
                 .catalogue(true)
                 .encadrantId(1001L)

@@ -155,11 +155,11 @@ class SujetProjetTest {
         assertEquals(1L, sujet.getId());
         assertEquals("Titre", sujet.getTitre());
         assertEquals(CategorieSujet.RDI, sujet.getCategorie());
-        assertEquals(9.5, sujet.getScoreFinal());
+        assertEquals(9.5, sujet.getScoreFinalEvaluation());
         assertTrue(sujet.getEligibleIndustrialisation());
         assertEquals("Motif", sujet.getMotifInvalidation());
 
-        sujet.setScoreFinal(10.0);
-        assertEquals(10.0, sujet.getScoreFinal());
+        sujet.setScoreFinalEvaluation(10.0);
+        assertEquals(10.0, sujet.getScoreFinalEvaluation());
     }
 }

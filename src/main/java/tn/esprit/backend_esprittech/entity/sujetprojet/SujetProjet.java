@@ -63,7 +63,9 @@ public class SujetProjet {
     @Column(nullable = false, length = 50)
     private StatutSujet statut;
 
-    private Double scoreFinal;
+    private Double scoreFinalEvaluation;
+
+    private Boolean bloqueParEliminatoire;
 
     @Builder.Default
     @Column(nullable = false)
@@ -91,6 +93,9 @@ public class SujetProjet {
 
     @Column(columnDefinition = "TEXT")
     private String motifInvalidation;
+
+    public SujetProjet(long l, String titre, CategorieSujet categorieSujet, String desc, String obj, String pre, String domaine, String java, int i, StatutSujet statutSujet, double v, boolean b, boolean b1, long l1, LocalDateTime now, LocalDateTime now1, LocalDateTime now2, LocalDateTime now3, LocalDateTime now4, String motif) {
+    }
 
     @PrePersist
     void onCreate() {

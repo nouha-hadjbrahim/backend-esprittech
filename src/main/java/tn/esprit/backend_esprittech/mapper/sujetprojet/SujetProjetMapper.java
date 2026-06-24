@@ -53,7 +53,7 @@ public class SujetProjetMapper {
                 parseTechnologies(entity.getTechnologies()),
                 entity.getCapaciteAccueil(),
                 entity.getStatut(),
-                entity.getScoreFinal(),
+                entity.getScoreFinalEvaluation(),
                 entity.getEligibleIndustrialisation(),
                 entity.getCatalogue(),
                 entity.getEncadrantId(),
