@@ -160,4 +160,14 @@ public class SujetProjetService {
                 .map(s -> sujetProjetMapper.toResponse(s, noms.getOrDefault(s.getEncadrantId(), "Encadrant inconnu")))
                 .toList();
     }
+
+    @Transactional(readOnly = true)
+    public List<SujetProjetResponse> getProjetsEvaluables() {
+        List<SujetProjet> sujets = sujetProjetRepository.findByStatutOrderByDateCreationDesc(
+                StatutSujet.REALISATION_TERMINEE
+        );
+        return sujets.stream()
+                .map(sujetProjetMapper::toResponse)
+                .toList();
+    }
 }

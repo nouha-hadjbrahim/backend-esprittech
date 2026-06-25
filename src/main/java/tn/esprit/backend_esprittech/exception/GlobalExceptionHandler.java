@@ -57,6 +57,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
     }
 
+    @ExceptionHandler(tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException.class)
+    public ProblemDetail handleCritereEvalNotFound(tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+    }
+
+    @ExceptionHandler(tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException.class)
+    public ProblemDetail handleCritereEvalBadRequest(tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException ex) {
+        return build(HttpStatus.BAD_REQUEST, "Requête invalide", ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new LinkedHashMap<>();

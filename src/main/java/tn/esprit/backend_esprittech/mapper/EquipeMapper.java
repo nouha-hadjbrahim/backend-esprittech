@@ -27,6 +27,7 @@ public class EquipeMapper {
         return EquipeRecherche.builder()
                 .nom(request.nom())
                 .description(request.description())
+                .domaine(request.domaine())
                 .build();
     }
 
@@ -41,6 +42,9 @@ public class EquipeMapper {
         if (request.description() != null) {
             equipe.setDescription(request.description());
         }
+        if (request.domaine() != null) {
+            equipe.setDomaine(request.domaine());
+        }
     }
 
     /** Convertit une entité vers sa représentation API (avec nombre de membres). */
@@ -52,6 +56,7 @@ public class EquipeMapper {
                 equipe.getId(),
                 equipe.getNom(),
                 equipe.getDescription(),
+                equipe.getDomaine(),
                 userMapper.toResponse(equipe.getChef()),
                 equipe.getMembers().stream().map(userMapper::toResponse).toList(),
                 nbMembres,
