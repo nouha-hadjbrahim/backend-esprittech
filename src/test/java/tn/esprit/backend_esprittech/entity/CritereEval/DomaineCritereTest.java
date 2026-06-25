@@ -1,0 +1,96 @@
+package tn.esprit.backend_esprittech.entity.CritereEval;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class DomaineCritereTest {
+
+    @Test
+    void values_containsAllDomains() {
+        DomaineCritere[] values = DomaineCritere.values();
+
+        assertEquals(7, values.length);
+        assertNotNull(DomaineCritere.valueOf("DOCUMENTATION"));
+        assertNotNull(DomaineCritere.valueOf("TECHNIQUE"));
+        assertNotNull(DomaineCritere.valueOf("SECURITE"));
+        assertNotNull(DomaineCritere.valueOf("INNOVATION"));
+        assertNotNull(DomaineCritere.valueOf("IMPACT_METIER"));
+        assertNotNull(DomaineCritere.valueOf("QUALITE_CODE"));
+        assertNotNull(DomaineCritere.valueOf("MAINTENABILITE"));
+    }
+
+    @Test
+    void valueOf_documentation_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("DOCUMENTATION");
+        assertEquals(DomaineCritere.DOCUMENTATION, result);
+    }
+
+    @Test
+    void valueOf_technique_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("TECHNIQUE");
+        assertEquals(DomaineCritere.TECHNIQUE, result);
+    }
+
+    @Test
+    void valueOf_securite_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("SECURITE");
+        assertEquals(DomaineCritere.SECURITE, result);
+    }
+
+    @Test
+    void valueOf_innovation_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("INNOVATION");
+        assertEquals(DomaineCritere.INNOVATION, result);
+    }
+
+    @Test
+    void valueOf_impactMetier_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("IMPACT_METIER");
+        assertEquals(DomaineCritere.IMPACT_METIER, result);
+    }
+
+    @Test
+    void valueOf_qualiteCode_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("QUALITE_CODE");
+        assertEquals(DomaineCritere.QUALITE_CODE, result);
+    }
+
+    @Test
+    void valueOf_maintenabilite_returnsCorrectEnum() {
+        DomaineCritere result = DomaineCritere.valueOf("MAINTENABILITE");
+        assertEquals(DomaineCritere.MAINTENABILITE, result);
+    }
+
+    @Test
+    void enumValues_canBeUsedInComparison() {
+        DomaineCritere domaine = DomaineCritere.TECHNIQUE;
+        assertTrue(domaine == DomaineCritere.TECHNIQUE);
+        assertFalse(domaine == DomaineCritere.SECURITE);
+    }
+
+    @Test
+    void enumValues_canBeUsedInSwitch() {
+        DomaineCritere domaine = DomaineCritere.SECURITE;
+        String result = switch (domaine) {
+            case DOCUMENTATION -> "DOC";
+            case TECHNIQUE -> "TECH";
+            case SECURITE -> "SEC";
+            case INNOVATION -> "INV";
+            case IMPACT_METIER -> "IMP";
+            case QUALITE_CODE -> "QC";
+            case MAINTENABILITE -> "MAIN";
+        };
+        assertEquals("SEC", result);
+    }
+
+    @Test
+    void enumValues_allEnumsAreDifferent() {
+        DomaineCritere[] values = DomaineCritere.values();
+        for (int i = 0; i < values.length; i++) {
+            for (int j = i + 1; j < values.length; j++) {
+                assertNotEquals(values[i], values[j]);
+            }
+        }
+    }
+}
