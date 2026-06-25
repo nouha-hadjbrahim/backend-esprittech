@@ -9,6 +9,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
@@ -46,8 +48,9 @@ class EvaluationControllerTest {
         );
         
         sujetProjetResponse = new SujetProjetResponse(
-                1L, "Titre", null, "Desc", "Obj", "Pre", "Domaine",
-                List.of("Java"), 2, null, 8.5, false, false, 1001L,
+                1L, "Titre", CategorieSujet.PFE, "Desc", "Obj",
+                List.of("Pre"), List.of("Domaine"), List.of("Java"), 2,
+                StatutSujet.REALISATION_TERMINEE, 8.5, false, false, 1001L, "Encadrant Test",
                 now, now, null, null, null, null
         );
     }
@@ -121,10 +124,14 @@ class EvaluationControllerTest {
     void getEvaluableProjects_multipleProjects_returnsAllProjects() {
         LocalDateTime now = LocalDateTime.now();
         List<SujetProjetResponse> projects = List.of(
-                new SujetProjetResponse(1L, "Project1", null, "Desc1", "Obj1", "Pre1", "Dom1",
-                        List.of("Java"), 2, null, 8.5, false, false, 1001L, now, now, null, null, null, null),
-                new SujetProjetResponse(2L, "Project2", null, "Desc2", "Obj2", "Pre2", "Dom2",
-                        List.of("Python"), 3, null, 7.5, false, false, 1002L, now, now, null, null, null, null)
+                new SujetProjetResponse(1L, "Project1", CategorieSujet.PFE, "Desc1", "Obj1",
+                        List.of("Pre1"), List.of("Dom1"), List.of("Java"), 2,
+                        StatutSujet.REALISATION_TERMINEE, 8.5, false, false, 1001L, "Encadrant 1",
+                        now, now, null, null, null, null),
+                new SujetProjetResponse(2L, "Project2", CategorieSujet.PFE, "Desc2", "Obj2",
+                        List.of("Pre2"), List.of("Dom2"), List.of("Python"), 3,
+                        StatutSujet.REALISATION_TERMINEE, 7.5, false, false, 1002L, "Encadrant 2",
+                        now, now, null, null, null, null)
         );
         when(sujetProjetService.getProjetsEvaluables()).thenReturn(projects);
 

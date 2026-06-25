@@ -33,6 +33,7 @@ class SujetProjetServiceTest {
     @Mock private SujetProjetMapper sujetProjetMapper;
     @Mock private UserService userService;
     @Mock private UserRepository userRepository;
+    @Mock private SujetReferenceService referenceService;
 
     @InjectMocks private SujetProjetService service;
 
