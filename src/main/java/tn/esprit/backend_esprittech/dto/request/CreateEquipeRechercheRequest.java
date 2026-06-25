@@ -18,6 +18,10 @@ public record CreateEquipeRechercheRequest(
         @Size(max = 1000, message = "La description ne peut dépasser 1000 caractères")
         String description,
 
+        @NotBlank(message = "Le domaine est obligatoire")
+        @Size(max = 200, message = "Le domaine ne peut dépasser 200 caractères")
+        String domaine,
+
         Long chefId,
 
         List<Long> memberIds

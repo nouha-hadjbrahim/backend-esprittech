@@ -12,8 +12,6 @@ import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
-import tn.esprit.backend_esprittech.mapper.EquipeMapper;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.EquipeRechercheService;
 
@@ -25,14 +23,11 @@ import java.util.List;
 public class EquipeController {
 
     private final EquipeRechercheService equipeService;
-    private final EquipeMapper equipeMapper;
     private final UserMapper userMapper;
 
     public EquipeController(EquipeRechercheService equipeService,
-                            EquipeMapper equipeMapper,
                             UserMapper userMapper) {
         this.equipeService = equipeService;
-        this.equipeMapper = equipeMapper;
         this.userMapper = userMapper;
     }
 
@@ -44,22 +39,14 @@ public class EquipeController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Lister les équipes")
     public ResponseEntity<List<EquipeResponse>> listerEquipes() {
-        List<EquipeResponse> equipes = equipeService.listerToutes().stream()
-                .map(e -> equipeMapper.toResponse(e, equipeService.compterMembres(e)))
-                .toList();
-
-        return ResponseEntity.ok(equipes);
+        return ResponseEntity.ok(equipeService.listerToutes());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Détail d'une équipe")
     public ResponseEntity<EquipeResponse> getEquipe(@PathVariable Long id) {
-        EquipeRecherche equipe = equipeService.getEntite(id);
-
-        return ResponseEntity.ok(
-                equipeMapper.toResponse(equipe, equipeService.compterMembres(equipe))
-        );
+        return ResponseEntity.ok(equipeService.findById(id));
     }
 
     @GetMapping("/{id}/membres")
@@ -113,10 +100,6 @@ public class EquipeController {
             @PathVariable Long id,
             @Valid @RequestBody AssignChefRequest request) {
 
-        EquipeRecherche equipe = equipeService.assignerChef(id, request.chefId());
-
-        return ResponseEntity.ok(
-                equipeMapper.toResponse(equipe, equipeService.compterMembres(equipe))
-        );
+        return ResponseEntity.ok(equipeService.assignerChef(id, request.chefId()));
     }
 }

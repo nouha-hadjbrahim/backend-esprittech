@@ -10,6 +10,7 @@ public record EquipeResponse(
         Long id,
         String nom,
         String description,
+        String domaine,
         UserResponse chef,
         List<UserResponse> members,
         int nbMembres,
