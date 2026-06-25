@@ -166,8 +166,6 @@ public class SujetProjetService {
         List<SujetProjet> sujets = sujetProjetRepository.findByStatutOrderByDateCreationDesc(
                 StatutSujet.REALISATION_TERMINEE
         );
-        return sujets.stream()
-                .map(sujetProjetMapper::toResponse)
-                .toList();
+        return toResponses(sujets);
     }
 }
