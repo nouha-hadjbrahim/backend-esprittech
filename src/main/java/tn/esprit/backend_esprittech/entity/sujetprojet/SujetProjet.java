@@ -43,9 +43,8 @@ public class SujetProjet {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String prerequis;
 
-    @NotBlank(message = "Le domaine est obligatoire")
-    @Size(max = 150, message = "Le domaine ne doit pas dépasser 150 caractères")
-    @Column(nullable = false, length = 150)
+    @NotBlank(message = "Au moins un domaine est obligatoire")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String domaine;
 
     @NotBlank(message = "Les technologies sont obligatoires")

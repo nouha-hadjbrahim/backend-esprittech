@@ -19,12 +19,11 @@ public record SujetProjetRequest(
         @NotBlank(message = "Les objectifs sont obligatoires")
         String objectifs,
 
-        @NotBlank(message = "Les prérequis sont obligatoires")
-        String prerequis,
+        @NotEmpty(message = "Au moins un prérequis doit être sélectionné")
+        List<@NotBlank String> prerequis,
 
-        @NotBlank(message = "Le domaine est obligatoire")
-        @Size(max = 150, message = "Le domaine ne doit pas dépasser 150 caractères")
-        String domaine,
+        @NotEmpty(message = "Au moins un domaine doit être sélectionné")
+        List<@NotBlank @Size(max = 150) String> domaines,
 
         @NotEmpty(message = "Au moins une technologie doit être sélectionnée")
         List<@NotBlank String> technologies,

@@ -5,7 +5,6 @@ import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
-import tn.esprit.backend_esprittech.service.sujetprojet.MockEncadrantContext;
 
 import java.util.Arrays;
 import java.util.List;
@@ -13,18 +12,18 @@ import java.util.List;
 @Component
 public class SujetProjetMapper {
 
-    public SujetProjet toEntity(SujetProjetRequest request) {
+    public SujetProjet toEntity(SujetProjetRequest request, Long encadrantId) {
         return SujetProjet.builder()
                 .titre(request.titre().trim())
                 .categorie(request.categorie())
                 .description(request.description().trim())
                 .objectifs(request.objectifs().trim())
-                .prerequis(request.prerequis().trim())
-                .domaine(request.domaine().trim())
-                .technologies(String.join(",", request.technologies()))
+                .prerequis(joinValues(request.prerequis()))
+                .domaine(joinValues(request.domaines()))
+                .technologies(joinValues(request.technologies()))
                 .capaciteAccueil(request.capaciteAccueil())
                 .statut(StatutSujet.SOUMIS_EN_VALIDATION)
-                .encadrantId(MockEncadrantContext.ENCADRANT_ID)
+                .encadrantId(encadrantId)
                 .eligibleIndustrialisation(false)
                 .catalogue(false)
                 .build();
@@ -35,28 +34,29 @@ public class SujetProjetMapper {
         entity.setCategorie(request.categorie());
         entity.setDescription(request.description().trim());
         entity.setObjectifs(request.objectifs().trim());
-        entity.setPrerequis(request.prerequis().trim());
-        entity.setDomaine(request.domaine().trim());
-        entity.setTechnologies(String.join(",", request.technologies()));
+        entity.setPrerequis(joinValues(request.prerequis()));
+        entity.setDomaine(joinValues(request.domaines()));
+        entity.setTechnologies(joinValues(request.technologies()));
         entity.setCapaciteAccueil(request.capaciteAccueil());
     }
 
-    public SujetProjetResponse toResponse(SujetProjet entity) {
+    public SujetProjetResponse toResponse(SujetProjet entity, String encadrantNom) {
         return new SujetProjetResponse(
                 entity.getId(),
                 entity.getTitre(),
                 entity.getCategorie(),
                 entity.getDescription(),
                 entity.getObjectifs(),
-                entity.getPrerequis(),
-                entity.getDomaine(),
-                parseTechnologies(entity.getTechnologies()),
+                parseValues(entity.getPrerequis()),
+                parseValues(entity.getDomaine()),
+                parseValues(entity.getTechnologies()),
                 entity.getCapaciteAccueil(),
                 entity.getStatut(),
                 entity.getScoreFinal(),
                 entity.getEligibleIndustrialisation(),
                 entity.getCatalogue(),
                 entity.getEncadrantId(),
+                encadrantNom,
                 entity.getDateCreation(),
                 entity.getDateSoumission(),
                 entity.getDateValidation(),
@@ -66,11 +66,15 @@ public class SujetProjetMapper {
         );
     }
 
-    private List<String> parseTechnologies(String technologies) {
-        if (technologies == null || technologies.isBlank()) {
+    private String joinValues(List<String> values) {
+        return String.join(",", values.stream().map(String::trim).filter(s -> !s.isEmpty()).toList());
+    }
+
+    private List<String> parseValues(String values) {
+        if (values == null || values.isBlank()) {
             return List.of();
         }
-        return Arrays.stream(technologies.split(","))
+        return Arrays.stream(values.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
