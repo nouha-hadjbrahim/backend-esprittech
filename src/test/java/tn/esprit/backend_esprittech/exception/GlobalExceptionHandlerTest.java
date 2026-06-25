@@ -130,4 +130,126 @@ class GlobalExceptionHandlerTest {
         assertEquals("Ressource introuvable", result.getTitle());
         assertEquals("Utilisateur non trouvé", result.getDetail());
     }
+
+    @Test
+    void handleCritereEvalNotFound_returns404() {
+        tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex =
+                new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("Critère non trouvé");
+
+        ProblemDetail pd = handler.handleCritereEvalNotFound(ex);
+
+        assertEquals(404, pd.getStatus());
+        assertEquals("Ressource introuvable", pd.getTitle());
+        assertEquals("Critère non trouvé", pd.getDetail());
+        assertNotNull(pd.getProperties().get("timestamp"));
+    }
+
+    @Test
+    void handleCritereEvalBadRequest_returns400() {
+        tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException ex =
+                new tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException("Requête invalide");
+
+        ProblemDetail pd = handler.handleCritereEvalBadRequest(ex);
+
+        assertEquals(400, pd.getStatus());
+        assertEquals("Requête invalide", pd.getTitle());
+        assertEquals("Requête invalide", pd.getDetail());
+        assertNotNull(pd.getProperties().get("timestamp"));
+    }
+
+    @Test
+    void handleValidation_multipleFieldErrors_returnsAllErrors() {
+        MethodArgumentNotValidException ex = mock(MethodArgumentNotValidException.class);
+        BindingResult bindingResult = mock(BindingResult.class);
+        FieldError error1 = new FieldError("request", "email", "Format invalide");
+        FieldError error2 = new FieldError("request", "password", "Mot de passe faible");
+
+        when(ex.getBindingResult()).thenReturn(bindingResult);
+        when(bindingResult.getFieldErrors()).thenReturn(List.of(error1, error2));
+
+        ProblemDetail pd = handler.handleValidation(ex);
+
+        assertEquals(400, pd.getStatus());
+        assertEquals("Validation", pd.getTitle());
+        assertNotNull(pd.getProperties().get("errors"));
+    }
+
+    @Test
+    void handleEmailExists_propertyHasTimestamp() {
+        EmailAlreadyExistsException ex = new EmailAlreadyExistsException("email exists");
+        ProblemDetail pd = handler.handleEmailExists(ex);
+
+        assertNotNull(pd.getProperties().get("timestamp"));
+        assertTrue(pd.getProperties().get("timestamp") instanceof java.time.Instant);
+    }
+
+    @Test
+    void handleGeneric_differentException_returns500() {
+        Exception ex = new Exception("Database connection error");
+        ProblemDetail pd = handler.handleGeneric(ex);
+
+        assertEquals(500, pd.getStatus());
+        assertEquals("Erreur interne", pd.getTitle());
+        assertEquals("Database connection error", pd.getDetail());
+    }
+
+    @Test
+    void handleBusiness_differentMessage_returns400() {
+        BusinessException ex = new BusinessException("Solde insuffisant");
+        ProblemDetail pd = handler.handleBusiness(ex);
+
+        assertEquals(400, pd.getStatus());
+        assertEquals("Règle métier violée", pd.getTitle());
+        assertEquals("Solde insuffisant", pd.getDetail());
+    }
+
+    @Test
+    void handleReferentielNotFound_differentMessage_returns404() {
+        ReferentielNotFoundException ex = new ReferentielNotFoundException("Fichier not found");
+        ProblemDetail pd = handler.handleReferentielNotFound(ex);
+
+        assertEquals(404, pd.getStatus());
+        assertEquals("Référentiel", pd.getTitle());
+        assertEquals("Fichier not found", pd.getDetail());
+    }
+
+    @Test
+    void handleAccessDenied_hasTimestamp() {
+        AccessDeniedException ex = new AccessDeniedException("Access denied");
+        ProblemDetail pd = handler.handleAccessDenied(ex);
+
+        assertNotNull(pd.getProperties().get("timestamp"));
+        assertTrue(pd.getProperties().get("timestamp") instanceof java.time.Instant);
+    }
+
+    @Test
+    void handleIllegalArgument_hasTimestamp() {
+        IllegalArgumentException ex = new IllegalArgumentException("Invalid argument");
+        ProblemDetail pd = handler.handleIllegalArgument(ex);
+
+        assertNotNull(pd.getProperties().get("timestamp"));
+    }
+
+    @Test
+    void handleNotFound_hasTimestamp() {
+        ResourceNotFoundException ex = new ResourceNotFoundException("Not found");
+        ProblemDetail pd = handler.handleNotFound(ex);
+
+        assertNotNull(pd.getProperties().get("timestamp"));
+    }
+
+    @Test
+    void handleValidation_noFieldErrors_returns400() {
+        MethodArgumentNotValidException ex = mock(MethodArgumentNotValidException.class);
+        BindingResult bindingResult = mock(BindingResult.class);
+
+        when(ex.getBindingResult()).thenReturn(bindingResult);
+        when(bindingResult.getFieldErrors()).thenReturn(List.of());
+
+        ProblemDetail pd = handler.handleValidation(ex);
+
+        assertEquals(400, pd.getStatus());
+        assertEquals("Validation", pd.getTitle());
+        assertNotNull(pd.getProperties().get("errors"));
+    }
 }
