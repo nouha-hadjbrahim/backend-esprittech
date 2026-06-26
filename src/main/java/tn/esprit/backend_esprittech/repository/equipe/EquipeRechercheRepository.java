@@ -1,8 +1,8 @@
-package tn.esprit.backend_esprittech.repository;
+package tn.esprit.backend_esprittech.repository.equipe;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 
 @Repository
 public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche, Long> {

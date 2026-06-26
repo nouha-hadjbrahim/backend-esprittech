@@ -1,10 +1,11 @@
-package tn.esprit.backend_esprittech.mapper;
+package tn.esprit.backend_esprittech.mapper.equipe;
 
 import org.springframework.stereotype.Component;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
+import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
+import tn.esprit.backend_esprittech.mapper.UserMapper;
 
 /**
  * Conversion des entités {@link EquipeRecherche} vers leur représentation API

@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.dto.request;
+package tn.esprit.backend_esprittech.dto.equipe;
 
 import jakarta.validation.constraints.NotNull;
 

@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.enums;
+package tn.esprit.backend_esprittech.enums.equipe;
 
 import org.junit.jupiter.api.Test;
 

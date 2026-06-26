@@ -1,20 +1,27 @@
-package tn.esprit.backend_esprittech.controller;
+package tn.esprit.backend_esprittech.controller.equipe;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import tn.esprit.backend_esprittech.dto.request.AjouterMembresRequest;
-import tn.esprit.backend_esprittech.dto.request.AssignChefRequest;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
+import tn.esprit.backend_esprittech.dto.equipe.AjouterMembresRequest;
+import tn.esprit.backend_esprittech.dto.equipe.AssignChefRequest;
+import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
+import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
-import tn.esprit.backend_esprittech.service.EquipeRechercheService;
+import tn.esprit.backend_esprittech.service.equipe.EquipeRechercheService;
+import tn.esprit.backend_esprittech.service.UserService;
 
 import java.util.List;
 
@@ -24,11 +31,14 @@ import java.util.List;
 public class EquipeController {
 
     private final EquipeRechercheService equipeService;
+    private final UserService userService;
     private final UserMapper userMapper;
 
     public EquipeController(EquipeRechercheService equipeService,
+                            UserService userService,
                             UserMapper userMapper) {
         this.equipeService = equipeService;
+        this.userService = userService;
         this.userMapper = userMapper;
     }
 
@@ -59,6 +69,22 @@ public class EquipeController {
                 .toList();
 
         return ResponseEntity.ok(membres);
+    }
+
+    @GetMapping("/users/eligible")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF_EQUIPE')")
+    @Operation(summary = "Utilisateurs éligibles",
+               description = "Liste paginée des utilisateurs éligibles pour être chef ou membre d'une équipe donnée.")
+    public ResponseEntity<PagedResponse<UserResponse>> getEligibleUsers(
+            @RequestParam(required = false) Long equipeId,
+            @RequestParam(defaultValue = "MEMBER") String type,
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "nom", "prenom"));
+        Page<User> users = userService.listEligible(search, equipeId, type, pageable);
+        return ResponseEntity.ok(PagedResponse.from(users, userMapper::toResponse));
     }
 
     // =====================================================
@@ -112,7 +138,7 @@ public class EquipeController {
     }
 
     @PostMapping("/{id}/membres")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF_EQUIPE')")
     @Operation(summary = "Ajouter des membres à une équipe")
     public ResponseEntity<EquipeResponse> ajouterMembres(
             @PathVariable Long id,
@@ -122,7 +148,7 @@ public class EquipeController {
     }
 
     @DeleteMapping("/{id}/membres/{userId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF_EQUIPE')")
     @Operation(summary = "Retirer un membre d'une équipe")
     public ResponseEntity<EquipeResponse> retirerMembre(
             @PathVariable Long id,

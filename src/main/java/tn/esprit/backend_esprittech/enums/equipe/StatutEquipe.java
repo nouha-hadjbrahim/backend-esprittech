@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.enums;
+package tn.esprit.backend_esprittech.enums.equipe;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;

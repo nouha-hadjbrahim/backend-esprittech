@@ -1,11 +1,11 @@
-package tn.esprit.backend_esprittech.dto.request;
+package tn.esprit.backend_esprittech.dto.equipe;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-import tn.esprit.backend_esprittech.enums.StatutEquipe;
+import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 
 /**
  * Création d'une équipe de recherche par l'admin avec assignation d'un chef

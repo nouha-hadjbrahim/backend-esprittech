@@ -1,18 +1,18 @@
-package tn.esprit.backend_esprittech.service;
+package tn.esprit.backend_esprittech.service.equipe;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
+import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
-import tn.esprit.backend_esprittech.mapper.EquipeMapper;
-import tn.esprit.backend_esprittech.repository.EquipeRechercheRepository;
+import tn.esprit.backend_esprittech.mapper.equipe.EquipeMapper;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.util.ArrayList;

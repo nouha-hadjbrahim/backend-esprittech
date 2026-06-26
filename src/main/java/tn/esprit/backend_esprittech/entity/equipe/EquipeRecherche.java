@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.entity;
+package tn.esprit.backend_esprittech.entity.equipe;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -13,7 +13,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import tn.esprit.backend_esprittech.enums.StatutEquipe;
+import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 
 /**
  * Équipe de recherche créée par l'admin. Chaque équipe possède un chef

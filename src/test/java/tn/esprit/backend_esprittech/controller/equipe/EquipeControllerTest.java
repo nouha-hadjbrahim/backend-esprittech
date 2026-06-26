@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.controller;
+package tn.esprit.backend_esprittech.controller.equipe;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -7,26 +7,31 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import tn.esprit.backend_esprittech.dto.request.AjouterMembresRequest;
-import tn.esprit.backend_esprittech.dto.request.AssignChefRequest;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
+import tn.esprit.backend_esprittech.dto.equipe.AjouterMembresRequest;
+import tn.esprit.backend_esprittech.dto.equipe.AssignChefRequest;
+import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.GlobalExceptionHandler;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
-import tn.esprit.backend_esprittech.service.EquipeRechercheService;
+import tn.esprit.backend_esprittech.service.equipe.EquipeRechercheService;
+import tn.esprit.backend_esprittech.service.UserService;
 
 import java.util.Collections;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -38,6 +43,9 @@ class EquipeControllerTest {
 
     @Mock
     private EquipeRechercheService equipeService;
+
+    @Mock
+    private UserService userService;
 
     @Mock
     private UserMapper userMapper;
@@ -162,6 +170,51 @@ class EquipeControllerTest {
                 .andExpect(status().isNotFound());
 
         verify(equipeService).getMembres(99L);
+    }
+
+    // ================================================================
+    // GET /api/equipes/users/eligible  — getEligibleUsers
+    // ================================================================
+
+    @Test
+    void getEligibleUsers_defaultParams_returnsPage() throws Exception {
+        Page<User> page = new PageImpl<>(List.of(new User()));
+        when(userService.listEligible(eq(""), eq(1L), eq("MEMBER"), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/equipes/users/eligible")
+                        .param("equipeId", "1"))
+                .andExpect(status().isOk());
+
+        verify(userService).listEligible(eq(""), eq(1L), eq("MEMBER"), any(Pageable.class));
+    }
+
+    @Test
+    void getEligibleUsers_withSearchAndChefType_returnsPage() throws Exception {
+        Page<User> page = new PageImpl<>(List.of(new User()));
+        when(userService.listEligible(eq("raed"), eq(1L), eq("CHEF"), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/equipes/users/eligible")
+                        .param("equipeId", "1")
+                        .param("type", "CHEF")
+                        .param("search", "raed"))
+                .andExpect(status().isOk());
+
+        verify(userService).listEligible(eq("raed"), eq(1L), eq("CHEF"), any(Pageable.class));
+    }
+
+    @Test
+    void getEligibleUsers_empty_returnsOkWithEmptyPage() throws Exception {
+        Page<User> empty = Page.empty();
+        when(userService.listEligible(eq(""), eq(99L), eq("MEMBER"), any(Pageable.class)))
+                .thenReturn(empty);
+
+        mockMvc.perform(get("/api/equipes/users/eligible")
+                        .param("equipeId", "99"))
+                .andExpect(status().isOk());
+
+        verify(userService).listEligible(eq(""), eq(99L), eq("MEMBER"), any(Pageable.class));
     }
 
     // ================================================================

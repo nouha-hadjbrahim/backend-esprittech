@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.entity;
+package tn.esprit.backend_esprittech.entity.equipe;
 
 import org.junit.jupiter.api.Test;
 
@@ -7,7 +7,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import tn.esprit.backend_esprittech.enums.StatutEquipe;
+import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 
 class EquipeRechercheTest {
 
