@@ -13,6 +13,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import tn.esprit.backend_esprittech.enums.StatutEquipe;
+
 /**
  * Équipe de recherche créée par l'admin. Chaque équipe possède un chef
  * (un {@link User} de rôle CHEF_EQUIPE) qui valide les demandes d'affiliation.
@@ -56,6 +58,11 @@ public class EquipeRecherche implements Serializable {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private StatutEquipe statut = StatutEquipe.ACTIF;
 
     @PrePersist
     void onCreate() {

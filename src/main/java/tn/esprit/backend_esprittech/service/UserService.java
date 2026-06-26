@@ -16,6 +16,7 @@ import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
@@ -62,6 +63,20 @@ public class UserService {
             return userRepository.search(search.trim(), pageable);
         }
         return userRepository.findAll(pageable);
+    }
+
+    /**
+     * Liste paginée des utilisateurs éligibles pour être chef ou membre
+     * d'une équipe donnée.
+     * @param type "CHEF" ou "MEMBER"
+     */
+    public Page<User> listEligible(String search, Long equipeId, String type, Pageable pageable) {
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT);
+        String q = search != null ? search.trim() : "";
+        if ("CHEF".equalsIgnoreCase(type) && equipeId != null) {
+            return userRepository.searchEligible(q, equipeId, roles, pageable);
+        }
+        return userRepository.searchEligibleMembers(q, roles, pageable);
     }
 
     /** Met à jour l'identité, le rôle et l'état d'activation d'un utilisateur. */

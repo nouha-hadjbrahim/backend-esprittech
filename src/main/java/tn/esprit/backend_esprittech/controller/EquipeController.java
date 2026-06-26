@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.backend_esprittech.dto.request.AjouterMembresRequest;
 import tn.esprit.backend_esprittech.dto.request.AssignChefRequest;
 import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
@@ -101,5 +102,32 @@ public class EquipeController {
             @Valid @RequestBody AssignChefRequest request) {
 
         return ResponseEntity.ok(equipeService.assignerChef(id, request.chefId()));
+    }
+
+    @DeleteMapping("/{id}/chef")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Révoquer le chef d'une équipe")
+    public ResponseEntity<EquipeResponse> retirerChef(@PathVariable Long id) {
+        return ResponseEntity.ok(equipeService.retirerChef(id));
+    }
+
+    @PostMapping("/{id}/membres")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Ajouter des membres à une équipe")
+    public ResponseEntity<EquipeResponse> ajouterMembres(
+            @PathVariable Long id,
+            @Valid @RequestBody AjouterMembresRequest request) {
+
+        return ResponseEntity.ok(equipeService.ajouterMembres(id, request.memberIds()));
+    }
+
+    @DeleteMapping("/{id}/membres/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Retirer un membre d'une équipe")
+    public ResponseEntity<EquipeResponse> retirerMembre(
+            @PathVariable Long id,
+            @PathVariable Long userId) {
+
+        return ResponseEntity.ok(equipeService.retirerMembre(id, userId));
     }
 }

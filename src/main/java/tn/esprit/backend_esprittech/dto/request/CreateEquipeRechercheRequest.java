@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
+import tn.esprit.backend_esprittech.enums.StatutEquipe;
+
 /**
  * Création d'une équipe de recherche par l'admin avec assignation d'un chef
  * et de membres optionnels.
@@ -24,6 +26,8 @@ public record CreateEquipeRechercheRequest(
 
         Long chefId,
 
-        List<Long> memberIds
+        List<Long> memberIds,
+
+        StatutEquipe statut
 ) {
 }

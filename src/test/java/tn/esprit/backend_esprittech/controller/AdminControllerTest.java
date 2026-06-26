@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -236,5 +237,48 @@ class AdminControllerTest {
                 .andExpect(status().isNotFound());
 
         verify(userService).delete(99L);
+    }
+
+    // ---------------- ELIGIBLE USERS ----------------
+
+    @Test
+    void getEligibleUsers_defaultParams_returnsPage() throws Exception {
+        Page<User> page = new PageImpl<>(List.of(new User()));
+        when(userService.listEligible(eq(""), eq(1L), eq("MEMBER"), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/users/eligible")
+                        .param("equipeId", "1"))
+                .andExpect(status().isOk());
+
+        verify(userService).listEligible(eq(""), eq(1L), eq("MEMBER"), any(Pageable.class));
+    }
+
+    @Test
+    void getEligibleUsers_withSearchAndChefType_returnsPage() throws Exception {
+        Page<User> page = new PageImpl<>(List.of(new User()));
+        when(userService.listEligible(eq("raed"), eq(1L), eq("CHEF"), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/users/eligible")
+                        .param("equipeId", "1")
+                        .param("type", "CHEF")
+                        .param("search", "raed"))
+                .andExpect(status().isOk());
+
+        verify(userService).listEligible(eq("raed"), eq(1L), eq("CHEF"), any(Pageable.class));
+    }
+
+    @Test
+    void getEligibleUsers_empty_returnsOkWithEmptyPage() throws Exception {
+        Page<User> empty = Page.empty();
+        when(userService.listEligible(eq(""), eq(99L), eq("MEMBER"), any(Pageable.class)))
+                .thenReturn(empty);
+
+        mockMvc.perform(get("/api/admin/users/eligible")
+                        .param("equipeId", "99"))
+                .andExpect(status().isOk());
+
+        verify(userService).listEligible(eq(""), eq(99L), eq("MEMBER"), any(Pageable.class));
     }
 }

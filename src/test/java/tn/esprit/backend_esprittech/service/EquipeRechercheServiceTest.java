@@ -339,8 +339,9 @@ class EquipeRechercheServiceTest {
     @Test
     void update_notFound_throwsResourceNotFoundException() {
         when(equipeRepository.findById(1L)).thenReturn(Optional.empty());
+        UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
         assertThrows(ResourceNotFoundException.class,
-                () -> service.update(1L, mock(UpdateEquipeRechercheRequest.class)));
+                () -> service.update(1L, req));
     }
 
     @Test
@@ -467,7 +468,7 @@ class EquipeRechercheServiceTest {
     }
 
     @Test
-    void delete_withMembers_dissociatesAndDeletes() {
+    void delete_withMembers_throwsBusinessException() {
         EquipeRecherche e = equipeVide();
         User m = enseignant(20L);
         e.getMembers().add(m);
@@ -475,10 +476,8 @@ class EquipeRechercheServiceTest {
 
         when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
 
-        service.delete(1L);
-
-        assertNull(m.getEquipeRecherche());
-        verify(equipeRepository).delete(e);
+        assertThrows(BusinessException.class, () -> service.delete(1L));
+        verify(equipeRepository, never()).delete(any());
     }
 
     @Test
@@ -656,6 +655,66 @@ class EquipeRechercheServiceTest {
         assertDoesNotThrow(() -> service.update(1L, req));
     }
 
+    // Branch: update() → chefId == null but equipe has a chef → chef is demoted and removed
+    @Test
+    void update_removeChef_demotesToEnseignant() {
+        EquipeRecherche e = equipeVide();
+        User oldChef = chefEquipe(10L);
+        e.setChef(oldChef);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(userRepository.save(oldChef)).thenReturn(oldChef);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn(null);
+        when(req.chefId()).thenReturn(null);
+        when(req.memberIds()).thenReturn(null);
+
+        service.update(1L, req);
+
+        assertNull(e.getChef());
+        assertEquals(Role.ROLE_ENSEIGNANT, oldChef.getRole());
+        verify(userRepository).save(oldChef);
+    }
+
+    // Branch: update() → chefId == null, equipe has chef AND members,
+    // memberIds keeps current members (ex-chef becomes regular member after demotion)
+    @Test
+    void update_removeChef_keepsMembersIntact() {
+        EquipeRecherche e = equipeVide();
+        User oldChef = chefEquipe(10L);
+        User member1 = enseignant(20L);
+        User member2 = enseignant(21L);
+        e.setChef(oldChef);
+        e.getMembers().add(oldChef);
+        oldChef.setEquipeRecherche(e);
+        e.getMembers().add(member1);
+        member1.setEquipeRecherche(e);
+        e.getMembers().add(member2);
+        member2.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(userRepository.save(oldChef)).thenReturn(oldChef);
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(oldChef, member1, member2));
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn(null);
+        when(req.chefId()).thenReturn(null);                       // chef removed
+        when(req.memberIds()).thenReturn(List.of(10L, 20L, 21L));   // members kept (including ex-chef)
+
+        service.update(1L, req);
+
+        assertNull(e.getChef());                                          // no chef
+        assertEquals(Role.ROLE_ENSEIGNANT, oldChef.getRole());             // demoted
+        assertEquals(3, e.getMembers().size());                            // all 3 still in members
+        assertTrue(e.getMembers().contains(oldChef));                       // ex-chef now a regular member
+        verify(userRepository).save(oldChef);
+    }
+
     // Branch: assignerMembres() → memberIds is empty list → early return
     @Test
     void create_emptyMemberIds_skipsAssignment() {
@@ -739,5 +798,243 @@ class EquipeRechercheServiceTest {
         when(req.memberIds()).thenReturn(List.of(20L));
 
         assertDoesNotThrow(() -> service.update(1L, req));
+    }
+
+    // =========================================================================
+    // ajouterMembres()
+    // =========================================================================
+
+    @Test
+    void ajouterMembres_teamNotFound_throwsResourceNotFoundException() {
+        when(equipeRepository.findById(99L)).thenReturn(Optional.empty());
+        List<Long> memberIds = List.of(1L);
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.ajouterMembres(99L, memberIds));
+    }
+
+    @Test
+    void ajouterMembres_emptyMemberIds_noOp() {
+        EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertDoesNotThrow(() -> service.ajouterMembres(1L, List.of()));
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void ajouterMembres_valid_savesAndReturns() {
+        EquipeRecherche e = equipeVide();
+        User member = enseignant(20L);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertNotNull(service.ajouterMembres(1L, List.of(20L)));
+        assertTrue(e.getMembers().contains(member));
+    }
+
+    @Test
+    void ajouterMembres_memberAlreadyInAnotherTeam_throwsBusinessException() {
+        EquipeRecherche e = equipeVide();
+        User member = enseignant(20L);
+        EquipeRecherche autre = new EquipeRecherche();
+        autre.setId(99L);
+        member.setEquipeRecherche(autre);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member));
+        List<Long> memberIds = List.of(20L);
+
+        assertThrows(BusinessException.class,
+                () -> service.ajouterMembres(1L, memberIds));
+    }
+
+    @Test
+    void ajouterMembres_memberNotFound_throwsResourceNotFoundException() {
+        EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of());
+        List<Long> memberIds = List.of(20L);
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.ajouterMembres(1L, memberIds));
+    }
+
+    @Test
+    void ajouterMembres_memberInvalidRole_throwsBusinessException() {
+        EquipeRecherche e = equipeVide();
+        User member = new User();
+        member.setId(20L);
+        member.setRole(Role.ROLE_ADMIN);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member));
+        List<Long> memberIds = List.of(20L);
+
+        assertThrows(BusinessException.class,
+                () -> service.ajouterMembres(1L, memberIds));
+    }
+
+    @Test
+    void ajouterMembres_chefInMemberIds_throwsBusinessException() {
+        EquipeRecherche e = equipeVide();
+        User chef = enseignant(10L);
+        e.setChef(chef);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        List<Long> memberIds = List.of(10L);
+
+        assertThrows(BusinessException.class,
+                () -> service.ajouterMembres(1L, memberIds));
+    }
+
+    // =========================================================================
+    // retirerMembre()
+    // =========================================================================
+
+    @Test
+    void retirerMembre_teamNotFound_throwsResourceNotFoundException() {
+        when(equipeRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.retirerMembre(99L, 1L));
+    }
+
+    @Test
+    void retirerMembre_userNotFound_throwsResourceNotFoundException() {
+        EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.retirerMembre(1L, 99L));
+    }
+
+    @Test
+    void retirerMembre_userNotAMember_throwsBusinessException() {
+        EquipeRecherche e = equipeVide();
+        User user = enseignant(20L);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(20L)).thenReturn(Optional.of(user));
+
+        assertThrows(BusinessException.class,
+                () -> service.retirerMembre(1L, 20L));
+    }
+
+    @Test
+    void retirerMembre_removeChef_throwsBusinessException() {
+        EquipeRecherche e = equipeVide();
+        User chef = enseignant(10L);
+        e.setChef(chef);
+        e.getMembers().add(chef);
+        chef.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(chef));
+
+        assertThrows(BusinessException.class,
+                () -> service.retirerMembre(1L, 10L));
+    }
+
+    @Test
+    void retirerMembre_withChef_removeNonChefMember_removesAndSaves() {
+        EquipeRecherche e = equipeVide();
+        User chef = enseignant(10L);
+        User member = enseignant(20L);
+        e.setChef(chef);
+        e.getMembers().add(chef);
+        chef.setEquipeRecherche(e);
+        e.getMembers().add(member);
+        member.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(20L)).thenReturn(Optional.of(member));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertNotNull(service.retirerMembre(1L, 20L));
+        assertFalse(e.getMembers().contains(member));
+        assertNull(member.getEquipeRecherche());
+        assertTrue(e.getMembers().contains(chef));
+    }
+
+    @Test
+    void retirerMembre_valid_removesAndSaves() {
+        EquipeRecherche e = equipeVide();
+        User member = enseignant(20L);
+        e.getMembers().add(member);
+        member.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(20L)).thenReturn(Optional.of(member));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertNotNull(service.retirerMembre(1L, 20L));
+        assertFalse(e.getMembers().contains(member));
+        assertNull(member.getEquipeRecherche());
+    }
+
+    // =========================================================================
+    // assignerChef() — missing branch
+    // =========================================================================
+
+    @Test
+    void assignerChef_userNotFound_throwsResourceNotFoundException() {
+        EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.assignerChef(1L, 99L));
+    }
+
+    // =========================================================================
+    // retirerChef()
+    // =========================================================================
+
+    @Test
+    void retirerChef_existingTeam_setsChefNullAndSaves() {
+        EquipeRecherche e = equipeVide();
+        User chef = chefEquipe(1L);
+        e.setChef(chef);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertNotNull(service.retirerChef(1L));
+        assertNull(e.getChef());
+        assertEquals(Role.ROLE_ENSEIGNANT, chef.getRole());
+        verify(equipeRepository).save(e);
+        verify(userRepository).save(chef);
+    }
+
+    @Test
+    void retirerChef_teamNotFound_throwsResourceNotFoundException() {
+        when(equipeRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.retirerChef(99L));
+    }
+
+    @Test
+    void retirerChef_noChef_skipsUserSave() {
+        EquipeRecherche e = equipeVide();
+        e.setChef(null); // no chef
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        assertNotNull(service.retirerChef(1L));
+        assertNull(e.getChef());
+        verify(equipeRepository).save(e);
+        verifyNoInteractions(userRepository); // save never called because chef was null
     }
 }

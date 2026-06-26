@@ -24,11 +24,14 @@ public class EquipeMapper {
         if (request == null) {
             return null;
         }
-        return EquipeRecherche.builder()
+        var builder = EquipeRecherche.builder()
                 .nom(request.nom())
                 .description(request.description())
-                .domaine(request.domaine())
-                .build();
+                .domaine(request.domaine());
+        if (request.statut() != null) {
+            builder.statut(request.statut());
+        }
+        return builder.build();
     }
 
     /** Met à jour partiellement une entité existante depuis le DTO de mise à jour. */
@@ -45,6 +48,9 @@ public class EquipeMapper {
         if (request.domaine() != null) {
             equipe.setDomaine(request.domaine());
         }
+        if (request.statut() != null) {
+            equipe.setStatut(request.statut());
+        }
     }
 
     /** Convertit une entité vers sa représentation API (avec nombre de membres). */
@@ -52,6 +58,7 @@ public class EquipeMapper {
         if (equipe == null) {
             return null;
         }
+        String statutLabel = equipe.getStatut() != null ? equipe.getStatut().getDisplayName() : "Actif";
         return new EquipeResponse(
                 equipe.getId(),
                 equipe.getNom(),
@@ -60,7 +67,8 @@ public class EquipeMapper {
                 userMapper.toResponse(equipe.getChef()),
                 equipe.getMembers().stream().map(userMapper::toResponse).toList(),
                 nbMembres,
-                equipe.getCreatedAt()
+                equipe.getCreatedAt(),
+                statutLabel
         );
     }
 }

@@ -7,6 +7,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import tn.esprit.backend_esprittech.enums.StatutEquipe;
+
 class EquipeRechercheTest {
 
     // ---------------- onCreate ----------------
@@ -134,5 +136,73 @@ class EquipeRechercheTest {
         equipe1.removeMember(user);
 
         assertSame(equipe2, user.getEquipeRecherche());
+    }
+
+    @Test
+    void addMember_duplicateUser_addsTwice() {
+        EquipeRecherche equipe = new EquipeRecherche();
+        User user = new User();
+
+        equipe.addMember(user);
+        equipe.addMember(user);
+
+        // List accepte les doublons ; la couche service empêche ce cas
+        assertEquals(2, equipe.getMembers().size());
+    }
+
+    @Test
+    void removeMember_nonExistentUser_doesNothing() {
+        EquipeRecherche equipe = new EquipeRecherche();
+        User user = new User();
+
+        equipe.removeMember(user);
+
+        assertTrue(equipe.getMembers().isEmpty());
+    }
+
+    // ---------------- statut ----------------
+
+    @Test
+    void statut_defaultIsActif() {
+        EquipeRecherche equipe = new EquipeRecherche();
+        assertEquals(StatutEquipe.ACTIF, equipe.getStatut());
+    }
+
+    @Test
+    void statut_actif_setAndGet() {
+        EquipeRecherche equipe = new EquipeRecherche();
+        equipe.setStatut(StatutEquipe.INACTIF);
+        assertEquals(StatutEquipe.INACTIF, equipe.getStatut());
+    }
+
+    @Test
+    void statut_builderDefault_actif() {
+        EquipeRecherche equipe = EquipeRecherche.builder()
+                .nom("AI")
+                .description("Desc")
+                .build();
+        assertEquals(StatutEquipe.ACTIF, equipe.getStatut());
+    }
+
+    @Test
+    void statut_builderWithCustom_statutSet() {
+        EquipeRecherche equipe = EquipeRecherche.builder()
+                .nom("AI")
+                .statut(StatutEquipe.INACTIF)
+                .build();
+        assertEquals(StatutEquipe.INACTIF, equipe.getStatut());
+    }
+
+    @Test
+    void getMembers_returnsModifiableList() {
+        EquipeRecherche equipe = new EquipeRecherche();
+        User user = new User();
+        equipe.addMember(user);
+
+        List<User> members = equipe.getMembers();
+        assertEquals(1, members.size());
+
+        members.clear();
+        assertTrue(equipe.getMembers().isEmpty()); // la liste est la même référence
     }
 }

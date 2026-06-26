@@ -74,6 +74,19 @@ public class AdminController {
                 return ResponseEntity.ok(PagedResponse.from(users, userMapper::toResponse));
         }
 
+        @GetMapping("/users/eligible")
+        @Operation(summary = "Utilisateurs éligibles", description = "Liste paginée des utilisateurs éligibles pour être chef ou membre d'une équipe donnée (filtre par rôle, exclusion des déjà assignés).")
+        public ResponseEntity<PagedResponse<UserResponse>> getEligibleUsers(
+                        @RequestParam(required = false) Long equipeId,
+                        @RequestParam(defaultValue = "MEMBER") String type,
+                        @RequestParam(defaultValue = "") String search,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "6") int size) {
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "nom", "prenom"));
+                Page<User> users = userService.listEligible(search, equipeId, type, pageable);
+                return ResponseEntity.ok(PagedResponse.from(users, userMapper::toResponse));
+        }
+
         @PutMapping("/users/{id}")
         @Operation(summary = "Modifier un utilisateur", description = "Met à jour l'identité, le rôle et l'état d'activation d'un utilisateur.")
         public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,

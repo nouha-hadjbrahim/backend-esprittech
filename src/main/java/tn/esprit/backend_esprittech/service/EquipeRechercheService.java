@@ -84,13 +84,19 @@ public class EquipeRechercheService {
         if (request.chefId() != null) {
             chef = promouvoirChef(request.chefId());
             ensureChefDisponible(chef, id);
+        } else if (equipe.getChef() != null) {
+            // Chef retiré explicitement
+            User oldChef = equipe.getChef();
+            oldChef.setRole(Role.ROLE_ENSEIGNANT);
+            userRepository.save(oldChef);
+            chef = null;
         }
 
         equipeMapper.updateEntity(request, equipe);
         equipe.setChef(chef);
 
         // Le chef ne peut pas être aussi membre
-        if (request.chefId() != null && equipe.getMembers().contains(chef)) {
+        if (chef != null && equipe.getMembers().contains(chef)) {
             equipe.removeMember(chef);
         }
 
@@ -113,11 +119,52 @@ public class EquipeRechercheService {
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
 
-    /** Supprime une équipe après avoir dissocié tous ses membres. */
+    /** Ajoute des membres à une équipe existante. */
+    @Transactional
+    public EquipeResponse ajouterMembres(Long equipeId, List<Long> memberIds) {
+        EquipeRecherche equipe = getEntite(equipeId);
+        assignerMembres(equipe, memberIds, equipe.getChef());
+        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+    }
+
+    /** Retire un membre d'une équipe. */
+    @Transactional
+    public EquipeResponse retirerMembre(Long equipeId, Long userId) {
+        EquipeRecherche equipe = getEntite(equipeId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable (id=" + userId + ")"));
+
+        if (!equipe.getMembers().contains(user)) {
+            throw new BusinessException("Cet utilisateur n'est pas membre de l'équipe");
+        }
+        if (equipe.getChef() != null && equipe.getChef().getId().equals(userId)) {
+            throw new BusinessException("Le chef ne peut pas être retiré des membres. Utilisez l'assignation de chef.");
+        }
+
+        equipe.removeMember(user);
+        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+    }
+
+    /** Retire le chef d'une équipe et le rétrograde au rôle ENSEIGNANT. */
+    @Transactional
+    public EquipeResponse retirerChef(Long equipeId) {
+        EquipeRecherche equipe = getEntite(equipeId);
+        User chef = equipe.getChef();
+        equipe.setChef(null);
+        if (chef != null) {
+            chef.setRole(Role.ROLE_ENSEIGNANT);
+            userRepository.save(chef);
+        }
+        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+    }
+
+    /** Supprime une équipe (uniquement si elle ne contient aucun membre). */
     @Transactional
     public void delete(Long id) {
         EquipeRecherche equipe = getEntite(id);
-        viderMembres(equipe);
+        if (compterMembres(equipe) > 0) {
+            throw new BusinessException("Impossible de supprimer une équipe qui contient encore des membres.");
+        }
         equipeRepository.delete(equipe);
     }
 

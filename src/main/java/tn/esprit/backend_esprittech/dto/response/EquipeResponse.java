@@ -14,6 +14,7 @@ public record EquipeResponse(
         UserResponse chef,
         List<UserResponse> members,
         int nbMembres,
-        Instant createdAt
+        Instant createdAt,
+        String statut
 ) {
 }
