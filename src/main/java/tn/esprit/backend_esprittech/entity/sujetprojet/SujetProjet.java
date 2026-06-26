@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "sujet_projets")
+@EntityListeners(SujetProjetEvaluationListener.class)
 @Getter
 @Setter
 @NoArgsConstructor

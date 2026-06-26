@@ -93,10 +93,17 @@ public class CritereNoteService {
         critere.setBareme(request.bareme());
         critere.setPoids(request.poids());
         critere.setSeuil(request.seuil());
+        critere.setModeEvaluation(request.modeEvaluation());
+        critere.setExpectedLivrableTypes(request.expectedLivrableTypes());
+        critere.setMinLivrableCount(request.minLivrableCount());
+        critere.setExpectedKeyword(request.expectedKeyword());
+        critere.setNoteMaxAuto(request.noteMaxAuto());
+        critere.setRuleDescription(request.ruleDescription());
 
         if (request.actif() != null) {
             critere.setActif(request.actif());
         }
+        critere.setRuleEnabled(Boolean.TRUE.equals(request.ruleEnabled()));
     }
 
     private void validateRequest(CritereNoteRequest request) {
@@ -133,7 +140,14 @@ public class CritereNoteService {
                 critere.getDateMiseAJour(),
                 critere.getBareme(),
                 critere.getPoids(),
-                critere.getSeuil()
+                critere.getSeuil(),
+                critere.getModeEvaluation(),
+                critere.getExpectedLivrableTypes(),
+                critere.getMinLivrableCount(),
+                critere.getExpectedKeyword(),
+                critere.getNoteMaxAuto(),
+                critere.getRuleEnabled(),
+                critere.getRuleDescription()
         );
     }
 }

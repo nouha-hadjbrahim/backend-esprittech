@@ -41,15 +41,17 @@ class SujetProjetMapperTest {
         assertEquals(StatutSujet.SOUMIS_EN_VALIDATION, entity.getStatut());
     }
 
+
     @Test
     void toResponse_mapsAllFields() {
+        LocalDateTime now = LocalDateTime.now();
         SujetProjet entity = SujetProjet.builder()
                 .id(5L)
                 .titre("Titre")
                 .categorie(CategorieSujet.RDI)
                 .description("Desc")
                 .objectifs("Obj")
-                .prerequis("Pre")
+                .prerequis("Soft skills,Java")
                 .domaine("Domaine")
                 .technologies("Java, Python")
                 .capaciteAccueil(2)
@@ -65,11 +67,6 @@ class SujetProjetMapperTest {
                 .dateTerminaison(now)
                 .motifInvalidation("Aucun")
                 .build();
-                .id(5L).titre("Titre").categorie(CategorieSujet.RDI)
-                .description("Desc").objectifs("Obj").prerequis("Soft skills,Java")
-                .domaine("Domaine").technologies("Java, Python")
-                .capaciteAccueil(2).statut(StatutSujet.VALIDE)
-                .encadrantId(1001L).dateCreation(LocalDateTime.now()).build();
 
         SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami");
 
