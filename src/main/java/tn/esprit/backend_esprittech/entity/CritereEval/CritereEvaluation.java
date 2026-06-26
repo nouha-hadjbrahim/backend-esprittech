@@ -32,6 +32,26 @@ public abstract class CritereEvaluation {
     @Column(nullable = false)
     private Boolean actif = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 60)
+    private ModeEvaluation modeEvaluation;
+
+    @Column(length = 500)
+    private String expectedLivrableTypes;
+
+    private Integer minLivrableCount;
+
+    @Column(length = 255)
+    private String expectedKeyword;
+
+    private Double noteMaxAuto;
+
+    @Column(nullable = false)
+    private Boolean ruleEnabled = false;
+
+    @Column(length = 1000)
+    private String ruleDescription;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime dateCreation;
 
@@ -44,6 +64,9 @@ public abstract class CritereEvaluation {
 
         if (this.actif == null) {
             this.actif = true;
+        }
+        if (this.ruleEnabled == null) {
+            this.ruleEnabled = false;
         }
     }
 
