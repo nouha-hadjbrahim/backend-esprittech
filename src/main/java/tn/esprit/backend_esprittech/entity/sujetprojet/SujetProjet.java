@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "sujet_projets")
+@EntityListeners(SujetProjetEvaluationListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -43,9 +44,8 @@ public class SujetProjet {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String prerequis;
 
-    @NotBlank(message = "Le domaine est obligatoire")
-    @Size(max = 150, message = "Le domaine ne doit pas dépasser 150 caractères")
-    @Column(nullable = false, length = 150)
+    @NotBlank(message = "Au moins un domaine est obligatoire")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String domaine;
 
     @NotBlank(message = "Les technologies sont obligatoires")
@@ -63,7 +63,9 @@ public class SujetProjet {
     @Column(nullable = false, length = 50)
     private StatutSujet statut;
 
-    private Double scoreFinal;
+    private Double scoreFinalEvaluation;
+
+    private Boolean bloqueParEliminatoire;
 
     @Builder.Default
     @Column(nullable = false)
@@ -91,6 +93,30 @@ public class SujetProjet {
 
     @Column(columnDefinition = "TEXT")
     private String motifInvalidation;
+
+    public SujetProjet(long id, String titre, CategorieSujet categorie, String description, String objectifs, String prerequis, String domaine, String technologies, int capaciteAccueil, StatutSujet statut, double scoreFinalEvaluation, boolean bloqueParEliminatoire, boolean eligibleIndustrialisation, long encadrantId, LocalDateTime dateCreation, LocalDateTime dateSoumission, LocalDateTime dateValidation, LocalDateTime dateDebutRealisation, LocalDateTime dateTerminaison, String motifInvalidation) {
+        this.id = id;
+        this.titre = titre;
+        this.categorie = categorie;
+        this.description = description;
+        this.objectifs = objectifs;
+        this.prerequis = prerequis;
+        this.domaine = domaine;
+        this.technologies = technologies;
+        this.capaciteAccueil = capaciteAccueil;
+        this.statut = statut;
+        this.scoreFinalEvaluation = scoreFinalEvaluation;
+        this.bloqueParEliminatoire = bloqueParEliminatoire;
+        this.eligibleIndustrialisation = eligibleIndustrialisation;
+        this.catalogue = false;
+        this.encadrantId = encadrantId;
+        this.dateCreation = dateCreation;
+        this.dateSoumission = dateSoumission;
+        this.dateValidation = dateValidation;
+        this.dateDebutRealisation = dateDebutRealisation;
+        this.dateTerminaison = dateTerminaison;
+        this.motifInvalidation = motifInvalidation;
+    }
 
     @PrePersist
     void onCreate() {

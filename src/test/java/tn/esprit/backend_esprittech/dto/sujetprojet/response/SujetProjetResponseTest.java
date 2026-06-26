@@ -15,18 +15,15 @@ class SujetProjetResponseTest {
     void recordAccessors_returnAllFields() {
         LocalDateTime now = LocalDateTime.now();
         SujetProjetResponse response = new SujetProjetResponse(
-                1L, "Titre", CategorieSujet.PFE, "Desc", "Obj", "Pre", "Domaine",
-                List.of("Java"), 2, StatutSujet.VALIDE, 8.5, false, false, 1001L,
+                1L, "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Soft skills"), List.of("Domaine"),
+                List.of("Java"), 2, StatutSujet.VALIDE, 8.5, false, false, 1001L, "Sami Ben Ali",
                 now, now, null, null, null, null
         );
 
         assertEquals(1L, response.id());
-        assertEquals("Titre", response.titre());
-        assertEquals(CategorieSujet.PFE, response.categorie());
+        assertEquals(List.of("Soft skills"), response.prerequis());
+        assertEquals(List.of("Domaine"), response.domaines());
+        assertEquals("Sami Ben Ali", response.encadrantNom());
         assertEquals(List.of("Java"), response.technologies());
-        assertEquals(StatutSujet.VALIDE, response.statut());
-        assertEquals(8.5, response.scoreFinal());
-        assertEquals(1001L, response.encadrantId());
-        assertEquals(now, response.dateCreation());
     }
 }

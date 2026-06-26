@@ -6,44 +6,61 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.ReferenceItemRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
-import tn.esprit.backend_esprittech.dto.sujetprojet.response.MockEncadrantResponse;
+import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetReferenceService;
 
 import java.util.List;
 
 @Validated
 @RestController
 @RequestMapping("/api/sujet-projets")
-@Tag(name = "Sujets de projet", description = "Dépôt et consultation des sujets par l'encadrant")
+@Tag(name = "Sujets de projet", description = "Dépôt et consultation des sujets par l'enseignant connecté")
 public class SujetProjetController {
 
     private final SujetProjetService sujetProjetService;
+    private final SujetReferenceService referenceService;
 
-    public SujetProjetController(SujetProjetService sujetProjetService) {
+    public SujetProjetController(SujetProjetService sujetProjetService,
+                                 SujetReferenceService referenceService) {
         this.sujetProjetService = sujetProjetService;
+        this.referenceService = referenceService;
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ENSEIGNANT')")
     @Operation(summary = "Déposer un sujet", description = "Enregistre une demande de partage avec le statut Soumis en validation.")
     public ResponseEntity<SujetProjetResponse> creerSujet(@Valid @RequestBody SujetProjetRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(sujetProjetService.creerSujet(request));
     }
 
     @GetMapping("/mes-sujets")
-    @Operation(summary = "Mes sujets", description = "Liste les sujets déposés par l'encadrant mock connecté.")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Mes sujets", description = "Liste les sujets déposés par l'enseignant connecté.")
     public ResponseEntity<List<SujetProjetResponse>> getMesSujets(
             @RequestParam(required = false) CategorieSujet categorie,
             @RequestParam(required = false) StatutSujet statut) {
         return ResponseEntity.ok(sujetProjetService.getMesSujets(categorie, statut));
     }
 
+    @GetMapping("/disponibles")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Sujets disponibles", description = "Catalogue des sujets validés et ouverts aux candidatures.")
+    public ResponseEntity<List<SujetProjetResponse>> getSujetsDisponibles(
+            @RequestParam(required = false) CategorieSujet categorie) {
+        return ResponseEntity.ok(sujetProjetService.getSujetsDisponibles(categorie));
+    }
+
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Détail d'un sujet")
     public ResponseEntity<SujetProjetResponse> getSujet(
             @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
@@ -51,22 +68,62 @@ public class SujetProjetController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Modifier un sujet", description = "Met à jour un sujet déposé par l'encadrant mock.")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Modifier un sujet", description = "Met à jour un sujet déposé par l'enseignant connecté.")
     public ResponseEntity<SujetProjetResponse> modifierSujet(
             @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
             @Valid @RequestBody SujetProjetRequest request) {
         return ResponseEntity.ok(sujetProjetService.modifierSujet(id, request));
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Supprimer un sujet", description = "Supprime un sujet déposé par l'enseignant connecté.")
+    public ResponseEntity<Void> supprimerSujet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        sujetProjetService.supprimerSujet(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/technologies")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Technologies disponibles", description = "Liste des technologies informatiques pour le formulaire.")
     public ResponseEntity<List<String>> getTechnologies() {
         return ResponseEntity.ok(sujetProjetService.getTechnologiesDisponibles());
     }
 
-    @GetMapping("/mock-encadrant")
-    @Operation(summary = "Encadrant mock", description = "Retourne l'encadrant statique utilisé pour les tests.")
-    public ResponseEntity<MockEncadrantResponse> getMockEncadrant() {
-        return ResponseEntity.ok(sujetProjetService.getMockEncadrant());
+    @GetMapping("/suggestions/prerequis")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Suggestions de prérequis", description = "Choix par défaut modifiables dans le formulaire.")
+    public ResponseEntity<List<String>> getPrerequisSuggestions() {
+        return ResponseEntity.ok(sujetProjetService.getPrerequisSuggestions());
+    }
+
+    @GetMapping("/suggestions/domaines")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Suggestions de domaines", description = "Liste des domaines disponibles pour le formulaire.")
+    public ResponseEntity<List<String>> getDomainesSuggestions() {
+        return ResponseEntity.ok(sujetProjetService.getDomainesSuggestions());
+    }
+
+    @PostMapping("/references/domaines")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Ajouter un domaine", description = "Crée le domaine s'il n'existe pas encore.")
+    public ResponseEntity<ReferenceItemResponse> suggestDomaine(@Valid @RequestBody ReferenceItemRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(referenceService.findOrCreateDomaine(request.nom()));
+    }
+
+    @PostMapping("/references/prerequis")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Ajouter un prérequis", description = "Crée le prérequis s'il n'existe pas encore.")
+    public ResponseEntity<ReferenceItemResponse> suggestPrerequis(@Valid @RequestBody ReferenceItemRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(referenceService.findOrCreatePrerequis(request.nom()));
+    }
+
+    @PostMapping("/references/technologies")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Ajouter une technologie", description = "Crée la technologie si elle n'existe pas encore.")
+    public ResponseEntity<ReferenceItemResponse> suggestTechnologie(@Valid @RequestBody ReferenceItemRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(referenceService.findOrCreateTechnologie(request.nom()));
     }
 }

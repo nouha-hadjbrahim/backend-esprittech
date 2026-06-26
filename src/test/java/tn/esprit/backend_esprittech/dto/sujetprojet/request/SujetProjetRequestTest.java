@@ -28,8 +28,8 @@ class SujetProjetRequestTest {
                 CategorieSujet.PFE,
                 "Description complète",
                 "Objectifs du projet",
-                "Prérequis nécessaires",
-                "Informatique",
+                List.of("Soft skills"),
+                List.of("Informatique"),
                 List.of("Java", "Spring Boot"),
                 2
         );
@@ -44,7 +44,7 @@ class SujetProjetRequestTest {
     @Test
     void blankTitre_failsValidation() {
         SujetProjetRequest request = new SujetProjetRequest(
-                "", CategorieSujet.PFE, "Desc", "Obj", "Pre", "Domaine", List.of("Java"), 1
+                "", CategorieSujet.PFE, "Desc", "Obj", List.of("Pre"), List.of("Domaine"), List.of("Java"), 1
         );
 
         Set<ConstraintViolation<SujetProjetRequest>> violations = validator.validate(request);
@@ -56,7 +56,7 @@ class SujetProjetRequestTest {
     @Test
     void nullCategorie_failsValidation() {
         SujetProjetRequest request = new SujetProjetRequest(
-                "Titre", null, "Desc", "Obj", "Pre", "Domaine", List.of("Java"), 1
+                "Titre", null, "Desc", "Obj", List.of("Pre"), List.of("Domaine"), List.of("Java"), 1
         );
 
         Set<ConstraintViolation<SujetProjetRequest>> violations = validator.validate(request);
@@ -68,7 +68,7 @@ class SujetProjetRequestTest {
     @Test
     void emptyTechnologies_failsValidation() {
         SujetProjetRequest request = new SujetProjetRequest(
-                "Titre", CategorieSujet.PFE, "Desc", "Obj", "Pre", "Domaine", Collections.emptyList(), 1
+                "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Pre"), List.of("Domaine"), Collections.emptyList(), 1
         );
 
         Set<ConstraintViolation<SujetProjetRequest>> violations = validator.validate(request);
@@ -80,7 +80,7 @@ class SujetProjetRequestTest {
     @Test
     void capaciteAccueilTooHigh_failsValidation() {
         SujetProjetRequest request = new SujetProjetRequest(
-                "Titre", CategorieSujet.PFE, "Desc", "Obj", "Pre", "Domaine", List.of("Java"), 51
+                "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Pre"), List.of("Domaine"), List.of("Java"), 51
         );
 
         Set<ConstraintViolation<SujetProjetRequest>> violations = validator.validate(request);
@@ -90,15 +90,27 @@ class SujetProjetRequestTest {
     }
 
     @Test
-    void domaineTooLong_failsValidation() {
+    void emptyDomaines_failsValidation() {
         SujetProjetRequest request = new SujetProjetRequest(
-                "Titre", CategorieSujet.PFE, "Desc", "Obj", "Pre", "x".repeat(151), List.of("Java"), 1
+                "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Pre"), Collections.emptyList(), List.of("Java"), 1
         );
 
         Set<ConstraintViolation<SujetProjetRequest>> violations = validator.validate(request);
 
         assertFalse(violations.isEmpty());
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("domaine")));
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("domaines")));
+    }
+
+    @Test
+    void domaineNameTooLong_failsValidation() {
+        SujetProjetRequest request = new SujetProjetRequest(
+                "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Pre"), List.of("x".repeat(151)), List.of("Java"), 1
+        );
+
+        Set<ConstraintViolation<SujetProjetRequest>> violations = validator.validate(request);
+
+        assertFalse(violations.isEmpty());
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().startsWith("domaines")));
     }
 
     @Test

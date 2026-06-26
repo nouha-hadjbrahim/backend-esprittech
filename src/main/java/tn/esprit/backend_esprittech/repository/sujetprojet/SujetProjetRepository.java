@@ -16,4 +16,10 @@ public interface SujetProjetRepository extends JpaRepository<SujetProjet, Long> 
     List<SujetProjet> findByEncadrantIdAndCategorieOrderByDateCreationDesc(Long encadrantId, CategorieSujet categorie);
 
     List<SujetProjet> findByEncadrantIdAndStatutOrderByDateCreationDesc(Long encadrantId, StatutSujet statut);
+
+    List<SujetProjet> findByStatutOrderByDateCreationDesc(StatutSujet statut);
+
+    List<SujetProjet> findByCatalogueTrueOrderByDateCreationDesc();
+
+    List<SujetProjet> findByStatutInOrderByDateCreationDesc(List<StatutSujet> statuts);
 }
