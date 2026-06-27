@@ -15,6 +15,7 @@ import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
 import tn.esprit.backend_esprittech.entity.CritereEval.Evaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.CritereEval.ResultatCritere;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -149,6 +151,85 @@ class EvaluationServiceTest {
     }
 
     @Test
+    void calculerEvaluation_missingProject_shouldThrowResourceNotFoundException() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> evaluationService.calculerEvaluation(1L, new EvaluationRequest(List.of(), List.of())));
+
+        assertEquals("Projet introuvable avec id: 1", ex.getMessage());
+    }
+
+    @Test
+    void calculerEvaluation_missingEliminatoryResult_shouldRejectRequest() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereEliminatoire));
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+
+        assertThrows(BadRequestException.class,
+                () -> evaluationService.calculerEvaluation(1L, new EvaluationRequest(null, null)));
+    }
+
+    @Test
+    void calculerEvaluation_missingNoteResult_shouldRejectRequest() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+
+        assertThrows(BadRequestException.class,
+                () -> evaluationService.calculerEvaluation(1L, new EvaluationRequest(List.of(), List.of())));
+    }
+
+    @Test
+    void calculerEvaluation_noteNull_shouldRejectRequest() {
+        assertInvalidManualNote(null);
+    }
+
+    @Test
+    void calculerEvaluation_noteNegative_shouldRejectRequest() {
+        assertInvalidManualNote(-0.1);
+    }
+
+    @Test
+    void calculerEvaluation_noteAboveBareme_shouldRejectRequest() {
+        assertInvalidManualNote(6.0);
+    }
+
+    @Test
+    void calculerEvaluation_invalidBareme_shouldRejectRequest() {
+        critereNote.setBareme(0.0);
+        assertInvalidManualNote(1.0);
+    }
+
+    @Test
+    void calculerEvaluation_invalidPoids_shouldRejectRequest() {
+        critereNote.setPoids(0.0);
+        assertInvalidManualNote(1.0);
+    }
+
+    @Test
+    void calculerEvaluation_eliminatoryNotOk_shouldBlockProjectAndPersistSnapshot() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereEliminatoire));
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculerEvaluation(1L, new EvaluationRequest(
+                List.of(new ResultatEliminatoireRequest(1L, ReponseEliminatoire.NOT_OK, "KO")),
+                List.of(new ResultatNoteRequest(2L, 5.0, "Max"))
+        ));
+
+        assertEquals(100.0, response.scoreFinal());
+        assertFalse(response.eligibleIndustrialisation());
+        assertTrue(response.bloqueParEliminatoire());
+        assertEquals(100.0, projet.getScoreFinalEvaluation());
+        assertFalse(projet.getEligibleIndustrialisation());
+        assertTrue(projet.getBloqueParEliminatoire());
+        verify(sujetProjetRepository).save(projet);
+    }
+
+    @Test
     void calculateAutomaticEvaluation_adminCanRecalculateAnyTerminatedProject() {
         Livrable livrable = livrable("documentation-rapport-final.pdf", "Documentation rapport final", TypeLivrable.RAPPORT);
         when(userService.getCurrentUser()).thenReturn(admin);
@@ -167,6 +248,22 @@ class EvaluationServiceTest {
     }
 
     @Test
+    void calculateEvaluationForSystem_noCriteria_shouldPersistZeroScoreAsSystem() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of());
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateEvaluationForSystem(1L);
+
+        assertEquals("SYSTEM", response.calculatedBy());
+        assertEquals(0.0, response.scoreFinal());
+        assertTrue(response.eligibleIndustrialisation());
+        assertTrue(response.recalculationReason().contains("Calcul automatique"));
+    }
+
+    @Test
     void calculateAutomaticEvaluation_encadrantCanRecalculateOwnProject() {
         Livrable livrable = livrable("documentation-rapport-final.pdf", "Documentation rapport final", TypeLivrable.RAPPORT);
         when(userService.getCurrentUser()).thenReturn(encadrant);
@@ -180,6 +277,92 @@ class EvaluationServiceTest {
 
         assertEquals("ROLE_ENSEIGNANT Sami Ben Ali", response.calculatedBy());
         assertEquals("Nouveaux livrables déposés", response.recalculationReason());
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_countMinPartial_shouldCalculatePartialAutoNote() {
+        critereNote.setModeEvaluation(ModeEvaluation.LIVRABLE_COUNT_MIN);
+        critereNote.setMinLivrableCount(3);
+        critereNote.setNoteMaxAuto(5.0);
+        Livrable rapport = livrable("rapport.pdf", "Rapport", TypeLivrable.RAPPORT);
+        Livrable doc = livrable("doc.pdf", "Documentation", TypeLivrable.DOCUMENTATION);
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(rapport, doc));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateAutomaticEvaluation(1L, "count");
+
+        assertEquals(66.6, response.scoreFinal());
+        assertEquals(3.33, response.resultats().get(0).noteObtenue());
+        assertTrue(response.resultats().get(0).evidenceSummary().contains("Ajoutez au moins 1"));
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_noteMaxAutoBelowBareme_shouldCapAutomaticNote() {
+        critereNote.setNoteMaxAuto(2.5);
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L))
+                .thenReturn(List.of(livrable("rapport.pdf", "Rapport", TypeLivrable.RAPPORT)));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateAutomaticEvaluation(1L, "cap");
+
+        assertEquals(50.0, response.scoreFinal());
+        assertEquals(2.5, response.resultats().get(0).noteObtenue());
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_linkFileKeywordAndManualModes_shouldEvaluateEachMode() {
+        CritereNote link = note(10L, ModeEvaluation.LIVRABLE_LINK_PRESENT, "Lien", null);
+        CritereNote file = note(11L, ModeEvaluation.LIVRABLE_FILE_PRESENT, "Fichier", null);
+        CritereNote keyword = note(12L, ModeEvaluation.KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION, "Keyword", null);
+        keyword.setExpectedKeyword("docker");
+        CritereNote manual = note(13L, ModeEvaluation.MANUAL_ADMIN_VALUE, "Manual", null);
+        Livrable linked = livrable(null, "Repo", TypeLivrable.CODE_SOURCE);
+        linked.setLienExterne("https://example.com/repo");
+        Livrable filed = livrable("archive.pdf", "Archive", TypeLivrable.RAPPORT);
+        filed.setObjectName("objects/archive.pdf");
+        Livrable keywordLivrable = livrable("deploy.txt", "Pipeline Docker", TypeLivrable.FICHIER_TXT);
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(link, file, keyword, manual));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(linked, filed, keywordLivrable));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateAutomaticEvaluation(1L, "modes");
+
+        assertEquals(75.0, response.scoreFinal());
+        assertEquals(5.0, response.resultats().get(0).noteObtenue());
+        assertEquals(5.0, response.resultats().get(1).noteObtenue());
+        assertEquals(5.0, response.resultats().get(2).noteObtenue());
+        assertEquals(0.0, response.resultats().get(3).noteObtenue());
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_unconfiguredNote_shouldBeReportedAndIgnoredFromScore() {
+        critereNote.setRuleEnabled(false);
+        critereNote.setModeEvaluation(null);
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of());
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateAutomaticEvaluation(1L, "unconfigured note");
+
+        assertEquals(0.0, response.scoreFinal());
+        assertEquals(1, response.criteresNotesNonConfigures());
+        assertFalse(response.resultats().get(0).ruleConfigured());
+        assertTrue(response.scoreCalculationCoverageMessage().contains("1 critere(s)"));
     }
 
     @Test
@@ -289,8 +472,99 @@ class EvaluationServiceTest {
         assertEquals("Aucune évaluation trouvée pour le projet id: 1", ex.getMessage());
     }
 
+    @Test
+    void getLatestEvaluationByProjet_ciCanReadAndInvalidEvidenceIdsAreIgnored() {
+        User ci = new User();
+        ci.setId(77L);
+        ci.setPrenom("CI");
+        ci.setNom("User");
+        ci.setRole(Role.ROLE_CI);
+        Evaluation evaluation = savedEvaluationWithResult("7,abc,8");
+        when(userService.getCurrentUser()).thenReturn(ci);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L)).thenReturn(Optional.of(evaluation));
+
+        var response = evaluationService.getLatestEvaluationByProjet(1L);
+
+        assertEquals(List.of(7L, 8L), response.resultats().get(0).evidenceLivrableIds());
+        assertTrue(response.evaluationComplete());
+    }
+
+    @Test
+    void getLatestEvaluationByProjet_ownerTeacherCanRead() {
+        Evaluation evaluation = savedEvaluationWithResult("101");
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L)).thenReturn(Optional.of(evaluation));
+
+        var response = evaluationService.getLatestEvaluationByProjet(1L);
+
+        assertEquals(1L, response.sujetProjetId());
+        assertEquals(List.of(101L), response.resultats().get(0).evidenceLivrableIds());
+    }
+
+    @Test
+    void getLatestEvaluationByProjet_studentShouldBeDenied() {
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+
+        assertThrows(AccessDeniedException.class, () -> evaluationService.getLatestEvaluationByProjet(1L));
+    }
+
+    private void assertInvalidManualNote(Double note) {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+
+        assertThrows(BadRequestException.class,
+                () -> evaluationService.calculerEvaluation(1L, new EvaluationRequest(
+                        List.of(),
+                        List.of(new ResultatNoteRequest(2L, note, "invalid"))
+                )));
+    }
+
+    private CritereNote note(Long id, ModeEvaluation mode, String label, String expectedTypes) {
+        CritereNote note = new CritereNote();
+        note.setId(id);
+        note.setLibelle(label);
+        note.setDomaine(label);
+        note.setActif(true);
+        note.setOrdre(id.intValue());
+        note.setBareme(5.0);
+        note.setPoids(1.0);
+        note.setRuleEnabled(true);
+        note.setModeEvaluation(mode);
+        note.setExpectedLivrableTypes(expectedTypes);
+        note.setNoteMaxAuto(5.0);
+        return note;
+    }
+
+    private Evaluation savedEvaluationWithResult(String evidenceIds) {
+        Evaluation evaluation = new Evaluation();
+        evaluation.setId(20L);
+        evaluation.setSujetProjet(projet);
+        evaluation.setScoreFinal(80.0);
+        evaluation.setEligibleIndustrialisation(true);
+        evaluation.setBloqueParEliminatoire(false);
+        ResultatCritere resultat = new ResultatCritere();
+        resultat.setId(30L);
+        resultat.setCritereId(2L);
+        resultat.setCritereLibelle("Rapport");
+        resultat.setTypeCritere(TypeCritere.NOTE);
+        resultat.setRuleConfigured(true);
+        resultat.setModeEvaluation(ModeEvaluation.LIVRABLE_TYPE_PRESENT);
+        resultat.setNoteObtenue(4.0);
+        resultat.setScorePondere(1.6);
+        resultat.setBareme(5.0);
+        resultat.setPoids(2.0);
+        resultat.setEvidenceLivrableIds(evidenceIds);
+        evaluation.addResultat(resultat);
+        return evaluation;
+    }
+
     private Livrable livrable(String fileName, String nom, TypeLivrable typeLivrable) {
         Livrable livrable = new Livrable();
+        livrable.setId(100L + typeLivrable.ordinal());
         livrable.setOriginalFileName(fileName);
         livrable.setNom(nom);
         livrable.setDescription(nom);
