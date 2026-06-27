@@ -7,9 +7,11 @@ import org.springframework.web.bind.annotation.*;
 import tn.esprit.backend_esprittech.dto.industrialisation.CandidatureIndustrialisationResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.DecisionGoRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.DecisionNoGoRequest;
+import tn.esprit.backend_esprittech.dto.industrialisation.IndustrialisationScoreResponse;
 import tn.esprit.backend_esprittech.entity.industrialisation.StatutIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeIndustrialisation;
 import tn.esprit.backend_esprittech.service.industrialisation.IndustrialisationService;
+import tn.esprit.backend_esprittech.service.industrialisation.IndustrialisationScoreService;
 
 import java.util.List;
 
@@ -20,6 +22,7 @@ import java.util.List;
 public class CiIndustrialisationController {
 
     private final IndustrialisationService industrialisationService;
+    private final IndustrialisationScoreService scoreService;
 
     @GetMapping
     public List<CandidatureIndustrialisationResponse> findRequests(
@@ -32,6 +35,11 @@ public class CiIndustrialisationController {
     @GetMapping("/{id}")
     public CandidatureIndustrialisationResponse detail(@PathVariable Long id) {
         return industrialisationService.detailForCi(id);
+    }
+
+    @GetMapping("/{id}/score")
+    public IndustrialisationScoreResponse score(@PathVariable Long id) {
+        return scoreService.calculate(id);
     }
 
     @PostMapping("/{id}/go")

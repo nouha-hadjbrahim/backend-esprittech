@@ -219,7 +219,7 @@ class IndustrialisationServiceTest {
     }
 
     @Test
-    void soumettre_requiredEliminatoryWithoutOkNotOk_shouldReturnPreciseError() {
+    void soumettre_requiredEliminatoryWithoutOkNotOk_shouldComputeAutomatically() {
         QuestionIndustrialisation question = gitQuestion();
         ReponseIndustrialisation reponse = new ReponseIndustrialisation();
         reponse.setId(22L);
@@ -232,11 +232,12 @@ class IndustrialisationServiceTest {
         when(livrableService.hasActiveLivrables(42L)).thenReturn(true);
         when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(question));
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of(reponse));
+        when(sujetProjetRepository.save(projet)).thenReturn(projet);
+        when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.soumettre(11L));
+        var response = industrialisationService.soumettre(11L);
 
-        assertEquals("Reponse eliminatoire OK/NOT_OK manquante pour: Depot Git disponible ?", ex.getMessage());
+        assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
     }
 
     @Test

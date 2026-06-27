@@ -131,7 +131,7 @@ public class IndustrialisationService {
                         created.setQuestion(question);
                         return created;
                     });
-            applyReponse(reponse, reponseRequest);
+            applyReponse(reponse, reponseRequest, question);
             reponseRepository.save(reponse);
         }
 
@@ -340,22 +340,20 @@ public class IndustrialisationService {
             return typeError;
         }
         if (question.getTypeCritere() == tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere.ELIMINATOIRE
-                && reponse.getReponseEliminatoire() == null) {
+                && IndustrialisationQuestionEvaluator.eliminatoryResult(question, reponse) == null) {
             return "Reponse eliminatoire OK/NOT_OK manquante pour: " + question.getLibelle();
-        }
-        if (question.getTypeCritere() == tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere.NOTE
-                && reponse.getNoteObtenue() == null) {
-            return "Note manquante pour: " + question.getLibelle();
         }
         return null;
     }
 
-    private void applyReponse(ReponseIndustrialisation reponse, ReponseIndustrialisationRequest request) {
+    private void applyReponse(ReponseIndustrialisation reponse,
+                              ReponseIndustrialisationRequest request,
+                              QuestionIndustrialisation question) {
         reponse.setValeurTexte(trimToNull(request.valeurTexte()));
         reponse.setValeurBoolean(request.valeurBoolean());
         reponse.setValeurNumerique(request.valeurNumerique());
         reponse.setValeurUrl(trimToNull(request.valeurUrl()));
-        reponse.setReponseEliminatoire(request.reponseEliminatoire());
+        reponse.setReponseEliminatoire(IndustrialisationQuestionEvaluator.eliminatoryResult(question, reponse));
         reponse.setNoteObtenue(request.noteObtenue());
         reponse.setJustificatif(trimToNull(request.justificatif()));
     }
