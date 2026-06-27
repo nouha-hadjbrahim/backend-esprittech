@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
@@ -30,13 +31,16 @@ public class EquipeRechercheService {
     private final EquipeRechercheRepository equipeRepository;
     private final UserRepository userRepository;
     private final EquipeMapper equipeMapper;
+    private final EquipeDomaineService domaineService;
 
     public EquipeRechercheService(EquipeRechercheRepository equipeRepository,
                                   UserRepository userRepository,
-                                  EquipeMapper equipeMapper) {
+                                  EquipeMapper equipeMapper,
+                                  EquipeDomaineService domaineService) {
         this.equipeRepository = equipeRepository;
         this.userRepository = userRepository;
         this.equipeMapper = equipeMapper;
+        this.domaineService = domaineService;
     }
 
     // -------------------------------------------------------------------------
@@ -53,6 +57,8 @@ public class EquipeRechercheService {
             throw new BusinessException("Une équipe portant ce nom existe déjà");
         }
 
+        EquipeDomaine domaine = domaineService.getEntityById(request.domaineId());
+
         User chef = null;
         if (request.chefId() != null) {
             chef = promouvoirChef(request.chefId());
@@ -62,7 +68,7 @@ public class EquipeRechercheService {
         EquipeRecherche equipe = EquipeRecherche.builder()
                 .nom(request.nom())
                 .description(request.description())
-                .domaine(request.domaine())
+                .domaine(domaine)
                 .chef(chef)
                 .build();
 
@@ -80,6 +86,11 @@ public class EquipeRechercheService {
             throw new BusinessException("Une équipe portant ce nom existe déjà");
         }
 
+        EquipeDomaine domaine = null;
+        if (request.domaineId() != null) {
+            domaine = domaineService.getEntityById(request.domaineId());
+        }
+
         User chef = equipe.getChef();
         if (request.chefId() != null) {
             chef = promouvoirChef(request.chefId());
@@ -92,7 +103,7 @@ public class EquipeRechercheService {
             chef = null;
         }
 
-        equipeMapper.updateEntity(request, equipe);
+        equipeMapper.updateEntity(request, equipe, domaine);
         equipe.setChef(chef);
 
         // Le chef ne peut pas être aussi membre

@@ -44,8 +44,9 @@ public class EquipeRecherche implements Serializable {
     @Column(nullable = false, length = 1000)
     private String description;
 
-    @Column(nullable = false, length = 200)
-    private String domaine;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "domaine_id", nullable = false, foreignKey = @ForeignKey(name = "fk_equipe_domaine"))
+    private EquipeDomaine domaine;
 
     /** Chef de l'équipe : un enseignant promu au rôle CHEF_EQUIPE. */
     @ManyToOne(fetch = FetchType.EAGER)

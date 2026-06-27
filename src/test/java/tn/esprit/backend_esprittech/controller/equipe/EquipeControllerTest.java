@@ -224,7 +224,7 @@ class EquipeControllerTest {
     @Test
     void create_validRequest_returns201() throws Exception {
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("AI Lab", "Research on AI", "Informatique", null, null, null);
+                new CreateEquipeRechercheRequest("AI Lab", "Research on AI", 1L, null, null, null);
         EquipeResponse response = mock(EquipeResponse.class);
 
         when(equipeService.create(any())).thenReturn(response);
@@ -240,7 +240,7 @@ class EquipeControllerTest {
     @Test
     void create_duplicateName_returns400() throws Exception {
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("AI Lab", "Desc", "Informatique", null, null, null);
+                new CreateEquipeRechercheRequest("AI Lab", "Desc", 1L, null, null, null);
 
         when(equipeService.create(any()))
                 .thenThrow(new BusinessException("Nom déjà utilisé"));
@@ -256,7 +256,7 @@ class EquipeControllerTest {
     @Test
     void create_serviceThrows_returns500() throws Exception {
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("AI Lab", "Desc", "Informatique", null, null, null);
+                new CreateEquipeRechercheRequest("AI Lab", "Desc", 1L, null, null, null);
 
         when(equipeService.create(any()))
                 .thenThrow(new RuntimeException("Unexpected error"));
@@ -529,7 +529,7 @@ class EquipeControllerTest {
     void create_invalidBody_returns400() throws Exception {
         // nom vide — @NotBlank devrait déclencher une erreur de validation
         CreateEquipeRechercheRequest request =
-                new CreateEquipeRechercheRequest("", "Desc", "Informatique", null, null, null);
+                new CreateEquipeRechercheRequest("", "Desc", 1L, null, null, null);
 
         mockMvc.perform(post("/api/equipes")
                         .contentType(MediaType.APPLICATION_JSON)

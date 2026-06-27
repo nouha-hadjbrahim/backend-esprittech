@@ -6,6 +6,7 @@ import org.mockito.*;
 import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
@@ -32,12 +33,19 @@ class EquipeRechercheServiceTest {
     @Mock
     private EquipeMapper equipeMapper;
 
+    @Mock
+    private EquipeDomaineService domaineService;
+
+    private EquipeDomaine testDomaine;
+
     @InjectMocks
     private EquipeRechercheService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        testDomaine = new EquipeDomaine(1L, "Informatique", null);
+        when(domaineService.getEntityById(anyLong())).thenReturn(testDomaine);
     }
 
     // =========================================================================
@@ -365,10 +373,29 @@ class EquipeRechercheServiceTest {
 
         UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
         when(req.nom()).thenReturn(null);
+        when(req.domaineId()).thenReturn(null);
         when(req.chefId()).thenReturn(null);
         when(req.memberIds()).thenReturn(null);
 
         assertDoesNotThrow(() -> service.update(1L, req));
+    }
+
+    @Test
+    void update_noDomaineId_skipsDomaineLookup() {
+        EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn(null);
+        when(req.domaineId()).thenReturn(null);
+        when(req.chefId()).thenReturn(null);
+        when(req.memberIds()).thenReturn(null);
+
+        service.update(1L, req);
+
+        verify(equipeMapper).updateEntity(req, e, null);
     }
 
     @Test
@@ -587,7 +614,6 @@ class EquipeRechercheServiceTest {
     @Test
     void update_domaineProvided_updatesEntity() {
         EquipeRecherche e = equipeVide();
-        e.setDomaine("OldDomaine");
         when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
         when(equipeRepository.save(e)).thenReturn(e);
         when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
@@ -595,13 +621,13 @@ class EquipeRechercheServiceTest {
         UpdateEquipeRechercheRequest req = mock(UpdateEquipeRechercheRequest.class);
         when(req.nom()).thenReturn(null);
         when(req.description()).thenReturn(null);
-        when(req.domaine()).thenReturn("NewDomaine");
+        when(req.domaineId()).thenReturn(2L);
         when(req.chefId()).thenReturn(null);
         when(req.memberIds()).thenReturn(null);
 
         service.update(1L, req);
 
-        verify(equipeMapper).updateEntity(req, e);
+        verify(equipeMapper).updateEntity(req, e, testDomaine);
     }
 
     // Branch: update() → chefId != null but chef is NOT in members (contains =

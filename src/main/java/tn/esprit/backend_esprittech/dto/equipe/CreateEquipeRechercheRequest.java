@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
+import jakarta.validation.constraints.NotNull;
 import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 
 /**
@@ -20,9 +21,8 @@ public record CreateEquipeRechercheRequest(
         @Size(max = 1000, message = "La description ne peut dépasser 1000 caractères")
         String description,
 
-        @NotBlank(message = "Le domaine est obligatoire")
-        @Size(max = 200, message = "Le domaine ne peut dépasser 200 caractères")
-        String domaine,
+        @NotNull(message = "Le domaine est obligatoire")
+        Long domaineId,
 
         Long chefId,
 

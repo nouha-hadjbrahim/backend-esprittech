@@ -7,7 +7,7 @@ import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 public record UpdateEquipeRechercheRequest(
         String nom,
         String description,
-        String domaine,
+        Long domaineId,
         Long chefId,
         List<Long> memberIds,
         StatutEquipe statut

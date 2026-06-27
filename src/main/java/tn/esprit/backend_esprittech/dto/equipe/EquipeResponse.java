@@ -12,6 +12,7 @@ public record EquipeResponse(
         Long id,
         String nom,
         String description,
+        Long domaineId,
         String domaine,
         UserResponse chef,
         List<UserResponse> members,
