@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 

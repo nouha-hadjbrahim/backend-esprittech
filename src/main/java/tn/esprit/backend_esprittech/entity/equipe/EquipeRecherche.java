@@ -1,4 +1,4 @@
-package tn.esprit.backend_esprittech.entity;
+package tn.esprit.backend_esprittech.entity.equipe;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -12,6 +12,9 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+
+import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 
 /**
  * Équipe de recherche créée par l'admin. Chaque équipe possède un chef
@@ -41,8 +44,9 @@ public class EquipeRecherche implements Serializable {
     @Column(nullable = false, length = 1000)
     private String description;
 
-    @Column(nullable = false, length = 200)
-    private String domaine;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "domaine_id", nullable = false, foreignKey = @ForeignKey(name = "fk_equipe_domaine"))
+    private EquipeDomaine domaine;
 
     /** Chef de l'équipe : un enseignant promu au rôle CHEF_EQUIPE. */
     @ManyToOne(fetch = FetchType.EAGER)
@@ -56,6 +60,11 @@ public class EquipeRecherche implements Serializable {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private StatutEquipe statut = StatutEquipe.ACTIF;
 
     @PrePersist
     void onCreate() {

@@ -1,17 +1,18 @@
-package tn.esprit.backend_esprittech.service;
+package tn.esprit.backend_esprittech.service.equipe;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tn.esprit.backend_esprittech.dto.request.CreateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.request.UpdateEquipeRechercheRequest;
-import tn.esprit.backend_esprittech.dto.response.EquipeResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
+import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
-import tn.esprit.backend_esprittech.mapper.EquipeMapper;
-import tn.esprit.backend_esprittech.repository.EquipeRechercheRepository;
+import tn.esprit.backend_esprittech.mapper.equipe.EquipeMapper;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.util.ArrayList;
@@ -30,13 +31,16 @@ public class EquipeRechercheService {
     private final EquipeRechercheRepository equipeRepository;
     private final UserRepository userRepository;
     private final EquipeMapper equipeMapper;
+    private final EquipeDomaineService domaineService;
 
     public EquipeRechercheService(EquipeRechercheRepository equipeRepository,
                                   UserRepository userRepository,
-                                  EquipeMapper equipeMapper) {
+                                  EquipeMapper equipeMapper,
+                                  EquipeDomaineService domaineService) {
         this.equipeRepository = equipeRepository;
         this.userRepository = userRepository;
         this.equipeMapper = equipeMapper;
+        this.domaineService = domaineService;
     }
 
     // -------------------------------------------------------------------------
@@ -53,6 +57,8 @@ public class EquipeRechercheService {
             throw new BusinessException("Une équipe portant ce nom existe déjà");
         }
 
+        EquipeDomaine domaine = domaineService.getEntityById(request.domaineId());
+
         User chef = null;
         if (request.chefId() != null) {
             chef = promouvoirChef(request.chefId());
@@ -62,7 +68,7 @@ public class EquipeRechercheService {
         EquipeRecherche equipe = EquipeRecherche.builder()
                 .nom(request.nom())
                 .description(request.description())
-                .domaine(request.domaine())
+                .domaine(domaine)
                 .chef(chef)
                 .build();
 
@@ -80,17 +86,28 @@ public class EquipeRechercheService {
             throw new BusinessException("Une équipe portant ce nom existe déjà");
         }
 
+        EquipeDomaine domaine = null;
+        if (request.domaineId() != null) {
+            domaine = domaineService.getEntityById(request.domaineId());
+        }
+
         User chef = equipe.getChef();
         if (request.chefId() != null) {
             chef = promouvoirChef(request.chefId());
             ensureChefDisponible(chef, id);
+        } else if (equipe.getChef() != null) {
+            // Chef retiré explicitement
+            User oldChef = equipe.getChef();
+            oldChef.setRole(Role.ROLE_ENSEIGNANT);
+            userRepository.save(oldChef);
+            chef = null;
         }
 
-        equipeMapper.updateEntity(request, equipe);
+        equipeMapper.updateEntity(request, equipe, domaine);
         equipe.setChef(chef);
 
         // Le chef ne peut pas être aussi membre
-        if (request.chefId() != null && equipe.getMembers().contains(chef)) {
+        if (chef != null && equipe.getMembers().contains(chef)) {
             equipe.removeMember(chef);
         }
 
@@ -113,11 +130,52 @@ public class EquipeRechercheService {
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
 
-    /** Supprime une équipe après avoir dissocié tous ses membres. */
+    /** Ajoute des membres à une équipe existante. */
+    @Transactional
+    public EquipeResponse ajouterMembres(Long equipeId, List<Long> memberIds) {
+        EquipeRecherche equipe = getEntite(equipeId);
+        assignerMembres(equipe, memberIds, equipe.getChef());
+        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+    }
+
+    /** Retire un membre d'une équipe. */
+    @Transactional
+    public EquipeResponse retirerMembre(Long equipeId, Long userId) {
+        EquipeRecherche equipe = getEntite(equipeId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable (id=" + userId + ")"));
+
+        if (!equipe.getMembers().contains(user)) {
+            throw new BusinessException("Cet utilisateur n'est pas membre de l'équipe");
+        }
+        if (equipe.getChef() != null && equipe.getChef().getId().equals(userId)) {
+            throw new BusinessException("Le chef ne peut pas être retiré des membres. Utilisez l'assignation de chef.");
+        }
+
+        equipe.removeMember(user);
+        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+    }
+
+    /** Retire le chef d'une équipe et le rétrograde au rôle ENSEIGNANT. */
+    @Transactional
+    public EquipeResponse retirerChef(Long equipeId) {
+        EquipeRecherche equipe = getEntite(equipeId);
+        User chef = equipe.getChef();
+        equipe.setChef(null);
+        if (chef != null) {
+            chef.setRole(Role.ROLE_ENSEIGNANT);
+            userRepository.save(chef);
+        }
+        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+    }
+
+    /** Supprime une équipe (uniquement si elle ne contient aucun membre). */
     @Transactional
     public void delete(Long id) {
         EquipeRecherche equipe = getEntite(id);
-        viderMembres(equipe);
+        if (compterMembres(equipe) > 0) {
+            throw new BusinessException("Impossible de supprimer une équipe qui contient encore des membres.");
+        }
         equipeRepository.delete(equipe);
     }
 
