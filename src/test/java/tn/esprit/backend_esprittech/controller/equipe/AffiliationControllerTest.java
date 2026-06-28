@@ -159,6 +159,33 @@ class AffiliationControllerTest {
     }
 
     // ================================================================
+    // GET /api/equipes/affiliations — getAllDemandes
+    // ================================================================
+
+    @Test
+    void getAllDemandes_returns200() throws Exception {
+        when(affiliationService.getAllDemandes()).thenReturn(List.of(affiliationResponse));
+
+        mockMvc.perform(get("/api/equipes/affiliations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(100))
+                .andExpect(jsonPath("$[0].equipeId").value(10));
+
+        verify(affiliationService).getAllDemandes();
+    }
+
+    @Test
+    void getAllDemandes_empty_returns200() throws Exception {
+        when(affiliationService.getAllDemandes()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/equipes/affiliations"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(affiliationService).getAllDemandes();
+    }
+
+    // ================================================================
     // PUT /api/equipes/{equipeId}/affiliations/{affiliationId} — traiterDemande
     // ================================================================
 

@@ -312,6 +312,80 @@ class AffiliationEnseignantServiceTest {
                 () -> service.traiter(100L, 10L, admin, StatutAffiliation.ACCEPTEE, null));
     }
 
+    @Test
+    void traiter_accept_autoRejectsOtherPendingRequests() {
+        savedAffiliation.setStatut(StatutAffiliation.EN_ATTENTE);
+
+        EquipeRecherche autreEquipe = new EquipeRecherche();
+        autreEquipe.setId(99L);
+
+        AffiliationEnseignant otherPending = new AffiliationEnseignant();
+        otherPending.setId(200L);
+        otherPending.setEnseignant(enseignant);
+        otherPending.setEquipe(autreEquipe);
+        otherPending.setStatut(StatutAffiliation.EN_ATTENTE);
+
+        when(affiliationRepository.findByIdAndEquipeId(100L, 10L)).thenReturn(Optional.of(savedAffiliation));
+        when(affiliationRepository.findByEnseignantIdAndStatut(1L, StatutAffiliation.EN_ATTENTE))
+                .thenReturn(List.of(otherPending));
+        when(affiliationRepository.save(any())).thenReturn(savedAffiliation);
+        when(equipeRepository.save(any())).thenReturn(equipe);
+        when(userRepository.save(any())).thenReturn(enseignant);
+        when(userMapper.toResponse(enseignant)).thenReturn(enseignantResponse);
+
+        service.traiter(100L, 10L, admin, StatutAffiliation.ACCEPTEE, "Bienvenue");
+
+        assertEquals(StatutAffiliation.REFUSEE, otherPending.getStatut());
+        assertNotNull(otherPending.getDateDecision());
+        assertEquals("Déjà accepté dans une autre équipe", otherPending.getMotifDecision());
+        verify(affiliationRepository).saveAll(List.of(otherPending));
+    }
+
+    @Test
+    void traiter_accept_noOtherPendingRequests_savesEmptyList() {
+        savedAffiliation.setStatut(StatutAffiliation.EN_ATTENTE);
+
+        when(affiliationRepository.findByIdAndEquipeId(100L, 10L)).thenReturn(Optional.of(savedAffiliation));
+        when(affiliationRepository.findByEnseignantIdAndStatut(1L, StatutAffiliation.EN_ATTENTE))
+                .thenReturn(List.of());
+        when(affiliationRepository.save(any())).thenReturn(savedAffiliation);
+        when(equipeRepository.save(any())).thenReturn(equipe);
+        when(userRepository.save(any())).thenReturn(enseignant);
+        when(userMapper.toResponse(enseignant)).thenReturn(enseignantResponse);
+
+        service.traiter(100L, 10L, admin, StatutAffiliation.ACCEPTEE, null);
+
+        verify(affiliationRepository).saveAll(List.of());
+    }
+
+    // =========================================================================
+    // getAllDemandes()
+    // =========================================================================
+
+    @Test
+    void getAllDemandes_withResults() {
+        when(affiliationRepository.findAllByOrderByDateDemandeDesc())
+                .thenReturn(List.of(savedAffiliation));
+        when(userMapper.toResponse(enseignant)).thenReturn(enseignantResponse);
+
+        List<AffiliationEnseignantResponse> result = service.getAllDemandes();
+
+        assertEquals(1, result.size());
+        assertEquals(100L, result.get(0).id());
+        verify(affiliationRepository).findAllByOrderByDateDemandeDesc();
+    }
+
+    @Test
+    void getAllDemandes_empty_returnsEmptyList() {
+        when(affiliationRepository.findAllByOrderByDateDemandeDesc())
+                .thenReturn(List.of());
+
+        List<AffiliationEnseignantResponse> result = service.getAllDemandes();
+
+        assertTrue(result.isEmpty());
+        verify(affiliationRepository).findAllByOrderByDateDemandeDesc();
+    }
+
     // =========================================================================
     // getDemandesByEquipe()
     // =========================================================================

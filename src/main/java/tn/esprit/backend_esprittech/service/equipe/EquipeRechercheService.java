@@ -8,13 +8,17 @@ import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.mapper.equipe.EquipeMapper;
+import tn.esprit.backend_esprittech.repository.equipe.AffiliationEnseignantRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,15 +36,18 @@ public class EquipeRechercheService {
     private final UserRepository userRepository;
     private final EquipeMapper equipeMapper;
     private final EquipeDomaineService domaineService;
+    private final AffiliationEnseignantRepository affiliationRepository;
 
     public EquipeRechercheService(EquipeRechercheRepository equipeRepository,
                                   UserRepository userRepository,
                                   EquipeMapper equipeMapper,
-                                  EquipeDomaineService domaineService) {
+                                  EquipeDomaineService domaineService,
+                                  AffiliationEnseignantRepository affiliationRepository) {
         this.equipeRepository = equipeRepository;
         this.userRepository = userRepository;
         this.equipeMapper = equipeMapper;
         this.domaineService = domaineService;
+        this.affiliationRepository = affiliationRepository;
     }
 
     // -------------------------------------------------------------------------
@@ -287,7 +294,25 @@ public class EquipeRechercheService {
 
         for (User user : membres) {
             equipe.addMember(user);
+            traiterDemandesEnAttente(user, equipe);
         }
+    }
+
+    private void traiterDemandesEnAttente(User user, EquipeRecherche equipe) {
+        List<AffiliationEnseignant> pending = affiliationRepository
+                .findByEnseignantIdAndStatut(user.getId(), StatutAffiliation.EN_ATTENTE);
+        if (pending.isEmpty()) return;
+
+        for (AffiliationEnseignant req : pending) {
+            if (req.getEquipe().getId().equals(equipe.getId())) {
+                req.setStatut(StatutAffiliation.ACCEPTEE);
+            } else {
+                req.setStatut(StatutAffiliation.REFUSEE);
+                req.setMotifDecision("Déjà membre d'une équipe");
+            }
+            req.setDateDecision(LocalDateTime.now());
+        }
+        affiliationRepository.saveAll(pending);
     }
 
     /** Dissocie tous les membres actuels de l'équipe. */
