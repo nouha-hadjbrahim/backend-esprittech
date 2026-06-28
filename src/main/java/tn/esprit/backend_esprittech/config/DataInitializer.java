@@ -37,7 +37,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (userRepository.existsByEmail(adminEmail)) {
+        if (userRepository.existsByEmail(adminEmail) || userRepository.existsByIdentifiant("ADMIN-001")) {
             log.info("Compte admin déjà présent ({}), initialisation ignorée.", adminEmail);
             return;
         }
