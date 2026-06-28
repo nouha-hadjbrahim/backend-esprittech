@@ -3,8 +3,11 @@ package tn.esprit.backend_esprittech.service.sujetprojet;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.InvaliderSujetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
@@ -15,9 +18,14 @@ import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 
+import java.time.LocalDateTime;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional
@@ -34,23 +42,113 @@ public class SujetProjetService {
     private final UserService userService;
     private final UserRepository userRepository;
     private final SujetReferenceService referenceService;
+    private final EquipeRechercheRepository equipeRechercheRepository;
 
     public SujetProjetService(SujetProjetRepository sujetProjetRepository,
                               SujetProjetMapper sujetProjetMapper,
                               UserService userService,
                               UserRepository userRepository,
-                              SujetReferenceService referenceService) {
+                              SujetReferenceService referenceService,
+                              EquipeRechercheRepository equipeRechercheRepository) {
         this.sujetProjetRepository = sujetProjetRepository;
         this.sujetProjetMapper = sujetProjetMapper;
         this.userService = userService;
         this.userRepository = userRepository;
         this.referenceService = referenceService;
+        this.equipeRechercheRepository = equipeRechercheRepository;
     }
 
     public SujetProjetResponse creerSujet(SujetProjetRequest request) {
         User encadrant = getCurrentEnseignant();
         SujetProjet sujet = sujetProjetMapper.toEntity(request, encadrant.getId());
         return toResponse(sujetProjetRepository.save(sujet));
+    }
+
+    @Transactional(readOnly = true)
+    public List<SujetProjetResponse> getSujetsPourCandidatures() {
+        List<StatutSujet> statuts = List.of(
+                StatutSujet.VALIDE,
+                StatutSujet.CANDIDATURE_OUVERTE,
+                StatutSujet.CANDIDATURE_FERMEE,
+                StatutSujet.REALISATION_EN_COURS,
+                StatutSujet.REALISATION_TERMINEE
+        );
+        return toResponses(sujetProjetRepository.findByStatutInOrderByDateCreationDesc(statuts));
+    }
+
+    /**
+     * US-12 / BF-03 : sujets en attente de validation.
+     *
+     * TEMPORAIRE : le module Équipes de recherche n'est pas encore finalisé (en cours de
+     * développement par un autre membre de l'équipe). En attendant, tout CHEF_EQUIPE voit
+     * et peut valider l'ensemble des sujets soumis, sans filtrage par équipe. Une fois le
+     * module Équipes prêt, réintroduire le filtrage via {@link #getMembresEquipeIds}.
+     */
+    @Transactional(readOnly = true)
+    public List<SujetProjetResponse> getSujetsEnAttenteValidation() {
+        User current = userService.getCurrentUser();
+        if (current.getRole() != Role.ROLE_ADMIN && current.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            throw new AccessDeniedException("Seul le chef d'équipe ou l'admin peut consulter cette liste.");
+        }
+
+        List<SujetProjet> enAttente = sujetProjetRepository
+                .findByStatutOrderByDateCreationDesc(StatutSujet.SOUMIS_EN_VALIDATION);
+        return toResponses(enAttente);
+    }
+
+    /** US-12 : validation d'un sujet par le chef d'équipe (ou l'admin). */
+    public SujetProjetResponse validerSujet(Long id) {
+        SujetProjet sujet = getSujetEntiteOrThrow(id);
+        checkChefOuAdmin(sujet);
+
+        if (sujet.getStatut() != StatutSujet.SOUMIS_EN_VALIDATION) {
+            throw new IllegalStateException("Seul un sujet soumis en validation peut être validé.");
+        }
+
+        sujet.setStatut(StatutSujet.VALIDE);
+        sujet.setDateValidation(LocalDateTime.now());
+        return toResponse(sujetProjetRepository.save(sujet));
+    }
+
+    /** US-13 : invalidation d'un sujet par le chef d'équipe (ou l'admin), motif obligatoire. */
+    public SujetProjetResponse invaliderSujet(Long id, InvaliderSujetRequest request) {
+        SujetProjet sujet = getSujetEntiteOrThrow(id);
+        checkChefOuAdmin(sujet);
+
+        if (sujet.getStatut() != StatutSujet.SOUMIS_EN_VALIDATION) {
+            throw new IllegalStateException("Seul un sujet soumis en validation peut être invalidé.");
+        }
+
+        sujet.setStatut(StatutSujet.INVALIDE);
+        sujet.setMotifInvalidation(request.motif());
+        sujet.setDateValidation(LocalDateTime.now());
+        return toResponse(sujetProjetRepository.save(sujet));
+    }
+
+    private SujetProjet getSujetEntiteOrThrow(Long id) {
+        return sujetProjetRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable : " + id));
+    }
+
+    /** TEMPORAIRE : pas de filtrage par équipe tant que ce module n'est pas finalisé (voir plus haut). */
+    private void checkChefOuAdmin(SujetProjet sujet) {
+        User current = userService.getCurrentUser();
+        if (current.getRole() != Role.ROLE_ADMIN && current.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            throw new AccessDeniedException("Vous n'êtes pas autorisé à valider ce sujet.");
+        }
+    }
+
+    /** Identifiants de l'encadrant lui-même + des membres de son équipe (le chef peut être encadrant aussi). */
+    private Set<Long> getMembresEquipeIds(User chef) {
+        // Check if the chef has an equipe
+        boolean hasEquipe = equipeRechercheRepository.existsByChefId(chef.getId());
+
+        if (!hasEquipe) {
+            return Set.of(chef.getId());
+        }
+
+
+        return Set.of(chef.getId());
     }
 
     @Transactional(readOnly = true)
@@ -76,9 +174,10 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getSujetsDisponibles(CategorieSujet categorie) {
+        // Le statut CANDIDATURE_OUVERTE est le seul filtre nécessaire.
+        // Le champ catalogue est mis à true automatiquement à l'ouverture (CandidatureService).
         List<SujetProjet> sujets = sujetProjetRepository.findByStatutInOrderByDateCreationDesc(STATUTS_DISPONIBLES)
                 .stream()
-                .filter(SujetProjet::getCatalogue)
                 .toList();
 
         if (categorie != null) {
@@ -170,5 +269,21 @@ public class SujetProjetService {
                 StatutSujet.REALISATION_TERMINEE
         );
         return toResponses(sujets);
+    }
+
+    @Transactional
+    public SujetProjetResponse declarerTerminaison(Long id) {
+        SujetProjet sujet = sujetProjetRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable avec l'id: " + id));
+
+        if (sujet.getStatut() != StatutSujet.REALISATION_EN_COURS) {
+            throw new IllegalStateException("Impossible de déclarer la terminaison : le sujet n'est pas en cours de réalisation.");
+        }
+
+        sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
+        // sujet.setDateFin(LocalDateTime.now());   ← removed because field doesn't exist
+
+        SujetProjet saved = sujetProjetRepository.save(sujet);
+        return toResponse(saved);
     }
 }
