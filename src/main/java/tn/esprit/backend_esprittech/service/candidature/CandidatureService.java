@@ -16,8 +16,10 @@ import tn.esprit.backend_esprittech.entity.candidature.Livrable;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutAffectation;
 import tn.esprit.backend_esprittech.enums.StatutCandidature;
+import org.springframework.security.access.AccessDeniedException;
 import tn.esprit.backend_esprittech.mapper.candidature.AffectationMapper;
 import tn.esprit.backend_esprittech.mapper.candidature.CandidatureMapper;
 import tn.esprit.backend_esprittech.mapper.candidature.LivrableMapper;
@@ -55,11 +57,13 @@ public class CandidatureService {
     @Transactional
     public void ouvrirCandidatures(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
+        checkSujetAccess(sujet);
         if (sujet.getStatut() != StatutSujet.VALIDE) {
             throw new IllegalStateException(
                     "Seul un sujet Validé peut être ouvert aux candidatures. Statut actuel : " + sujet.getStatut());
         }
         sujet.setStatut(StatutSujet.CANDIDATURE_OUVERTE);
+        sujet.setCatalogue(true); // rendre visible dans le catalogue étudiant
         sujetProjetRepository.save(sujet);
     }
 
@@ -97,6 +101,7 @@ public class CandidatureService {
     @Transactional
     public CandidatureResponse deciderCandidature(Long candidatureId, DecisionCandidatureRequest request) {
         Candidature candidature = getCandidatureOrThrow(candidatureId);
+        checkSujetAccess(getSujetOrThrow(candidature.getSujetId()));
 
         if (candidature.getStatut() != StatutCandidature.DEPOSEE) {
             throw new IllegalStateException("Seule une candidature Déposée peut être traitée.");
@@ -112,6 +117,19 @@ public class CandidatureService {
                     .candidature(candidature)
                     .build();
             affectationRepository.save(affectation);
+
+            // Un étudiant ne peut être affecté qu'à un seul sujet : on archive ses autres
+            // candidatures encore en attente sur d'autres sujets.
+            List<Candidature> autresEnAttente = candidatureRepository
+                    .findByEtudiantIdAndStatut(candidature.getEtudiant().getId(), StatutCandidature.DEPOSEE)
+                    .stream()
+                    .filter(c -> !c.getId().equals(candidature.getId()))
+                    .toList();
+            autresEnAttente.forEach(c -> {
+                c.setStatut(StatutCandidature.ARCHIVEE);
+                c.setDateDecision(Instant.now());
+            });
+            candidatureRepository.saveAll(autresEnAttente);
 
         } else {
             if (request.motifRefus() == null || request.motifRefus().isBlank()) {
@@ -132,6 +150,7 @@ public class CandidatureService {
     @Transactional
     public void fermerCandidatures(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
+        checkSujetAccess(sujet);
         if (sujet.getStatut() != StatutSujet.CANDIDATURE_OUVERTE) {
             throw new IllegalStateException(
                     "Seul un sujet en CandidatureOuverte peut être fermé. Statut actuel : " + sujet.getStatut());
@@ -156,6 +175,7 @@ public class CandidatureService {
     @Transactional
     public AffectationResponse retirerEtudiant(Long affectationId, RetraitEtudiantRequest request) {
         Affectation affectation = getAffectationOrThrow(affectationId);
+        checkSujetAccess(getSujetOrThrow(affectation.getSujetId()));
 
         if (affectation.getStatut() != StatutAffectation.ACTIVE) {
             throw new IllegalStateException("Cette affectation est déjà archivée.");
@@ -180,6 +200,7 @@ public class CandidatureService {
     @Transactional
     public LivrableResponse ajouterLivrable(Long sujetId, LivrableRequest request) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
+        checkSujetAccess(sujet);
 
         if (sujet.getStatut() != StatutSujet.REALISATION_EN_COURS
                 && sujet.getStatut() != StatutSujet.REALISATION_TERMINEE) {
@@ -209,6 +230,7 @@ public class CandidatureService {
     @Transactional
     public void declarerTerminaison(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
+        checkSujetAccess(sujet);
         if (sujet.getStatut() != StatutSujet.REALISATION_EN_COURS) {
             throw new IllegalStateException(
                     "La terminaison ne peut être déclarée que depuis RéalisationEnCours.");
@@ -221,22 +243,26 @@ public class CandidatureService {
     // Lectures
     // ─────────────────────────────────────────────────────────────────
 
+    @Transactional
     public List<CandidatureResponse> getCandidaturesParSujet(Long sujetId) {
         return candidatureRepository.findBySujetIdOrderByDateDepotAsc(sujetId)
                 .stream().map(candidatureMapper::toResponse).toList();
     }
 
+    @Transactional
     public List<CandidatureResponse> getMesCandidatures() {
         User etudiant = userService.getCurrentUser();
         return candidatureRepository.findByEtudiantIdOrderByDateDepotDesc(etudiant.getId())
                 .stream().map(candidatureMapper::toResponse).toList();
     }
 
+    @Transactional
     public List<AffectationResponse> getAffectationsParSujet(Long sujetId) {
         return affectationRepository.findBySujetId(sujetId)
                 .stream().map(affectationMapper::toResponse).toList();
     }
 
+    @Transactional
     public List<LivrableResponse> getLivrablesParSujet(Long sujetId) {
         return livrableRepository.findBySujetIdOrderByDateDepotDesc(sujetId)
                 .stream().map(livrableMapper::toResponse).toList();
@@ -249,6 +275,22 @@ public class CandidatureService {
     private SujetProjet getSujetOrThrow(Long id) {
         return sujetProjetRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable : " + id));
+    }
+
+    /**
+     * ADMIN et CHEF_EQUIPE ont la main sur tous les sujets.
+     * Un ENSEIGNANT (encadrant) ne peut agir que sur ses propres sujets.
+     */
+    private void checkSujetAccess(SujetProjet sujet) {
+        User current = userService.getCurrentUser();
+        if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CHEF_EQUIPE) {
+            return;
+        }
+        if (current.getRole() == Role.ROLE_ENSEIGNANT
+                && current.getId().equals(sujet.getEncadrantId())) {
+            return;
+        }
+        throw new AccessDeniedException("Vous n'êtes pas autorisé à gérer ce sujet.");
     }
 
     private Candidature getCandidatureOrThrow(Long id) {

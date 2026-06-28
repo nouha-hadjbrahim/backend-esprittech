@@ -78,14 +78,21 @@ class CandidatureServiceTest {
         sujetValide = new SujetProjet();
         sujetValide.setId(10L);
         sujetValide.setStatut(StatutSujet.VALIDE);
+        sujetValide.setEncadrantId(2L);
 
         sujetOuvert = new SujetProjet();
         sujetOuvert.setId(10L);
         sujetOuvert.setStatut(StatutSujet.CANDIDATURE_OUVERTE);
+        sujetOuvert.setEncadrantId(2L);
 
         sujetEnRealisation = new SujetProjet();
         sujetEnRealisation.setId(10L);
         sujetEnRealisation.setStatut(StatutSujet.REALISATION_EN_COURS);
+        sujetEnRealisation.setEncadrantId(2L);
+
+        // Par défaut, l'utilisateur courant est l'encadrant propriétaire du sujet.
+        // Les tests côté étudiant écrasent ce stub avec `etudiant`.
+        lenient().when(userService.getCurrentUser()).thenReturn(encadrant);
 
         candidatureDeposee = Candidature.builder()
                 .sujetId(10L)
@@ -169,6 +176,7 @@ class CandidatureServiceTest {
     @Test
     void deciderCandidature_acceptation_creeAffectation() {
         when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
         when(candidatureRepository.save(any())).thenReturn(candidatureDeposee);
         when(affectationRepository.save(any())).thenReturn(affectationActive);
         when(candidatureMapper.toResponse(any())).thenReturn(mockCandidatureResponse());
@@ -186,6 +194,7 @@ class CandidatureServiceTest {
     @Test
     void deciderCandidature_refusAvecMotif_enregistreMotif() {
         when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
         when(candidatureRepository.save(any())).thenReturn(candidatureDeposee);
         when(candidatureMapper.toResponse(any())).thenReturn(mockCandidatureResponse());
 
@@ -200,6 +209,7 @@ class CandidatureServiceTest {
     @Test
     void deciderCandidature_refusSansMotif_leveException() {
         when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
 
         assertThrows(IllegalArgumentException.class,
                 () -> candidatureService.deciderCandidature(100L,
@@ -251,6 +261,7 @@ class CandidatureServiceTest {
     void retirerEtudiant_affectationDejaArchivee_leveException() {
         affectationActive.setStatut(StatutAffectation.RETIREE_ARCHIVEE);
         when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetEnRealisation));
 
         assertThrows(IllegalStateException.class,
                 () -> candidatureService.retirerEtudiant(200L,

@@ -44,10 +44,10 @@ class EvaluationControllerTest {
         evaluationRequest = new EvaluationRequest(
                 new ArrayList<>(), new ArrayList<>()
         );
-        
+
         sujetProjetResponse = new SujetProjetResponse(
-                1L, "Titre", null, "Desc", "Obj", "Pre", "Domaine",
-                List.of("Java"), 2, null, 8.5, false, false, 1001L,
+                1L, "Titre", null, "Desc", "Obj", List.of("Pre"), List.of("Domaine"),
+                List.of("Java"), 2, null, 8.5, false, false, 1001L, "Encadrant Test",
                 now, now, null, null, null, null
         );
     }
@@ -121,10 +121,10 @@ class EvaluationControllerTest {
     void getEvaluableProjects_multipleProjects_returnsAllProjects() {
         LocalDateTime now = LocalDateTime.now();
         List<SujetProjetResponse> projects = List.of(
-                new SujetProjetResponse(1L, "Project1", null, "Desc1", "Obj1", "Pre1", "Dom1",
-                        List.of("Java"), 2, null, 8.5, false, false, 1001L, now, now, null, null, null, null),
-                new SujetProjetResponse(2L, "Project2", null, "Desc2", "Obj2", "Pre2", "Dom2",
-                        List.of("Python"), 3, null, 7.5, false, false, 1002L, now, now, null, null, null, null)
+                new SujetProjetResponse(1L, "Project1", null, "Desc1", "Obj1", List.of("Pre1"), List.of("Dom1"),
+                        List.of("Java"), 2, null, 8.5, false, false, 1001L, "Encadrant1", now, now, null, null, null, null),
+                new SujetProjetResponse(2L, "Project2", null, "Desc2", "Obj2", List.of("Pre2"), List.of("Dom2"),
+                        List.of("Python"), 3, null, 7.5, false, false, 1002L, "Encadrant2", now, now, null, null, null, null)
         );
         when(sujetProjetService.getProjetsEvaluables()).thenReturn(projects);
 

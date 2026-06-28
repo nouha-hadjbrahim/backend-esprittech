@@ -25,4 +25,7 @@ public interface CandidatureRepository extends JpaRepository<Candidature, Long> 
 
     /** Nombre de candidatures acceptées pour un sujet (pour vérif capacité) */
     long countBySujetIdAndStatut(Long sujetId, StatutCandidature statut);
+
+    /** Autres candidatures en attente du même étudiant (pour archivage auto à l'acceptation) */
+    List<Candidature> findByEtudiantIdAndStatut(Long etudiantId, StatutCandidature statut);
 }

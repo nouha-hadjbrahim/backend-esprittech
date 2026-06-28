@@ -27,7 +27,7 @@ public class CandidatureController {
     // ── US-14 : Ouvrir candidatures ──────────────────────────────────
     // POST /api/sujets/{id}/ouvrir-candidatures
     @PostMapping("/sujets/{sujetId}/ouvrir-candidatures")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<Void> ouvrirCandidatures(@PathVariable Long sujetId) {
         candidatureService.ouvrirCandidatures(sujetId);
         return ResponseEntity.noContent().build();
@@ -36,7 +36,7 @@ public class CandidatureController {
     // ── US-16 : Étudiant dépose une candidature ──────────────────────
     // POST /api/sujets/{id}/candidatures
     @PostMapping("/sujets/{sujetId}/candidatures")
-    @PreAuthorize("hasRole('ROLE_ETUDIANT')")
+    @PreAuthorize("hasRole('ETUDIANT')")
     public ResponseEntity<CandidatureResponse> deposerCandidature(
             @PathVariable Long sujetId,
             @Valid @RequestBody CandidatureRequest request) {
@@ -50,7 +50,7 @@ public class CandidatureController {
     // POST /api/candidatures/{id}/accepter  (body: { "accepter": true })
     // POST /api/candidatures/{id}/refuser   (body: { "accepter": false, "motifRefus": "..." })
     @PostMapping("/candidatures/{candidatureId}/decider")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<CandidatureResponse> deciderCandidature(
             @PathVariable Long candidatureId,
             @Valid @RequestBody DecisionCandidatureRequest request) {
@@ -59,14 +59,14 @@ public class CandidatureController {
 
     // Alias pratiques pour correspondre aux endpoints indicatifs du cahier des charges
     @PostMapping("/candidatures/{candidatureId}/accepter")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<CandidatureResponse> accepterCandidature(@PathVariable Long candidatureId) {
         return ResponseEntity.ok(candidatureService.deciderCandidature(candidatureId,
                 new DecisionCandidatureRequest(true, null)));
     }
 
     @PostMapping("/candidatures/{candidatureId}/refuser")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<CandidatureResponse> refuserCandidature(
             @PathVariable Long candidatureId,
             @Valid @RequestBody DecisionCandidatureRequest request) {
@@ -77,7 +77,7 @@ public class CandidatureController {
     // ── US-19 + US-20 : Fermer candidatures (+ bascule auto réalisation)
     // POST /api/sujets/{id}/fermer-candidatures
     @PostMapping("/sujets/{sujetId}/fermer-candidatures")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<Void> fermerCandidatures(@PathVariable Long sujetId) {
         candidatureService.fermerCandidatures(sujetId);
         return ResponseEntity.noContent().build();
@@ -85,7 +85,7 @@ public class CandidatureController {
 
     // ── US-22 : Retrait d'un étudiant (archivage) ────────────────────
     @PostMapping("/affectations/{affectationId}/retirer")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<AffectationResponse> retirerEtudiant(
             @PathVariable Long affectationId,
             @Valid @RequestBody RetraitEtudiantRequest request) {
@@ -94,7 +94,7 @@ public class CandidatureController {
 
     // ── US-23 : Dépôt de livrables ───────────────────────────────────
     @PostMapping("/sujets/{sujetId}/livrables")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<LivrableResponse> ajouterLivrable(
             @PathVariable Long sujetId,
             @Valid @RequestBody LivrableRequest request) {
@@ -105,7 +105,7 @@ public class CandidatureController {
     // ── US-24 : Déclaration de terminaison ───────────────────────────
     // POST /api/projets/{id}/terminer
     @PostMapping("/projets/{sujetId}/terminer")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<Void> declarerTerminaison(@PathVariable Long sujetId) {
         candidatureService.declarerTerminaison(sujetId);
         return ResponseEntity.noContent().build();
@@ -114,19 +114,19 @@ public class CandidatureController {
     // ── Lectures ─────────────────────────────────────────────────────
 
     @GetMapping("/sujets/{sujetId}/candidatures")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE', 'ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<List<CandidatureResponse>> getCandidaturesParSujet(@PathVariable Long sujetId) {
         return ResponseEntity.ok(candidatureService.getCandidaturesParSujet(sujetId));
     }
 
     @GetMapping("/candidatures/mes-candidatures")
-    @PreAuthorize("hasRole('ROLE_ETUDIANT')")
+    @PreAuthorize("hasRole('ETUDIANT')")
     public ResponseEntity<List<CandidatureResponse>> getMesCandidatures() {
         return ResponseEntity.ok(candidatureService.getMesCandidatures());
     }
 
     @GetMapping("/sujets/{sujetId}/affectations")
-    @PreAuthorize("hasAnyRole('ROLE_ENCADRANT', 'ROLE_CHEF_EQUIPE_RECHERCHE', 'ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<List<AffectationResponse>> getAffectationsParSujet(@PathVariable Long sujetId) {
         return ResponseEntity.ok(candidatureService.getAffectationsParSujet(sujetId));
     }
