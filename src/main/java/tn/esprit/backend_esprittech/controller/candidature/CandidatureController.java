@@ -8,11 +8,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.backend_esprittech.dto.candidature.request.CandidatureRequest;
 import tn.esprit.backend_esprittech.dto.candidature.request.DecisionCandidatureRequest;
-import tn.esprit.backend_esprittech.dto.candidature.request.LivrableRequest;
 import tn.esprit.backend_esprittech.dto.candidature.request.RetraitEtudiantRequest;
 import tn.esprit.backend_esprittech.dto.candidature.response.AffectationResponse;
 import tn.esprit.backend_esprittech.dto.candidature.response.CandidatureResponse;
-import tn.esprit.backend_esprittech.dto.candidature.response.LivrableResponse;
 import tn.esprit.backend_esprittech.service.candidature.CandidatureService;
 
 import java.util.List;
@@ -24,8 +22,7 @@ public class CandidatureController {
 
     private final CandidatureService candidatureService;
 
-    // ── US-14 : Ouvrir candidatures ──────────────────────────────────
-    // POST /api/sujets/{id}/ouvrir-candidatures
+    // US-14 : Ouvrir candidatures
     @PostMapping("/sujets/{sujetId}/ouvrir-candidatures")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<Void> ouvrirCandidatures(@PathVariable Long sujetId) {
@@ -33,22 +30,18 @@ public class CandidatureController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── US-16 : Étudiant dépose une candidature ──────────────────────
-    // POST /api/sujets/{id}/candidatures
+    // US-16 : Déposer candidature
     @PostMapping("/sujets/{sujetId}/candidatures")
     @PreAuthorize("hasRole('ETUDIANT')")
     public ResponseEntity<CandidatureResponse> deposerCandidature(
             @PathVariable Long sujetId,
             @Valid @RequestBody CandidatureRequest request) {
-        // sujetId dans l'URL est la source d'autorité ; le body peut l'omettre
         CandidatureRequest withSujetId = new CandidatureRequest(sujetId, request.messageEtudiant());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(candidatureService.deposerCandidature(withSujetId));
     }
 
-    // ── US-17 & US-18 : Accepter ou refuser une candidature ─────────
-    // POST /api/candidatures/{id}/accepter  (body: { "accepter": true })
-    // POST /api/candidatures/{id}/refuser   (body: { "accepter": false, "motifRefus": "..." })
+    // US-17 & US-18 : Décider candidature
     @PostMapping("/candidatures/{candidatureId}/decider")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<CandidatureResponse> deciderCandidature(
@@ -57,7 +50,6 @@ public class CandidatureController {
         return ResponseEntity.ok(candidatureService.deciderCandidature(candidatureId, request));
     }
 
-    // Alias pratiques pour correspondre aux endpoints indicatifs du cahier des charges
     @PostMapping("/candidatures/{candidatureId}/accepter")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<CandidatureResponse> accepterCandidature(@PathVariable Long candidatureId) {
@@ -74,8 +66,7 @@ public class CandidatureController {
                 new DecisionCandidatureRequest(false, request.motifRefus())));
     }
 
-    // ── US-19 + US-20 : Fermer candidatures (+ bascule auto réalisation)
-    // POST /api/sujets/{id}/fermer-candidatures
+    // US-19 + US-20 : Fermer candidatures
     @PostMapping("/sujets/{sujetId}/fermer-candidatures")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<Void> fermerCandidatures(@PathVariable Long sujetId) {
@@ -83,7 +74,7 @@ public class CandidatureController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── US-22 : Retrait d'un étudiant (archivage) ────────────────────
+    // US-22 : Retrait d'étudiant
     @PostMapping("/affectations/{affectationId}/retirer")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<AffectationResponse> retirerEtudiant(
@@ -92,27 +83,7 @@ public class CandidatureController {
         return ResponseEntity.ok(candidatureService.retirerEtudiant(affectationId, request));
     }
 
-    // ── US-23 : Dépôt de livrables ───────────────────────────────────
-    @PostMapping("/sujets/{sujetId}/livrables")
-    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
-    public ResponseEntity<LivrableResponse> ajouterLivrable(
-            @PathVariable Long sujetId,
-            @Valid @RequestBody LivrableRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(candidatureService.ajouterLivrable(sujetId, request));
-    }
-
-    // ── US-24 : Déclaration de terminaison ───────────────────────────
-    // POST /api/projets/{id}/terminer
-    @PostMapping("/projets/{sujetId}/terminer")
-    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
-    public ResponseEntity<Void> declarerTerminaison(@PathVariable Long sujetId) {
-        candidatureService.declarerTerminaison(sujetId);
-        return ResponseEntity.noContent().build();
-    }
-
-    // ── Lectures ─────────────────────────────────────────────────────
-
+    // Lectures
     @GetMapping("/sujets/{sujetId}/candidatures")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<List<CandidatureResponse>> getCandidaturesParSujet(@PathVariable Long sujetId) {
@@ -129,11 +100,5 @@ public class CandidatureController {
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     public ResponseEntity<List<AffectationResponse>> getAffectationsParSujet(@PathVariable Long sujetId) {
         return ResponseEntity.ok(candidatureService.getAffectationsParSujet(sujetId));
-    }
-
-    @GetMapping("/sujets/{sujetId}/livrables")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<LivrableResponse>> getLivrablesParSujet(@PathVariable Long sujetId) {
-        return ResponseEntity.ok(candidatureService.getLivrablesParSujet(sujetId));
     }
 }
