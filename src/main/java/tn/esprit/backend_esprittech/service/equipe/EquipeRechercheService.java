@@ -126,6 +126,10 @@ public class EquipeRechercheService {
         User chef = promouvoirChef(chefId);
         ensureChefDisponible(chef, equipeId);
         equipe.setChef(chef);
+        // Le chef ne peut pas être aussi membre
+        if (equipe.getMembers().contains(chef)) {
+            equipe.removeMember(chef);
+        }
         equipe = equipeRepository.save(equipe);
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }

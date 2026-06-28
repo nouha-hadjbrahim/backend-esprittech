@@ -1019,6 +1019,27 @@ class EquipeRechercheServiceTest {
                 () -> service.assignerChef(1L, 99L));
     }
 
+    @Test
+    void assignerChef_chefIsMember_removesFromMembers() {
+        EquipeRecherche e = equipeVide();
+        User chef = enseignant(2L);
+        e.getMembers().add(chef);
+        chef.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(chef));
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeRepository.existsByChefIdAndIdNot(2L, 1L)).thenReturn(false);
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.assignerChef(1L, 2L);
+
+        assertSame(chef, e.getChef());
+        assertFalse(e.getMembers().contains(chef));
+        assertNull(chef.getEquipeRecherche());
+    }
+
     // =========================================================================
     // retirerChef()
     // =========================================================================
