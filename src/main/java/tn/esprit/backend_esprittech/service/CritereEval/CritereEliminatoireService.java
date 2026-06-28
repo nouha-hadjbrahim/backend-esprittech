@@ -92,10 +92,17 @@ public class CritereEliminatoireService {
         critere.setDomaine(request.domaine());
         critere.setOrdre(request.ordre());
         critere.setReponseAttendue(request.reponseAttendue());
+        critere.setModeEvaluation(request.modeEvaluation());
+        critere.setExpectedLivrableTypes(request.expectedLivrableTypes());
+        critere.setMinLivrableCount(request.minLivrableCount());
+        critere.setExpectedKeyword(request.expectedKeyword());
+        critere.setNoteMaxAuto(request.noteMaxAuto());
+        critere.setRuleDescription(request.ruleDescription());
 
         if (request.actif() != null) {
             critere.setActif(request.actif());
         }
+        critere.setRuleEnabled(Boolean.TRUE.equals(request.ruleEnabled()));
     }
 
     private void validateRequest(CritereEliminatoireRequest request) {
@@ -118,7 +125,14 @@ public class CritereEliminatoireService {
                 critere.getActif(),
                 critere.getDateCreation(),
                 critere.getDateMiseAJour(),
-                critere.getReponseAttendue()
+                critere.getReponseAttendue(),
+                critere.getModeEvaluation(),
+                critere.getExpectedLivrableTypes(),
+                critere.getMinLivrableCount(),
+                critere.getExpectedKeyword(),
+                critere.getNoteMaxAuto(),
+                critere.getRuleEnabled(),
+                critere.getRuleDescription()
         );
     }
 }

@@ -29,9 +29,22 @@ public class ResultatCritere {
     @Column(nullable = false)
     private Long critereId;
 
+    @Column(nullable = false, length = 255)
+    private String critereLibelle;
+
+    @Column(length = 255)
+    private String critereDomaine;
+
+    @Column(length = 2000)
+    private String critereDescription;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TypeCritere typeCritere;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 60)
+    private ModeEvaluation modeEvaluation;
 
     @Enumerated(EnumType.STRING)
     private ReponseEliminatoire reponseEliminatoire;
@@ -39,6 +52,19 @@ public class ResultatCritere {
     private Double noteObtenue;
 
     private Double scorePondere;
+
+    private Double bareme;
+
+    private Double poids;
+
+    @Column(length = 2000)
+    private String evidenceSummary;
+
+    @Column(length = 1000)
+    private String evidenceLivrableIds;
+
+    @Column(nullable = false)
+    private Boolean ruleConfigured = false;
 
     @Column(length = 2000)
     private String commentaire;

@@ -259,6 +259,9 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getProjetsEvaluables() {
+        if (userService.getCurrentUser().getRole() != Role.ROLE_ADMIN) {
+            throw new AccessDeniedException("Acces admin requis");
+        }
         List<SujetProjet> sujets = sujetProjetRepository.findByStatutOrderByDateCreationDesc(
                 StatutSujet.REALISATION_TERMINEE
         );

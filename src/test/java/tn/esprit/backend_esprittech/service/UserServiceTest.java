@@ -228,6 +228,76 @@ class UserServiceTest {
         verify(userRepository).findAll(pageable);
     }
 
+    // ---- listEligible ----
+
+    @Test
+    void listEligible_typeMember_callsSearchEligibleMembers() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT);
+        Page<User> page = new PageImpl<>(List.of(user));
+        when(userRepository.searchEligibleMembers("test", roles, pageable)).thenReturn(page);
+
+        Page<User> result = userService.listEligible("test", 1L, "MEMBER", pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(userRepository).searchEligibleMembers("test", roles, pageable);
+        verify(userRepository, never()).searchEligible(any(), any(), any(), any());
+    }
+
+    @Test
+    void listEligible_typeChefWithEquipeId_callsSearchEligible() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT);
+        Page<User> page = new PageImpl<>(List.of(user));
+        when(userRepository.searchEligible("test", 1L, roles, pageable)).thenReturn(page);
+
+        Page<User> result = userService.listEligible("test", 1L, "CHEF", pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(userRepository).searchEligible("test", 1L, roles, pageable);
+        verify(userRepository, never()).searchEligibleMembers(any(), any(), any());
+    }
+
+    @Test
+    void listEligible_typeChefWithoutEquipeId_fallsBackToEligibleMembers() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT);
+        Page<User> page = new PageImpl<>(List.of(user));
+        when(userRepository.searchEligibleMembers("test", roles, pageable)).thenReturn(page);
+
+        Page<User> result = userService.listEligible("test", null, "CHEF", pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(userRepository).searchEligibleMembers("test", roles, pageable);
+        verify(userRepository, never()).searchEligible(any(), any(), any(), any());
+    }
+
+    @Test
+    void listEligible_trimsSearchQuery() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT);
+        Page<User> page = new PageImpl<>(List.of(user));
+        when(userRepository.searchEligibleMembers("in", roles, pageable)).thenReturn(page);
+
+        Page<User> result = userService.listEligible("  in  ", null, "MEMBER", pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(userRepository).searchEligibleMembers("in", roles, pageable);
+    }
+
+    @Test
+    void listEligible_nullSearch_passesEmptyString() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT);
+        Page<User> page = new PageImpl<>(List.of(user));
+        when(userRepository.searchEligibleMembers("", roles, pageable)).thenReturn(page);
+
+        Page<User> result = userService.listEligible(null, null, "MEMBER", pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(userRepository).searchEligibleMembers("", roles, pageable);
+    }
+
     // ---- update ----
 
     @Test
@@ -253,6 +323,23 @@ class UserServiceTest {
 
         assertThrows(EmailAlreadyExistsException.class, () -> userService.update(1L, request));
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void update_emailChangedNotTaken_proceeds() {
+        var request = new UpdateUserRequest("Nouveau", "Nom", "libre@esprit.tn",
+                Role.ROLE_CHEF_EQUIPE, false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.existsByEmail("libre@esprit.tn")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        User result = userService.update(1L, request);
+
+        assertEquals("libre@esprit.tn", result.getEmail());
+        assertEquals("Nouveau", result.getNom());
+        assertEquals(Role.ROLE_CHEF_EQUIPE, result.getRole());
+        assertFalse(result.isEnabled());
+        verify(userRepository).save(any(User.class));
     }
 
     // ---- delete ----

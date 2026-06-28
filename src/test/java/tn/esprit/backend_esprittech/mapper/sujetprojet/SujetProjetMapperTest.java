@@ -41,10 +41,10 @@ class SujetProjetMapperTest {
         assertEquals(StatutSujet.SOUMIS_EN_VALIDATION, entity.getStatut());
     }
 
+
     @Test
     void toResponse_mapsAllFields() {
         LocalDateTime now = LocalDateTime.now();
-
         SujetProjet entity = SujetProjet.builder()
                 .id(5L)
                 .titre("Titre")
