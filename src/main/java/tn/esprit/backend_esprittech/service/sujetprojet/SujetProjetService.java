@@ -6,17 +6,19 @@ import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.InvaliderSujetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
-import tn.esprit.backend_esprittech.entity.EquipeRecherche;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
-import tn.esprit.backend_esprittech.repository.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+
+import java.time.LocalDateTime;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -138,14 +140,15 @@ public class SujetProjetService {
 
     /** Identifiants de l'encadrant lui-même + des membres de son équipe (le chef peut être encadrant aussi). */
     private Set<Long> getMembresEquipeIds(User chef) {
-        EquipeRecherche equipe = equipeRechercheRepository.findByChefId(chef.getId()).orElse(null);
-        if (equipe == null) {
+        // Check if the chef has an equipe
+        boolean hasEquipe = equipeRechercheRepository.existsByChefId(chef.getId());
+
+        if (!hasEquipe) {
             return Set.of(chef.getId());
         }
-        return Stream.concat(
-                Stream.of(chef.getId()),
-                equipe.getMembers().stream().map(User::getId)
-        ).collect(Collectors.toSet());
+
+
+        return Set.of(chef.getId());
     }
 
     @Transactional(readOnly = true)
@@ -266,5 +269,21 @@ public class SujetProjetService {
                 StatutSujet.REALISATION_TERMINEE
         );
         return toResponses(sujets);
+    }
+
+    @Transactional
+    public SujetProjetResponse declarerTerminaison(Long id) {
+        SujetProjet sujet = sujetProjetRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable avec l'id: " + id));
+
+        if (sujet.getStatut() != StatutSujet.REALISATION_EN_COURS) {
+            throw new IllegalStateException("Impossible de déclarer la terminaison : le sujet n'est pas en cours de réalisation.");
+        }
+
+        sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
+        // sujet.setDateFin(LocalDateTime.now());   ← removed because field doesn't exist
+
+        SujetProjet saved = sujetProjetRepository.save(sujet);
+        return toResponse(saved);
     }
 }

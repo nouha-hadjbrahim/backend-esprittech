@@ -77,6 +77,17 @@ public class SujetProjetController {
         return ResponseEntity.ok(sujetProjetService.invaliderSujet(id, request));
     }
 
+    // ==================== NEW METHOD ADDED HERE ====================
+    @PostMapping("/{id}/terminer")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Déclarer la terminaison d'un projet",
+            description = "Passe un sujet en cours de réalisation à 'REALISATION_TERMINEE'")
+    public ResponseEntity<SujetProjetResponse> declarerTerminaison(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        return ResponseEntity.ok(sujetProjetService.declarerTerminaison(id));
+    }
+    // ============================================================
+
     @GetMapping("/admin/candidatures")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Sujets pour gestion des candidatures (admin)",
