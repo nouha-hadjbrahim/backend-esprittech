@@ -15,6 +15,9 @@ public record UserResponse(
         TypeUtilisateur typeUtilisateur,
         String departement,
         boolean enabled,
-        Instant createdAt
+        Instant createdAt,
+        boolean isAffilieToEquipe,
+        Long equipeId,
+        String equipeNom
 ) {
 }

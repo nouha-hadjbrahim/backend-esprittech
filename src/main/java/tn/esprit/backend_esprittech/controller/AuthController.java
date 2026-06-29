@@ -16,7 +16,6 @@ import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.AuthService;
 import tn.esprit.backend_esprittech.service.UserService;
 
@@ -30,16 +29,13 @@ public class AuthController {
 
     private final AuthService authService;
     private final UserService userService;
-    private final UserMapper userMapper;
     private final AuthCookieFactory cookieFactory;
 
     public AuthController(AuthService authService,
                           UserService userService,
-                          UserMapper userMapper,
                           AuthCookieFactory cookieFactory) {
         this.authService = authService;
         this.userService = userService;
-        this.userMapper = userMapper;
         this.cookieFactory = cookieFactory;
     }
 
@@ -90,9 +86,9 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    @Operation(summary = "Profil courant", description = "Retourne l'utilisateur authentifié.")
+    @Operation(summary = "Profil courant", description = "Retourne l'utilisateur authentifié, enrichi de son affiliation.")
     public ResponseEntity<UserResponse> me() {
-        return ResponseEntity.ok(userMapper.toResponse(userService.getCurrentUser()));
+        return ResponseEntity.ok(userService.getCurrentUserResponse());
     }
 
     /** Dépose l'access et le refresh token dans deux cookies HttpOnly distincts. */

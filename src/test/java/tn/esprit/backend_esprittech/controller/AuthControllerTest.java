@@ -19,10 +19,8 @@ import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
-import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.AuthService;
 import tn.esprit.backend_esprittech.service.UserService;
 
@@ -34,7 +32,6 @@ class AuthControllerTest {
 
     @Mock private AuthService authService;
     @Mock private UserService userService;
-    @Mock private UserMapper userMapper;
     @Mock private AuthCookieFactory cookieFactory;
 
     @InjectMocks private AuthController authController;
@@ -45,7 +42,8 @@ class AuthControllerTest {
     @BeforeEach
     void setUp() {
         userResponse = new UserResponse(1L, "Test", "User", "test@esprit.tn",
-                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null);
+                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
+                false, null, null);
         authResponse = AuthResponse.of("access-token", "refresh-token", userResponse);
     }
 
@@ -125,14 +123,7 @@ class AuthControllerTest {
 
     @Test
     void me_returns200() {
-        User user = User.builder()
-                .id(1L).nom("Test").prenom("User")
-                .email("test@esprit.tn").identifiant("ETU-001")
-                .role(Role.ROLE_ETUDIANT).typeUtilisateur(TypeUtilisateur.ETUDIANT)
-                .enabled(true).build();
-
-        when(userService.getCurrentUser()).thenReturn(user);
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
+        when(userService.getCurrentUserResponse()).thenReturn(userResponse);
 
         ResponseEntity<UserResponse> response = authController.me();
 

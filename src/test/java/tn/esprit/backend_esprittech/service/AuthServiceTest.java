@@ -21,7 +21,6 @@ import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
 import tn.esprit.backend_esprittech.exception.ReferentielNotFoundException;
-import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.util.Optional;
@@ -37,7 +36,7 @@ class AuthServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtTokenProvider tokenProvider;
     @Mock private AuthenticationManager authenticationManager;
-    @Mock private UserMapper userMapper;
+    @Mock private UserService userService;
     @Mock private ReferentielService referentielService;
 
     @InjectMocks private AuthService authService;
@@ -60,7 +59,8 @@ class AuthServiceTest {
                 .build();
 
         userResponse = new UserResponse(1L, "Test", "User", "test@esprit.tn",
-                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null);
+                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
+                false, null, null);
 
         reference = ReferentielUtilisateur.builder()
                 .id(1L).nom("Test").prenom("User")
@@ -82,7 +82,7 @@ class AuthServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(tokenProvider.generateAccessToken(user)).thenReturn("access-token");
         when(tokenProvider.generateRefreshToken(user)).thenReturn("refresh-token");
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
+        when(userService.toEnrichedResponse(user)).thenReturn(userResponse);
 
         AuthResponse response = authService.register(request);
 
@@ -134,7 +134,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail("test@esprit.tn")).thenReturn(Optional.of(user));
         when(tokenProvider.generateAccessToken(user)).thenReturn("access-token");
         when(tokenProvider.generateRefreshToken(user)).thenReturn("refresh-token");
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
+        when(userService.toEnrichedResponse(user)).thenReturn(userResponse);
 
         AuthResponse response = authService.login(request);
 
@@ -170,7 +170,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail("test@esprit.tn")).thenReturn(Optional.of(user));
         when(tokenProvider.generateAccessToken(user)).thenReturn("new-access");
         when(tokenProvider.generateRefreshToken(user)).thenReturn("new-refresh");
-        when(userMapper.toResponse(user)).thenReturn(userResponse);
+        when(userService.toEnrichedResponse(user)).thenReturn(userResponse);
 
         AuthResponse response = authService.refresh("valid-refresh");
 

@@ -42,6 +42,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "Accès refusé", "Vous n'avez pas les droits requis");
     }
 
+    @ExceptionHandler(ForbiddenException.class)
+    public ProblemDetail handleForbidden(ForbiddenException ex) {
+        return build(HttpStatus.FORBIDDEN, "Accès refusé", ex.getMessage());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ProblemDetail handleConflict(ConflictException ex) {
+        return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
         return build(HttpStatus.BAD_REQUEST, "Requête invalide", ex.getMessage());

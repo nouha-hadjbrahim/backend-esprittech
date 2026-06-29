@@ -10,11 +10,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
+import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
+import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -24,10 +28,17 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EquipeRechercheRepository equipeRechercheRepository;
+    private final UserMapper userMapper;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       EquipeRechercheRepository equipeRechercheRepository,
+                       UserMapper userMapper) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.equipeRechercheRepository = equipeRechercheRepository;
+        this.userMapper = userMapper;
     }
 
     /** Création directe d'un compte par l'admin (sans validation contre le référentiel). */
@@ -129,5 +140,29 @@ public class UserService {
             return user;
         }
         return findByEmail(authentication.getName());
+    }
+
+    /** Profil enrichi de l'utilisateur courant (avec son affiliation), pour /auth/me. */
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUserResponse() {
+        return toEnrichedResponse(getCurrentUser());
+    }
+
+    /**
+     * Construit un {@link UserResponse} enrichi de l'affiliation à une équipe de recherche.
+     * L'enseignant membre est affilié via {@code user.equipeRecherche} ; le chef d'équipe
+     * l'est via l'équipe dont il est responsable. Exécutée dans une transaction pour
+     * initialiser les associations paresseuses.
+     */
+    @Transactional(readOnly = true)
+    public UserResponse toEnrichedResponse(User user) {
+        User managed = userRepository.findById(user.getId()).orElse(user);
+        EquipeRecherche equipe = managed.getEquipeRecherche();
+        if (equipe == null) {
+            equipe = equipeRechercheRepository.findByChefId(managed.getId()).orElse(null);
+        }
+        Long equipeId = (equipe != null) ? equipe.getId() : null;
+        String equipeNom = (equipe != null) ? equipe.getNom() : null;
+        return userMapper.toResponse(managed, equipeId != null, equipeId, equipeNom);
     }
 }
