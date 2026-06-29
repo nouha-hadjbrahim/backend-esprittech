@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import tn.esprit.backend_esprittech.dto.candidature.request.CandidatureRequest;
 import tn.esprit.backend_esprittech.dto.candidature.request.DecisionCandidatureRequest;
 import tn.esprit.backend_esprittech.dto.candidature.request.RetraitEtudiantRequest;
@@ -137,38 +138,264 @@ class CandidatureServiceTest {
         verify(candidatureRepository).save(any(Candidature.class));
     }
 
-    // ... (keeping other valid tests)
+    @Test
+    void deposerCandidature_sujetFerme_leveException() {
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetValide));
+
+        assertThrows(IllegalStateException.class,
+                () -> candidatureService.deposerCandidature(new CandidatureRequest(10L, "Je candidate")));
+
+        verify(candidatureRepository, never()).save(any());
+    }
 
     @Test
-    void deposerCandidature_sujetFerme_leveException() { /* ... */ }
-    @Test
-    void deposerCandidature_doublonExistant_leveException() { /* ... */ }
+    void deposerCandidature_doublonExistant_leveException() {
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+        when(candidatureRepository.findBySujetIdAndEtudiantId(10L, 1L)).thenReturn(Optional.of(candidatureDeposee));
+
+        assertThrows(IllegalStateException.class,
+                () -> candidatureService.deposerCandidature(new CandidatureRequest(10L, "Je candidate")));
+
+        verify(candidatureRepository, never()).save(any());
+    }
 
     // ── US-17 / US-18 : Acceptation & Refus ───────────────────────
     @Test
-    void deciderCandidature_acceptation_creeAffectation() { /* ... */ }
+    void deciderCandidature_acceptation_creeAffectation() {
+        Candidature autreCandidature = setId(Candidature.builder()
+                .sujetId(11L)
+                .etudiant(etudiant)
+                .statut(StatutCandidature.DEPOSEE)
+                .build(), 101L);
+
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+        when(candidatureRepository.findByEtudiantIdAndStatut(1L, StatutCandidature.DEPOSEE))
+                .thenReturn(List.of(candidatureDeposee, autreCandidature));
+        when(candidatureRepository.save(candidatureDeposee)).thenReturn(candidatureDeposee);
+        when(candidatureMapper.toResponse(candidatureDeposee)).thenReturn(mockCandidatureResponse());
+
+        CandidatureResponse result = candidatureService.deciderCandidature(
+                100L,
+                new DecisionCandidatureRequest(true, null));
+
+        assertNotNull(result);
+        assertEquals(StatutCandidature.ACCEPTEE, candidatureDeposee.getStatut());
+        assertNotNull(candidatureDeposee.getDateDecision());
+        assertEquals(StatutCandidature.ARCHIVEE, autreCandidature.getStatut());
+        assertNotNull(autreCandidature.getDateDecision());
+        verify(affectationRepository).save(any(Affectation.class));
+        verify(candidatureRepository).saveAll(List.of(autreCandidature));
+    }
+
     @Test
-    void deciderCandidature_refusAvecMotif_enregistreMotif() { /* ... */ }
+    void deciderCandidature_refusAvecMotif_enregistreMotif() {
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+        when(candidatureRepository.save(candidatureDeposee)).thenReturn(candidatureDeposee);
+        when(candidatureMapper.toResponse(candidatureDeposee)).thenReturn(mockCandidatureResponse());
+
+        CandidatureResponse result = candidatureService.deciderCandidature(
+                100L,
+                new DecisionCandidatureRequest(false, "Profil non retenu"));
+
+        assertNotNull(result);
+        assertEquals(StatutCandidature.REFUSEE, candidatureDeposee.getStatut());
+        assertEquals("Profil non retenu", candidatureDeposee.getMotifRefus());
+        assertNotNull(candidatureDeposee.getDateDecision());
+        verify(affectationRepository, never()).save(any());
+    }
+
     @Test
-    void deciderCandidature_refusSansMotif_leveException() { /* ... */ }
+    void deciderCandidature_refusSansMotif_leveException() {
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(false, "  ")));
+    }
+
+    @Test
+    void deciderCandidature_dejaTraitee_leveException() {
+        candidatureDeposee.setStatut(StatutCandidature.ACCEPTEE);
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+
+        assertThrows(IllegalStateException.class,
+                () -> candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(true, null)));
+    }
 
     // ── US-19 + US-20 : Fermeture + Réalisation ───────────────────
     @Test
-    void fermerCandidatures_sujetOuvert_basculeSurRealisationEnCours() { /* ... */ }
+    void fermerCandidatures_sujetOuvert_basculeSurRealisationEnCours() {
+        Candidature enAttente = setId(Candidature.builder()
+                .sujetId(10L)
+                .etudiant(etudiant)
+                .statut(StatutCandidature.DEPOSEE)
+                .build(), 102L);
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+        when(candidatureRepository.findBySujetIdAndStatut(10L, StatutCandidature.DEPOSEE))
+                .thenReturn(List.of(enAttente));
+
+        candidatureService.fermerCandidatures(10L);
+
+        assertEquals(StatutSujet.REALISATION_EN_COURS, sujetOuvert.getStatut());
+        assertEquals(StatutCandidature.ARCHIVEE, enAttente.getStatut());
+        verify(candidatureRepository).saveAll(List.of(enAttente));
+        verify(sujetProjetRepository).save(sujetOuvert);
+    }
+
     @Test
-    void fermerCandidatures_sujetNonOuvert_leveException() { /* ... */ }
+    void fermerCandidatures_sujetNonOuvert_leveException() {
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetValide));
+
+        assertThrows(IllegalStateException.class, () -> candidatureService.fermerCandidatures(10L));
+    }
 
     // ── US-22 : Retrait étudiant ─────────────────────────────────────
     @Test
-    void retirerEtudiant_affectationActive_archiveAvecMotif() { /* ... */ }
+    void retirerEtudiant_affectationActive_archiveAvecMotif() {
+        when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetEnRealisation));
+        when(affectationRepository.save(affectationActive)).thenReturn(affectationActive);
+        when(affectationMapper.toResponse(affectationActive)).thenReturn(mockAffectationResponse());
+
+        AffectationResponse result = candidatureService.retirerEtudiant(
+                200L,
+                new RetraitEtudiantRequest("Abandon sans justification"));
+
+        assertNotNull(result);
+        assertEquals(StatutAffectation.RETIREE_ARCHIVEE, affectationActive.getStatut());
+        assertEquals("Abandon sans justification", affectationActive.getMotifRetrait());
+        assertNotNull(affectationActive.getDateRetrait());
+    }
+
     @Test
-    void retirerEtudiant_affectationDejaArchivee_leveException() { /* ... */ }
+    void retirerEtudiant_affectationDejaArchivee_leveException() {
+        affectationActive.setStatut(StatutAffectation.RETIREE_ARCHIVEE);
+        when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetEnRealisation));
+
+        assertThrows(IllegalStateException.class,
+                () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
+    }
+
+    @Test
+    void retirerEtudiant_sujetPasEnRealisation_leveException() {
+        when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+
+        assertThrows(IllegalStateException.class,
+                () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
+    }
 
     // ── US-24 : Terminaison ──────────────────────────────────────────
     @Test
-    void declarerTerminaison_sujetEnRealisation_passeTermine() { /* ... */ }
+    void declarerTerminaison_sujetEnRealisation_passeTermine() {
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetEnRealisation));
+
+        candidatureService.declarerTerminaison(10L);
+
+        assertEquals(StatutSujet.REALISATION_TERMINEE, sujetEnRealisation.getStatut());
+        verify(sujetProjetRepository).save(sujetEnRealisation);
+    }
+
     @Test
-    void declarerTerminaison_sujetPasEnRealisation_leveException() { /* ... */ }
+    void declarerTerminaison_sujetPasEnRealisation_leveException() {
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+
+        assertThrows(IllegalStateException.class, () -> candidatureService.declarerTerminaison(10L));
+    }
+
+    @Test
+    void getCandidaturesParSujet_mappeLesResponses() {
+        when(candidatureRepository.findBySujetIdOrderByDateDepotAsc(10L)).thenReturn(List.of(candidatureDeposee));
+        when(candidatureMapper.toResponse(candidatureDeposee)).thenReturn(mockCandidatureResponse());
+
+        List<CandidatureResponse> result = candidatureService.getCandidaturesParSujet(10L);
+
+        assertEquals(1, result.size());
+        verify(candidatureMapper).toResponse(candidatureDeposee);
+    }
+
+    @Test
+    void getMesCandidatures_utiliseUtilisateurCourant() {
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+        when(candidatureRepository.findByEtudiantIdOrderByDateDepotDesc(1L)).thenReturn(List.of(candidatureDeposee));
+        when(candidatureMapper.toResponse(candidatureDeposee)).thenReturn(mockCandidatureResponse());
+
+        List<CandidatureResponse> result = candidatureService.getMesCandidatures();
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void getAffectationsParSujet_mappeLesResponses() {
+        when(affectationRepository.findBySujetId(10L)).thenReturn(List.of(affectationActive));
+        when(affectationMapper.toResponse(affectationActive)).thenReturn(mockAffectationResponse());
+
+        List<AffectationResponse> result = candidatureService.getAffectationsParSujet(10L);
+
+        assertEquals(1, result.size());
+        verify(affectationMapper).toResponse(affectationActive);
+    }
+
+    @Test
+    void ouvrirCandidatures_adminPeutGererSujetNonPossede() {
+        when(userService.getCurrentUser()).thenReturn(user(Role.ROLE_ADMIN, 99L));
+        sujetValide.setEncadrantId(2L);
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetValide));
+
+        candidatureService.ouvrirCandidatures(10L);
+
+        assertEquals(StatutSujet.CANDIDATURE_OUVERTE, sujetValide.getStatut());
+        assertTrue(sujetValide.getCatalogue());
+    }
+
+    @Test
+    void fermerCandidatures_chefEquipePeutGererSujetNonPossede() {
+        when(userService.getCurrentUser()).thenReturn(user(Role.ROLE_CHEF_EQUIPE, 44L));
+        sujetOuvert.setEncadrantId(2L);
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+        when(candidatureRepository.findBySujetIdAndStatut(10L, StatutCandidature.DEPOSEE)).thenReturn(List.of());
+
+        candidatureService.fermerCandidatures(10L);
+
+        assertEquals(StatutSujet.REALISATION_EN_COURS, sujetOuvert.getStatut());
+    }
+
+    @Test
+    void ouvrirCandidatures_enseignantNonProprietaire_refuse() {
+        when(userService.getCurrentUser()).thenReturn(user(Role.ROLE_ENSEIGNANT, 77L));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetValide));
+
+        assertThrows(AccessDeniedException.class, () -> candidatureService.ouvrirCandidatures(10L));
+    }
+
+    @Test
+    void ouvrirCandidatures_sujetInexistant_leveException() {
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> candidatureService.ouvrirCandidatures(10L));
+    }
+
+    @Test
+    void deciderCandidature_inexistante_leveException() {
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(true, null)));
+    }
+
+    @Test
+    void retirerEtudiant_affectationInexistante_leveException() {
+        when(affectationRepository.findById(200L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
+    }
 
     // ─────────────────────────────────────────────────────────────────
     // Helpers
@@ -185,6 +412,13 @@ class CandidatureServiceTest {
                 java.time.Instant.parse("2026-06-25T10:00:00Z"),
                 java.time.Instant.parse("2026-06-25T11:00:00Z"),
                 "Abandon sans justification");
+    }
+
+    private User user(Role role, Long id) {
+        User user = new User();
+        user.setId(id);
+        user.setRole(role);
+        return user;
     }
 
     private Candidature setId(Candidature c, Long id) {

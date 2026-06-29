@@ -19,7 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/equipes/admin/domaines")
 @Tag(name = "Domaines d'équipe (admin)", description = "CRUD des domaines pour les équipes de recherche")
-@PreAuthorize("hasRole('ADMIN')")
+
 public class EquipeDomaineController {
 
     private final EquipeDomaineService service;
@@ -29,6 +29,7 @@ public class EquipeDomaineController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Lister les domaines (paginé)")
     public ResponseEntity<PagedResponse<EquipeDomaineResponse>> getPage(
             @RequestParam(defaultValue = "0") int page,
@@ -38,24 +39,28 @@ public class EquipeDomaineController {
     }
 
     @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF_EQUIPE')")
     @Operation(summary = "Lister tous les domaines (non paginé, pour dropdowns)")
     public ResponseEntity<List<EquipeDomaineResponse>> getAll() {
         return ResponseEntity.ok(service.getAll());
     }
 
     @GetMapping("/count")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Nombre total de domaines")
     public ResponseEntity<Long> getCount() {
         return ResponseEntity.ok(service.count());
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Créer un domaine")
     public ResponseEntity<EquipeDomaineResponse> create(@Valid @RequestBody EquipeDomaineRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Modifier un domaine")
     public ResponseEntity<EquipeDomaineResponse> update(
             @PathVariable Long id,
@@ -64,6 +69,7 @@ public class EquipeDomaineController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Supprimer un domaine")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.delete(id);
