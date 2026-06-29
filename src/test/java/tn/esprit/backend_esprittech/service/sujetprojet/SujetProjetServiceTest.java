@@ -15,6 +15,7 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
+import tn.esprit.backend_esprittech.repository.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
@@ -34,6 +35,7 @@ class SujetProjetServiceTest {
     @Mock private UserService userService;
     @Mock private UserRepository userRepository;
     @Mock private SujetReferenceService referenceService;
+    @Mock private EquipeRechercheRepository equipeRechercheRepository;
 
     @InjectMocks private SujetProjetService service;
 
@@ -59,8 +61,8 @@ class SujetProjetServiceTest {
 
         response = new SujetProjetResponse(1L, "Sujet", CategorieSujet.PFE, "Desc", "Obj",
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2, StatutSujet.SOUMIS_EN_VALIDATION,
-                null, false, false, 10L, "Sami Ben Ali", entity.getDateCreation(), entity.getDateCreation(),
-                null, null, null, null);
+                null, false, false, 10L, "Sami Ben Ali", "sami@esprit.tn", null,
+                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null);
 
         when(userService.getCurrentUser()).thenReturn(enseignant);
         when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
@@ -71,7 +73,7 @@ class SujetProjetServiceTest {
     void creerSujet_savesAndReturnsResponse() {
         when(sujetProjetMapper.toEntity(request, 10L)).thenReturn(entity);
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali")).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
 
         assertEquals(response, service.creerSujet(request));
     }
@@ -85,7 +87,7 @@ class SujetProjetServiceTest {
     @Test
     void getMesSujets_returnsSubjectsForCurrentTeacher() {
         when(sujetProjetRepository.findByEncadrantIdOrderByDateCreationDesc(10L)).thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali")).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
 
         assertEquals(1, service.getMesSujets(null, null).size());
     }
@@ -93,7 +95,7 @@ class SujetProjetServiceTest {
     @Test
     void getSujetById_owner_canAccess() {
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali")).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
 
         assertEquals(response, service.getSujetById(1L));
     }

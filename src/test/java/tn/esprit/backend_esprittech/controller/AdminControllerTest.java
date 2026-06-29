@@ -12,17 +12,26 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
+import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.GlobalExceptionHandler;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -43,6 +52,9 @@ class AdminControllerTest {
     @Mock
     private ReferentielService referentielService;
 
+    @Mock
+    private SujetProjetService sujetProjetService;
+
     @InjectMocks
     private AdminController controller;
 
@@ -50,9 +62,29 @@ class AdminControllerTest {
 
     @BeforeEach
     void setup() {
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .setValidator(validator)
                 .build();
+    }
+
+    private SujetProjetResponse sampleSujetResponse() {
+        return new SujetProjetResponse(
+                1L, "Sujet test", CategorieSujet.PFE, "Description", "Objectifs",
+                List.of("Soft skills"), List.of("Info"), List.of("Java"), 2,
+                StatutSujet.SOUMIS_EN_VALIDATION, null, false, false,
+                10L, "Sami Ben Ali", "sami@esprit.tn", null,
+                LocalDateTime.now(), LocalDateTime.now(), null, null, null, null);
+    }
+
+    private Map<String, Object> validSujetPayload() {
+        return Map.of(
+                "titre", "Sujet test", "categorie", "PFE", "description", "Description",
+                "objectifs", "Objectifs", "prerequis", List.of("Soft skills"),
+                "domaines", List.of("Informatique"), "technologies", List.of("Java"), "capaciteAccueil", 2
+        );
     }
 
     // ---------------- IMPORT REFERENTIEL ----------------
@@ -236,5 +268,141 @@ class AdminControllerTest {
                 .andExpect(status().isNotFound());
 
         verify(userService).delete(99L);
+    }
+
+    // ---------------- GESTION SUJETS ----------------
+
+    @Test
+    void listerSujets_returnsPagedResponse() throws Exception {
+        Page<SujetProjetResponse> page = new PageImpl<>(List.of(sampleSujetResponse()));
+        when(sujetProjetService.listSujetsForAdmin(isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/sujet-projets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        verify(sujetProjetService).listSujetsForAdmin(isNull(), isNull(), isNull(), any(Pageable.class));
+    }
+
+    @Test
+    void listerSujets_withFilters_delegatesToService() throws Exception {
+        Page<SujetProjetResponse> page = new PageImpl<>(List.of(sampleSujetResponse()));
+        when(sujetProjetService.listSujetsForAdmin(
+                eq(CategorieSujet.PFE), eq(StatutSujet.SOUMIS_EN_VALIDATION), eq("java"), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/sujet-projets")
+                        .param("categorie", "PFE")
+                        .param("statut", "SOUMIS_EN_VALIDATION")
+                        .param("search", "java")
+                        .param("page", "0")
+                        .param("size", "8"))
+                .andExpect(status().isOk());
+
+        verify(sujetProjetService).listSujetsForAdmin(
+                eq(CategorieSujet.PFE), eq(StatutSujet.SOUMIS_EN_VALIDATION), eq("java"), any(Pageable.class));
+    }
+
+    @Test
+    void listerDemandes_returnsPagedResponse() throws Exception {
+        Page<SujetProjetResponse> page = new PageImpl<>(List.of(sampleSujetResponse()));
+        when(sujetProjetService.listDemandesForAdmin(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/sujet-projets/demandes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        verify(sujetProjetService).listDemandesForAdmin(isNull(), isNull(), any(Pageable.class));
+    }
+
+    @Test
+    void listerSujetsDisponibles_returnsPagedResponse() throws Exception {
+        Page<SujetProjetResponse> page = new PageImpl<>(List.of(sampleSujetResponse()));
+        when(sujetProjetService.listSujetsDisponiblesForAdmin(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/sujet-projets/disponibles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        verify(sujetProjetService).listSujetsDisponiblesForAdmin(isNull(), isNull(), any(Pageable.class));
+    }
+
+    @Test
+    void getSujet_validId_returnsOk() throws Exception {
+        when(sujetProjetService.getSujetForAdmin(1L)).thenReturn(sampleSujetResponse());
+
+        mockMvc.perform(get("/api/admin/sujet-projets/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.titre").value("Sujet test"));
+
+        verify(sujetProjetService).getSujetForAdmin(1L);
+    }
+
+    @Test
+    void validerSujet_validId_returnsOk() throws Exception {
+        SujetProjetResponse validated = sampleSujetResponse();
+        when(sujetProjetService.validerSujetAsAdmin(1L)).thenReturn(validated);
+
+        mockMvc.perform(post("/api/admin/sujet-projets/1/valider"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1));
+
+        verify(sujetProjetService).validerSujetAsAdmin(1L);
+    }
+
+    @Test
+    void invaliderSujet_validRequest_returnsOk() throws Exception {
+        when(sujetProjetService.invaliderSujetAsAdmin(eq(1L), any(SujetInvalidationRequest.class)))
+                .thenReturn(sampleSujetResponse());
+
+        mockMvc.perform(post("/api/admin/sujet-projets/1/invalider")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("motif", "Motif de refus"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1));
+
+        verify(sujetProjetService).invaliderSujetAsAdmin(eq(1L), any(SujetInvalidationRequest.class));
+    }
+
+    @Test
+    void invaliderSujet_blankMotif_returns400() throws Exception {
+        mockMvc.perform(post("/api/admin/sujet-projets/1/invalider")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("motif", ""))))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(sujetProjetService);
+    }
+
+    @Test
+    void modifierSujet_validRequest_returnsOk() throws Exception {
+        when(sujetProjetService.modifierSujetAsAdmin(eq(1L), any(SujetProjetRequest.class)))
+                .thenReturn(sampleSujetResponse());
+
+        mockMvc.perform(put("/api/admin/sujet-projets/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validSujetPayload())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titre").value("Sujet test"));
+
+        verify(sujetProjetService).modifierSujetAsAdmin(eq(1L), any(SujetProjetRequest.class));
+    }
+
+    @Test
+    void supprimerSujet_validId_returnsOk() throws Exception {
+        doNothing().when(sujetProjetService).supprimerSujetAsAdmin(1L);
+
+        mockMvc.perform(delete("/api/admin/sujet-projets/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Sujet supprimé"));
+
+        verify(sujetProjetService).supprimerSujetAsAdmin(1L);
     }
 }

@@ -14,4 +14,6 @@ public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche
     boolean existsByChefId(Long chefId);
 
     boolean existsByChefIdAndIdNot(Long chefId, Long id);
+
+    java.util.Optional<EquipeRecherche> findByChefId(Long chefId);
 }

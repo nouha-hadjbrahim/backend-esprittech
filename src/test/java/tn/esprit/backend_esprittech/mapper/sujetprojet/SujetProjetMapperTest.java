@@ -62,7 +62,7 @@ class SujetProjetMapperTest {
                 .dateCreation(now)
                 .build();
 
-        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami");
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", "REEE");
 
         assertEquals(List.of("Soft skills", "Java"), response.prerequis());
         assertEquals(List.of("Domaine"), response.domaines());

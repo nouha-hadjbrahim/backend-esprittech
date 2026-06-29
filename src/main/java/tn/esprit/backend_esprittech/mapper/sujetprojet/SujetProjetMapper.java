@@ -40,7 +40,8 @@ public class SujetProjetMapper {
         entity.setCapaciteAccueil(request.capaciteAccueil());
     }
 
-    public SujetProjetResponse toResponse(SujetProjet entity, String encadrantNom) {
+    public SujetProjetResponse toResponse(SujetProjet entity, String encadrantNom,
+                                          String encadrantEmail, String equipeNom) {
         return new SujetProjetResponse(
                 entity.getId(),
                 entity.getTitre(),
@@ -57,6 +58,8 @@ public class SujetProjetMapper {
                 entity.getCatalogue(),
                 entity.getEncadrantId(),
                 encadrantNom,
+                encadrantEmail,
+                equipeNom,
                 entity.getDateCreation(),
                 entity.getDateSoumission(),
                 entity.getDateValidation(),
