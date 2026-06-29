@@ -19,6 +19,7 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.CandidatureIndustrialisation;
+import tn.esprit.backend_esprittech.entity.industrialisation.HistoriqueIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.OrientationIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.ReponseIndustrialisation;
@@ -39,6 +40,7 @@ import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -565,6 +567,45 @@ class IndustrialisationServiceTest {
         var response = industrialisationService.detail(11L);
 
         assertEquals(11L, response.id());
+    }
+
+    @Test
+    void detail_withHistory_shouldMapActorAndTransitionFields() {
+        User actor = user(9L, Role.ROLE_CI);
+        actor.setPrenom("Comite");
+        actor.setNom("Industrie");
+        LocalDateTime transitionDate = LocalDateTime.of(2026, 2, 1, 10, 30);
+        HistoriqueIndustrialisation history = new HistoriqueIndustrialisation();
+        history.setId(70L);
+        history.setCandidatureIndustrialisation(candidature);
+        history.setStatutSource(StatutIndustrialisation.SOUMISE);
+        history.setStatutCible(StatutIndustrialisation.GO);
+        history.setActeur(actor);
+        history.setRoleActeur(Role.ROLE_CI.name());
+        history.setDateTransition(transitionDate);
+        history.setMotif("Recevable");
+        history.setCommentaire("Go DSI");
+
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
+        when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of());
+        when(livrableService.findByProjet(42L)).thenReturn(List.of());
+        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L))
+                .thenReturn(List.of(history));
+
+        var response = industrialisationService.detail(11L);
+
+        assertEquals(1, response.historique().size());
+        var mapped = response.historique().get(0);
+        assertEquals(70L, mapped.id());
+        assertEquals(StatutIndustrialisation.SOUMISE, mapped.statutSource());
+        assertEquals(StatutIndustrialisation.GO, mapped.statutCible());
+        assertEquals(9L, mapped.acteurId());
+        assertEquals("Comite Industrie", mapped.acteurNom());
+        assertEquals(Role.ROLE_CI.name(), mapped.roleActeur());
+        assertEquals(transitionDate, mapped.dateTransition());
+        assertEquals("Recevable", mapped.motif());
+        assertEquals("Go DSI", mapped.commentaire());
     }
 
     @Test
