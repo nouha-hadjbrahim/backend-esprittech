@@ -20,3 +20,4 @@ public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche
     /** Équipe dont l'utilisateur donné est le chef (au plus une). */
     Optional<EquipeRecherche> findByChefId(Long chefId);
 }
+

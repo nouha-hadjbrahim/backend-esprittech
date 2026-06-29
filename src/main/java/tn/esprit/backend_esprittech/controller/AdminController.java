@@ -18,10 +18,16 @@ import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.MessageResponse;
 import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
+import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 /**
  * Endpoints réservés à l'administrateur : import du référentiel CSV,
@@ -36,13 +42,16 @@ public class AdminController {
         private final ReferentielService referentielService;
         private final UserService userService;
         private final UserMapper userMapper;
+        private final SujetProjetService sujetProjetService;
 
         public AdminController(ReferentielService referentielService,
                         UserService userService,
-                        UserMapper userMapper) {
+                        UserMapper userMapper,
+                        SujetProjetService sujetProjetService) {
                 this.referentielService = referentielService;
                 this.userService = userService;
                 this.userMapper = userMapper;
+                this.sujetProjetService = sujetProjetService;
         }
 
         @PostMapping(value = "/import-referentiel", consumes = "multipart/form-data")
@@ -86,5 +95,100 @@ public class AdminController {
         public ResponseEntity<MessageResponse> deleteUser(@PathVariable Long id) {
                 userService.delete(id);
                 return ResponseEntity.ok(MessageResponse.of("Utilisateur supprimé"));
+        }
+
+        // ----- Gestion des sujets -----
+
+        @GetMapping("/sujet-projets")
+        @Operation(summary = "Lister les sujets", description = "Liste paginée de tous les sujets déposés, avec recherche et filtres.")
+        public ResponseEntity<PagedResponse<SujetProjetResponse>> listerSujets(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "8") int size,
+                        @RequestParam(required = false) String search,
+                        @RequestParam(required = false) CategorieSujet categorie,
+                        @RequestParam(required = false) StatutSujet statut) {
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateCreation"));
+                Page<SujetProjetResponse> sujets = sujetProjetService.listSujetsForAdmin(categorie, statut, search, pageable);
+                return ResponseEntity.ok(new PagedResponse<>(
+                                sujets.getContent(),
+                                sujets.getNumber(),
+                                sujets.getSize(),
+                                sujets.getTotalElements(),
+                                sujets.getTotalPages(),
+                                sujets.isFirst(),
+                                sujets.isLast()));
+        }
+
+        @GetMapping("/sujet-projets/demandes")
+        @Operation(summary = "Lister les demandes en attente", description = "Demandes de sujets non encore traitées (soumis ou en attente).")
+        public ResponseEntity<PagedResponse<SujetProjetResponse>> listerDemandes(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "8") int size,
+                        @RequestParam(required = false) String search,
+                        @RequestParam(required = false) CategorieSujet categorie) {
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateCreation"));
+                Page<SujetProjetResponse> demandes = sujetProjetService.listDemandesForAdmin(categorie, search, pageable);
+                return ResponseEntity.ok(new PagedResponse<>(
+                                demandes.getContent(),
+                                demandes.getNumber(),
+                                demandes.getSize(),
+                                demandes.getTotalElements(),
+                                demandes.getTotalPages(),
+                                demandes.isFirst(),
+                                demandes.isLast()));
+        }
+
+        @GetMapping("/sujet-projets/disponibles")
+        @Operation(summary = "Lister les sujets disponibles", description = "Sujets publiés dans le catalogue (acceptés et visibles côté frontoffice).")
+        public ResponseEntity<PagedResponse<SujetProjetResponse>> listerSujetsDisponibles(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "8") int size,
+                        @RequestParam(required = false) String search,
+                        @RequestParam(required = false) CategorieSujet categorie) {
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateCreation"));
+                Page<SujetProjetResponse> sujets = sujetProjetService.listSujetsDisponiblesForAdmin(categorie, search, pageable);
+                return ResponseEntity.ok(new PagedResponse<>(
+                                sujets.getContent(),
+                                sujets.getNumber(),
+                                sujets.getSize(),
+                                sujets.getTotalElements(),
+                                sujets.getTotalPages(),
+                                sujets.isFirst(),
+                                sujets.isLast()));
+        }
+
+        @PostMapping("/sujet-projets/{id}/valider")
+        @Operation(summary = "Accepter une demande", description = "Valide un sujet en attente et l'ouvre aux candidatures.")
+        public ResponseEntity<SujetProjetResponse> validerSujet(@PathVariable Long id) {
+                return ResponseEntity.ok(sujetProjetService.validerSujetAsAdmin(id));
+        }
+
+        @PostMapping("/sujet-projets/{id}/invalider")
+        @Operation(summary = "Refuser une demande", description = "Rejette un sujet en attente avec un motif enregistré.")
+        public ResponseEntity<SujetProjetResponse> invaliderSujet(
+                        @PathVariable Long id,
+                        @Valid @RequestBody SujetInvalidationRequest request) {
+                return ResponseEntity.ok(sujetProjetService.invaliderSujetAsAdmin(id, request));
+        }
+
+        @GetMapping("/sujet-projets/{id}")
+        @Operation(summary = "Détail d'un sujet", description = "Retourne toutes les informations d'un sujet.")
+        public ResponseEntity<SujetProjetResponse> getSujet(@PathVariable Long id) {
+                return ResponseEntity.ok(sujetProjetService.getSujetForAdmin(id));
+        }
+
+        @PutMapping("/sujet-projets/{id}")
+        @Operation(summary = "Modifier un sujet", description = "Met à jour le contenu d'un sujet déposé.")
+        public ResponseEntity<SujetProjetResponse> modifierSujet(
+                        @PathVariable Long id,
+                        @Valid @RequestBody SujetProjetRequest request) {
+                return ResponseEntity.ok(sujetProjetService.modifierSujetAsAdmin(id, request));
+        }
+
+        @DeleteMapping("/sujet-projets/{id}")
+        @Operation(summary = "Supprimer un sujet", description = "Supprime définitivement un sujet.")
+        public ResponseEntity<MessageResponse> supprimerSujet(@PathVariable Long id) {
+                sujetProjetService.supprimerSujetAsAdmin(id);
+                return ResponseEntity.ok(MessageResponse.of("Sujet supprimé"));
         }
 }

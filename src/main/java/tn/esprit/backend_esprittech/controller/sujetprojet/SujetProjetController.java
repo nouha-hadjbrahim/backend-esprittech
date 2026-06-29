@@ -9,8 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import tn.esprit.backend_esprittech.dto.sujetprojet.request.InvaliderSujetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.ReferenceItemRequest;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
@@ -60,23 +60,6 @@ public class SujetProjetController {
         return ResponseEntity.ok(sujetProjetService.getSujetsEnAttenteValidation());
     }
 
-    @PostMapping("/{id}/valider")
-    @PreAuthorize("hasAnyRole('CHEF_EQUIPE', 'ADMIN')")
-    @Operation(summary = "Valider un sujet", description = "Fait passer un sujet Soumis en validation au statut Validé.")
-    public ResponseEntity<SujetProjetResponse> validerSujet(
-            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
-        return ResponseEntity.ok(sujetProjetService.validerSujet(id));
-    }
-
-    @PostMapping("/{id}/invalider")
-    @PreAuthorize("hasAnyRole('CHEF_EQUIPE', 'ADMIN')")
-    @Operation(summary = "Invalider un sujet", description = "Refuse un sujet Soumis en validation avec motif obligatoire.")
-    public ResponseEntity<SujetProjetResponse> invaliderSujet(
-            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
-            @Valid @RequestBody InvaliderSujetRequest request) {
-        return ResponseEntity.ok(sujetProjetService.invaliderSujet(id, request));
-    }
-
     // ==================== NEW METHOD ADDED HERE ====================
     @PostMapping("/{id}/terminer")
     @PreAuthorize("hasRole('ENSEIGNANT')")
@@ -102,6 +85,32 @@ public class SujetProjetController {
     public ResponseEntity<List<SujetProjetResponse>> getSujetsDisponibles(
             @RequestParam(required = false) CategorieSujet categorie) {
         return ResponseEntity.ok(sujetProjetService.getSujetsDisponibles(categorie));
+    }
+
+    @GetMapping("/a-valider")
+    @PreAuthorize("hasRole('CHEF_EQUIPE')")
+    @Operation(summary = "Sujets à valider", description = "Liste les demandes de sujets déposées par les membres de l'équipe.")
+    public ResponseEntity<List<SujetProjetResponse>> getSujetsAValider(
+            @RequestParam(required = false) CategorieSujet categorie,
+            @RequestParam(required = false) StatutSujet statut) {
+        return ResponseEntity.ok(sujetProjetService.getSujetsAValider(categorie, statut));
+    }
+
+    @PostMapping("/{id}/valider")
+    @PreAuthorize("hasRole('CHEF_EQUIPE')")
+    @Operation(summary = "Valider un sujet", description = "Accepte la demande et publie le sujet dans le catalogue.")
+    public ResponseEntity<SujetProjetResponse> validerSujet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        return ResponseEntity.ok(sujetProjetService.validerSujet(id));
+    }
+
+    @PostMapping("/{id}/invalider")
+    @PreAuthorize("hasRole('CHEF_EQUIPE')")
+    @Operation(summary = "Refuser un sujet", description = "Rejette la demande avec un motif.")
+    public ResponseEntity<SujetProjetResponse> invaliderSujet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
+            @Valid @RequestBody SujetInvalidationRequest request) {
+        return ResponseEntity.ok(sujetProjetService.invaliderSujet(id, request));
     }
 
     @GetMapping("/{id}")

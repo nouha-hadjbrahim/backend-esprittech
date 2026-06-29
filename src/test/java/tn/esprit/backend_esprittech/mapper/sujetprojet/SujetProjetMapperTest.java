@@ -99,14 +99,9 @@ class SujetProjetMapperTest {
                 .catalogue(true)
                 .encadrantId(1001L)
                 .dateCreation(now)
-                .dateSoumission(now)
-                .dateValidation(now)
-                .dateDebutRealisation(now)
-                .dateTerminaison(now)
-                .motifInvalidation("Aucun")
                 .build();
 
-        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami");
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", "REEE");
 
         assertEquals(List.of("Soft skills", "Java"), response.prerequis());
         assertEquals(List.of("Domaine"), response.domaines());
@@ -131,7 +126,7 @@ class SujetProjetMapperTest {
                 .encadrantId(1001L)
                 .build();
 
-        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami");
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", null);
 
         assertTrue(response.prerequis().isEmpty());
         assertTrue(response.domaines().isEmpty());

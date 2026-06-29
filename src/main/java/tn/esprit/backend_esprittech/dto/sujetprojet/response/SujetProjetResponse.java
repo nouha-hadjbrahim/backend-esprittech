@@ -22,6 +22,8 @@ public record SujetProjetResponse(
         Boolean catalogue,
         Long encadrantId,
         String encadrantNom,
+        String encadrantEmail,
+        String equipeNom,
         LocalDateTime dateCreation,
         LocalDateTime dateSoumission,
         LocalDateTime dateValidation,
