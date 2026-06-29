@@ -122,6 +122,34 @@ class SujetReferenceServiceTest {
     }
 
     @Test
+    void countAndAllNames_shouldDelegateToRepositories() {
+        when(domaineRepository.count()).thenReturn(2L);
+        when(prerequisRepository.count()).thenReturn(3L);
+        when(domaineRepository.findAllByOrderByNomAsc()).thenReturn(List.of(domaine(1L, "Cloud")));
+        when(technologieRepository.findAllByOrderByNomAsc()).thenReturn(List.of(technologie(2L, "Angular")));
+
+        assertEquals(2L, service.countDomaines());
+        assertEquals(3L, service.countPrerequis());
+        assertEquals(List.of("Cloud"), service.getAllDomaineNoms());
+        assertEquals(List.of("Angular"), service.getAllTechnologieNoms());
+    }
+
+    @Test
+    void findOrCreateDomaine_newName_shouldSaveNormalizedName() {
+        when(domaineRepository.findByNomIgnoreCase("Cybersecurite")).thenReturn(Optional.empty());
+        when(domaineRepository.save(any(SujetDomaine.class))).thenAnswer(invocation -> {
+            SujetDomaine saved = invocation.getArgument(0);
+            saved.setId(6L);
+            return saved;
+        });
+
+        var response = service.findOrCreateDomaine(" Cybersecurite ");
+
+        assertEquals(6L, response.id());
+        assertEquals("Cybersecurite", response.nom());
+    }
+
+    @Test
     void prerequisCrud_shouldCreateUpdateListAndDelete() {
         SujetPrerequis prerequis = prerequis(1L, "Java");
         when(prerequisRepository.existsByNomIgnoreCase("Java")).thenReturn(false);
@@ -142,6 +170,56 @@ class SujetReferenceServiceTest {
 
         service.deletePrerequis(1L);
         verify(prerequisRepository).delete(prerequis);
+    }
+
+    @Test
+    void getPrerequis_withAndWithoutSearch_shouldUseExpectedQueries() {
+        when(prerequisRepository.findByNomContainingIgnoreCase(eq("ja"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(prerequis(1L, "Java"))));
+        when(prerequisRepository.findAllByOrderByNomAsc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(prerequis(2L, "Docker"))));
+
+        var searched = service.getPrerequis(0, 10, " ja ");
+        var all = service.getPrerequis(0, 10, "");
+
+        assertEquals("Java", searched.content().get(0).nom());
+        assertEquals("Docker", all.content().get(0).nom());
+    }
+
+    @Test
+    void findOrCreatePrerequis_existingAndNewNames_shouldReturnExpectedItems() {
+        SujetPrerequis existing = prerequis(1L, "Java");
+        when(prerequisRepository.findByNomIgnoreCase("Java")).thenReturn(Optional.of(existing));
+
+        var existingResponse = service.findOrCreatePrerequis(" Java ");
+
+        assertEquals(1L, existingResponse.id());
+
+        when(prerequisRepository.findByNomIgnoreCase("Spring")).thenReturn(Optional.empty());
+        when(prerequisRepository.save(any(SujetPrerequis.class))).thenAnswer(invocation -> {
+            SujetPrerequis saved = invocation.getArgument(0);
+            saved.setId(2L);
+            return saved;
+        });
+
+        var createdResponse = service.findOrCreatePrerequis("Spring");
+
+        assertEquals(2L, createdResponse.id());
+        assertEquals("Spring", createdResponse.nom());
+    }
+
+    @Test
+    void updatePrerequis_duplicateDifferentId_shouldReject() {
+        SujetPrerequis current = prerequis(1L, "Java");
+        SujetPrerequis duplicate = prerequis(2L, "Spring");
+        when(prerequisRepository.findById(1L)).thenReturn(Optional.of(current));
+        when(prerequisRepository.findByNomIgnoreCase("Spring")).thenReturn(Optional.of(duplicate));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.updatePrerequis(1L, new ReferenceItemRequest("Spring")));
+
+        assertEquals("Ce pr\u00e9requis existe d\u00e9j\u00e0", ex.getMessage());
+        verify(prerequisRepository, never()).save(any());
     }
 
     @Test
@@ -172,11 +250,72 @@ class SujetReferenceServiceTest {
     }
 
     @Test
+    void getTechnologies_withAndWithoutSearch_shouldUseExpectedQueries() {
+        when(technologieRepository.findByNomContainingIgnoreCase(eq("ang"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(technologie(2L, "Angular"))));
+        when(technologieRepository.findAllByOrderByNomAsc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(technologie(3L, "React"))));
+
+        var searched = service.getTechnologies(0, 10, " ang ");
+        var all = service.getTechnologies(0, 10, null);
+
+        assertEquals("Angular", searched.content().get(0).nom());
+        assertEquals("React", all.content().get(0).nom());
+    }
+
+    @Test
+    void updateTechnologie_sameExistingId_shouldAllowRenameAndSave() {
+        SujetTechnologie technologie = technologie(2L, "Angular");
+        when(technologieRepository.findById(2L)).thenReturn(Optional.of(technologie));
+        when(technologieRepository.findByNomIgnoreCase("Angular")).thenReturn(Optional.of(technologie));
+        when(technologieRepository.save(technologie)).thenReturn(technologie);
+
+        var response = service.updateTechnologie(2L, new ReferenceItemRequest(" Angular "));
+
+        assertEquals("Angular", response.nom());
+        verify(technologieRepository).save(technologie);
+    }
+
+    @Test
+    void updateTechnologie_duplicateDifferentId_shouldReject() {
+        SujetTechnologie current = technologie(2L, "Angular");
+        SujetTechnologie duplicate = technologie(3L, "React");
+        when(technologieRepository.findById(2L)).thenReturn(Optional.of(current));
+        when(technologieRepository.findByNomIgnoreCase("React")).thenReturn(Optional.of(duplicate));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.updateTechnologie(2L, new ReferenceItemRequest("React")));
+
+        assertEquals("Cette technologie existe d\u00e9j\u00e0", ex.getMessage());
+        verify(technologieRepository, never()).save(any());
+    }
+
+    @Test
+    void missingPrerequisAndTechnologie_shouldThrowResourceNotFound() {
+        when(prerequisRepository.findById(404L)).thenReturn(Optional.empty());
+        when(technologieRepository.findById(405L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.deletePrerequis(404L));
+        assertThrows(ResourceNotFoundException.class, () -> service.deleteTechnologie(405L));
+    }
+
+    @Test
     void createReference_blankName_shouldReject() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> service.createTechnologie(new ReferenceItemRequest(" ")));
 
         assertEquals("Le nom est obligatoire", ex.getMessage());
+        verify(technologieRepository, never()).save(any());
+    }
+
+    @Test
+    void createTechnology_duplicate_shouldRejectWithoutSaving() {
+        when(technologieRepository.existsByNomIgnoreCase("Angular")).thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createTechnologie(new ReferenceItemRequest("Angular")));
+
+        assertEquals("Cette technologie existe d\u00e9j\u00e0", ex.getMessage());
         verify(technologieRepository, never()).save(any());
     }
 
