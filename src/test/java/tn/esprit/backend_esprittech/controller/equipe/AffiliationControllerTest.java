@@ -58,7 +58,7 @@ class AffiliationControllerTest {
 
         enseignantResponse = new UserResponse(1L, "Doe", "John", "john@test.tn",
                 "JD001", Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
-                "Informatique", true, Instant.now());
+                "Informatique", true, Instant.now(), false, null, null);
 
         affiliationResponse = new AffiliationEnseignantResponse(
                 100L, enseignantResponse, 10L, "Équipe Alpha",
