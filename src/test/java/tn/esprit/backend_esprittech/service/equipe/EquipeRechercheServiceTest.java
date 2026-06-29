@@ -6,13 +6,16 @@ import org.mockito.*;
 import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.mapper.equipe.EquipeMapper;
+import tn.esprit.backend_esprittech.repository.equipe.AffiliationEnseignantRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
@@ -36,6 +39,9 @@ class EquipeRechercheServiceTest {
     @Mock
     private EquipeDomaineService domaineService;
 
+    @Mock
+    private AffiliationEnseignantRepository affiliationRepository;
+
     private EquipeDomaine testDomaine;
 
     @InjectMocks
@@ -46,6 +52,8 @@ class EquipeRechercheServiceTest {
         MockitoAnnotations.openMocks(this);
         testDomaine = new EquipeDomaine(1L, "Informatique", null);
         when(domaineService.getEntityById(anyLong())).thenReturn(testDomaine);
+        when(affiliationRepository.findByEnseignantIdAndStatut(anyLong(), any()))
+                .thenReturn(List.of());
     }
 
     // =========================================================================
@@ -1019,6 +1027,27 @@ class EquipeRechercheServiceTest {
                 () -> service.assignerChef(1L, 99L));
     }
 
+    @Test
+    void assignerChef_chefIsMember_removesFromMembers() {
+        EquipeRecherche e = equipeVide();
+        User chef = enseignant(2L);
+        e.getMembers().add(chef);
+        chef.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(chef));
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeRepository.existsByChefIdAndIdNot(2L, 1L)).thenReturn(false);
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.assignerChef(1L, 2L);
+
+        assertSame(chef, e.getChef());
+        assertFalse(e.getMembers().contains(chef));
+        assertNull(chef.getEquipeRecherche());
+    }
+
     // =========================================================================
     // retirerChef()
     // =========================================================================
@@ -1062,5 +1091,94 @@ class EquipeRechercheServiceTest {
         assertNull(e.getChef());
         verify(equipeRepository).save(e);
         verifyNoInteractions(userRepository); // save never called because chef was null
+    }
+
+    // =========================================================================
+    // Gestion des affiliations en attente lors de l'ajout manuel
+    // =========================================================================
+
+    private AffiliationEnseignant affiliation(Long id, Long equipeId, StatutAffiliation statut) {
+        EquipeRecherche equipe = new EquipeRecherche();
+        equipe.setId(equipeId);
+        return AffiliationEnseignant.builder()
+                .id(id)
+                .equipe(equipe)
+                .statut(statut)
+                .build();
+    }
+
+    @Test
+    void create_memberHasPendingRequest_otherTeam_rejected() {
+        CreateEquipeRechercheRequest req = mock(CreateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn("AI");
+        when(req.description()).thenReturn("Desc");
+        when(req.chefId()).thenReturn(null);
+        when(req.memberIds()).thenReturn(List.of(20L));
+
+        User member = enseignant(20L);
+        EquipeRecherche saved = equipeVide(); // id = 1L
+        AffiliationEnseignant pending = affiliation(100L, 99L, StatutAffiliation.EN_ATTENTE);
+
+        when(equipeRepository.existsByNom("AI")).thenReturn(false);
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member));
+        when(equipeRepository.save(any())).thenReturn(saved);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+        when(affiliationRepository.findByEnseignantIdAndStatut(20L, StatutAffiliation.EN_ATTENTE))
+                .thenReturn(List.of(pending));
+
+        service.create(req);
+
+        assertEquals(StatutAffiliation.REFUSEE, pending.getStatut());
+        assertEquals("Déjà membre d'une équipe", pending.getMotifDecision());
+        assertNotNull(pending.getDateDecision());
+        verify(affiliationRepository).saveAll(List.of(pending));
+    }
+
+    @Test
+    void ajouterMembres_memberHasPendingRequest_sameTeam_accepted_otherTeam_rejected() {
+        EquipeRecherche equipe = equipeVide(); // id = 1L
+        User member = enseignant(20L);
+
+        AffiliationEnseignant sameTeamReq = affiliation(100L, 1L, StatutAffiliation.EN_ATTENTE);
+        AffiliationEnseignant otherTeamReq = affiliation(101L, 99L, StatutAffiliation.EN_ATTENTE);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(equipe));
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member));
+        when(equipeRepository.save(equipe)).thenReturn(equipe);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+        when(affiliationRepository.findByEnseignantIdAndStatut(20L, StatutAffiliation.EN_ATTENTE))
+                .thenReturn(List.of(sameTeamReq, otherTeamReq));
+
+        service.ajouterMembres(1L, List.of(20L));
+
+        assertEquals(StatutAffiliation.ACCEPTEE, sameTeamReq.getStatut());
+        assertEquals(StatutAffiliation.REFUSEE, otherTeamReq.getStatut());
+        assertEquals("Déjà membre d'une équipe", otherTeamReq.getMotifDecision());
+        assertNull(sameTeamReq.getMotifDecision());
+        assertNotNull(sameTeamReq.getDateDecision());
+        assertNotNull(otherTeamReq.getDateDecision());
+        verify(affiliationRepository).saveAll(List.of(sameTeamReq, otherTeamReq));
+    }
+
+    @Test
+    void create_memberNoPendingRequests_noAffiliationInteraction() {
+        CreateEquipeRechercheRequest req = mock(CreateEquipeRechercheRequest.class);
+        when(req.nom()).thenReturn("AI");
+        when(req.description()).thenReturn("Desc");
+        when(req.chefId()).thenReturn(null);
+        when(req.memberIds()).thenReturn(List.of(20L));
+
+        User member = enseignant(20L);
+        EquipeRecherche saved = equipeVide();
+
+        when(equipeRepository.existsByNom("AI")).thenReturn(false);
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member));
+        when(equipeRepository.save(any())).thenReturn(saved);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.create(req);
+
+        verify(affiliationRepository).findByEnseignantIdAndStatut(20L, StatutAffiliation.EN_ATTENTE);
+        verify(affiliationRepository, never()).saveAll(any());
     }
 }
