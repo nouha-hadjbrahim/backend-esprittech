@@ -20,4 +20,5 @@ public record UserResponse(
         Long equipeId,
         String equipeNom
 ) {
+
 }
