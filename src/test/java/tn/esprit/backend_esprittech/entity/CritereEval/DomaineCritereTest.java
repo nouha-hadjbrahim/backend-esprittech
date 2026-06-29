@@ -2,6 +2,8 @@ package tn.esprit.backend_esprittech.entity.CritereEval;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class DomaineCritereTest {
@@ -70,18 +72,16 @@ class DomaineCritereTest {
     }
 
     @Test
-    void enumValues_canBeUsedInSwitch() {
-        DomaineCritere domaine = DomaineCritere.SECURITE;
-        String result = switch (domaine) {
-            case DOCUMENTATION -> "DOC";
-            case TECHNIQUE -> "TECH";
-            case SECURITE -> "SEC";
-            case INNOVATION -> "INV";
-            case IMPACT_METIER -> "IMP";
-            case QUALITE_CODE -> "QC";
-            case MAINTENABILITE -> "MAIN";
-        };
-        assertEquals("SEC", result);
+    void enumValues_matchExpectedSet() {
+        assertEquals(EnumSet.of(
+                DomaineCritere.DOCUMENTATION,
+                DomaineCritere.TECHNIQUE,
+                DomaineCritere.SECURITE,
+                DomaineCritere.INNOVATION,
+                DomaineCritere.IMPACT_METIER,
+                DomaineCritere.QUALITE_CODE,
+                DomaineCritere.MAINTENABILITE
+        ), EnumSet.allOf(DomaineCritere.class));
     }
 
     @Test

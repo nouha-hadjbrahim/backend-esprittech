@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.backend_esprittech.config.JwtTokenProvider;
 import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
@@ -15,32 +15,41 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.repository.ReferentielUtilisateurRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@TestPropertySource(properties = {
-        "DB_URL=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
-        "DB_USERNAME=sa",
-        "DB_PASSWORD=",
-        "SERVER_PORT=0",
-        "JWT_SECRET=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
-        "JWT_ACCESS_EXPIRATION=900000",
-        "JWT_REFRESH_EXPIRATION=604800000",
-        "ADMIN_EMAIL=admin@test.tn",
-        "ADMIN_PASSWORD=TestAdmin123",
-        "CORS_ALLOWED_ORIGINS=http://localhost:4200",
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:security-integration-test;DB_CLOSE_DELAY=-1",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
         "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "server.port=0",
+        "app.jwt.secret=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
+        "app.jwt.expiration-ms=900000",
+        "app.jwt.refresh-expiration-ms=604800000",
+        "app.admin.email=admin@test.tn",
+        "app.admin.password=TestAdmin123",
+        "app.auth.cookie.secure=false",
+        "app.auth.cookie.same-site=Strict",
+        "app.cors.allowed-origins=http://localhost:4200",
+        "minio.endpoint=http://127.0.0.1:1",
+        "minio.access-key=test-access-key",
+        "minio.secret-key=test-secret-key",
+        "minio.bucket=test-bucket",
+        "minio.secure=false"
 })
+@AutoConfigureMockMvc
 class SecurityIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtTokenProvider tokenProvider;
     @Autowired private UserRepository userRepository;
     @Autowired private ReferentielUtilisateurRepository referentielRepository;
+    @MockitoBean private MinioStorageService minioStorageService;
 
     /** Alimente le référentiel (source de vérité) de façon idempotente avant chaque test. */
     @BeforeEach

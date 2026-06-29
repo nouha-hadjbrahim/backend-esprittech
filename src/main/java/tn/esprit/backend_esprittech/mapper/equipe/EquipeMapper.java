@@ -1,0 +1,80 @@
+package tn.esprit.backend_esprittech.mapper.equipe;
+
+import org.springframework.stereotype.Component;
+import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
+import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
+import tn.esprit.backend_esprittech.mapper.UserMapper;
+
+/**
+ * Conversion des entités {@link EquipeRecherche} vers leur représentation API
+ * et inversement.
+ */
+@Component
+public class EquipeMapper {
+
+    private final UserMapper userMapper;
+
+    public EquipeMapper(UserMapper userMapper) {
+        this.userMapper = userMapper;
+    }
+
+    /** Constructs an {@link EquipeRecherche} from the create DTO. */
+    public EquipeRecherche toEntity(CreateEquipeRechercheRequest request, EquipeDomaine domaine) {
+        if (request == null) {
+            return null;
+        }
+        var builder = EquipeRecherche.builder()
+                .nom(request.nom())
+                .description(request.description())
+                .domaine(domaine);
+        if (request.statut() != null) {
+            builder.statut(request.statut());
+        }
+        return builder.build();
+    }
+
+    /** Partially updates an existing entity from the update DTO. */
+    public void updateEntity(UpdateEquipeRechercheRequest request, EquipeRecherche equipe, EquipeDomaine domaine) {
+        if (request == null || equipe == null) {
+            return;
+        }
+        if (request.nom() != null) {
+            equipe.setNom(request.nom());
+        }
+        if (request.description() != null) {
+            equipe.setDescription(request.description());
+        }
+        if (request.domaineId() != null && domaine != null) {
+            equipe.setDomaine(domaine);
+        }
+        if (request.statut() != null) {
+            equipe.setStatut(request.statut());
+        }
+    }
+
+    /** Converts entity to API representation (with member count). */
+    public EquipeResponse toResponse(EquipeRecherche equipe, int nbMembres) {
+        if (equipe == null) {
+            return null;
+        }
+        String statutLabel = equipe.getStatut() != null ? equipe.getStatut().getDisplayName() : "Actif";
+        EquipeDomaine domaine = equipe.getDomaine();
+        Long domaineId = domaine != null ? domaine.getId() : null;
+        String domaineNom = domaine != null ? domaine.getNom() : null;
+        return new EquipeResponse(
+                equipe.getId(),
+                equipe.getNom(),
+                equipe.getDescription(),
+                domaineId,
+                domaineNom,
+                userMapper.toResponse(equipe.getChef()),
+                equipe.getMembers().stream().map(userMapper::toResponse).toList(),
+                nbMembres,
+                equipe.getCreatedAt(),
+                statutLabel
+        );
+    }
+}

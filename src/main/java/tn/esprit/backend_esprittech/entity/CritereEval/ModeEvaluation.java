@@ -1,0 +1,12 @@
+package tn.esprit.backend_esprittech.entity.CritereEval;
+
+public enum ModeEvaluation {
+    LIVRABLE_TYPE_PRESENT,
+    LIVRABLE_LINK_PRESENT,
+    LIVRABLE_FILE_PRESENT,
+    LIVRABLE_COUNT_MIN,
+    GIT_LINK_PRESENT,
+    DOCUMENTATION_PRESENT,
+    KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION,
+    MANUAL_ADMIN_VALUE
+}

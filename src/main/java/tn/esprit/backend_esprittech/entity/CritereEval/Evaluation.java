@@ -41,6 +41,12 @@ public class Evaluation {
     @Column(length = 2000)
     private String commentaire;
 
+    @Column(length = 255)
+    private String calculatedBy;
+
+    @Column(length = 2000)
+    private String recalculationReason;
+
     @OneToMany(
             mappedBy = "evaluation",
             cascade = CascadeType.ALL,

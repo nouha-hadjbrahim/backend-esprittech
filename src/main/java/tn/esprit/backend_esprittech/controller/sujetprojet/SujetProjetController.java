@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.InvaliderSujetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.ReferenceItemRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
@@ -50,6 +51,50 @@ public class SujetProjetController {
             @RequestParam(required = false) CategorieSujet categorie,
             @RequestParam(required = false) StatutSujet statut) {
         return ResponseEntity.ok(sujetProjetService.getMesSujets(categorie, statut));
+    }
+
+    @GetMapping("/en-attente-validation")
+    @PreAuthorize("hasAnyRole('CHEF_EQUIPE', 'ADMIN')")
+    @Operation(summary = "Sujets en attente de validation",
+            description = "Liste les sujets soumis par les encadrants de l'équipe du chef connecté (ou tous, pour l'admin).")
+    public ResponseEntity<List<SujetProjetResponse>> getSujetsEnAttenteValidation() {
+        return ResponseEntity.ok(sujetProjetService.getSujetsEnAttenteValidation());
+    }
+
+    @PostMapping("/{id}/valider")
+    @PreAuthorize("hasAnyRole('CHEF_EQUIPE', 'ADMIN')")
+    @Operation(summary = "Valider un sujet", description = "Fait passer un sujet Soumis en validation au statut Validé.")
+    public ResponseEntity<SujetProjetResponse> validerSujet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        return ResponseEntity.ok(sujetProjetService.validerSujet(id));
+    }
+
+    @PostMapping("/{id}/invalider")
+    @PreAuthorize("hasAnyRole('CHEF_EQUIPE', 'ADMIN')")
+    @Operation(summary = "Invalider un sujet", description = "Refuse un sujet Soumis en validation avec motif obligatoire.")
+    public ResponseEntity<SujetProjetResponse> invaliderSujet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
+            @Valid @RequestBody InvaliderSujetRequest request) {
+        return ResponseEntity.ok(sujetProjetService.invaliderSujet(id, request));
+    }
+
+    // ==================== NEW METHOD ADDED HERE ====================
+    @PostMapping("/{id}/terminer")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @Operation(summary = "Déclarer la terminaison d'un projet",
+            description = "Passe un sujet en cours de réalisation à 'REALISATION_TERMINEE'")
+    public ResponseEntity<SujetProjetResponse> declarerTerminaison(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        return ResponseEntity.ok(sujetProjetService.declarerTerminaison(id));
+    }
+    // ============================================================
+
+    @GetMapping("/admin/candidatures")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Sujets pour gestion des candidatures (admin)",
+            description = "Liste tous les sujets validés ou plus avancés dans le cycle candidatures/réalisation.")
+    public ResponseEntity<List<SujetProjetResponse>> getSujetsPourCandidatures() {
+        return ResponseEntity.ok(sujetProjetService.getSujetsPourCandidatures());
     }
 
     @GetMapping("/disponibles")

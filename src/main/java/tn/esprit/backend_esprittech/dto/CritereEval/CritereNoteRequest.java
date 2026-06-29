@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 
 public record CritereNoteRequest(
         @NotBlank String libelle,
@@ -14,6 +15,25 @@ public record CritereNoteRequest(
         @NotNull @Positive Double bareme,
         @NotNull @Positive Double poids,
         @NotNull Double seuil,
-        Boolean actif
+        Boolean actif,
+        ModeEvaluation modeEvaluation,
+        String expectedLivrableTypes,
+        Integer minLivrableCount,
+        String expectedKeyword,
+        Double noteMaxAuto,
+        Boolean ruleEnabled,
+        String ruleDescription
 ) {
+    public CritereNoteRequest(
+            String libelle,
+            String description,
+            String domaine,
+            Integer ordre,
+            Double bareme,
+            Double poids,
+            Double seuil,
+            Boolean actif
+    ) {
+        this(libelle, description, domaine, ordre, bareme, poids, seuil, actif, null, null, null, null, null, false, null);
+    }
 }

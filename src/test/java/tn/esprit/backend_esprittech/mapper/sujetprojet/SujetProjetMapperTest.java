@@ -42,6 +42,45 @@ class SujetProjetMapperTest {
     }
 
     @Test
+    void updateEntity_replacesMutableFieldsAndTrimsListValues() {
+        SujetProjet entity = SujetProjet.builder()
+                .titre("Old")
+                .categorie(CategorieSujet.RDI)
+                .description("Old desc")
+                .objectifs("Old obj")
+                .prerequis("Old")
+                .domaine("Old")
+                .technologies("Old")
+                .capaciteAccueil(1)
+                .statut(StatutSujet.VALIDE)
+                .encadrantId(42L)
+                .build();
+
+        mapper.updateEntity(entity, new SujetProjetRequest(
+                "  New title  ",
+                CategorieSujet.PFE,
+                "  New description  ",
+                "  New goals  ",
+                List.of(" Java ", " "),
+                List.of(" Cloud ", ""),
+                List.of(" Spring ", "Docker"),
+                4
+        ));
+
+        assertEquals("New title", entity.getTitre());
+        assertEquals(CategorieSujet.PFE, entity.getCategorie());
+        assertEquals("New description", entity.getDescription());
+        assertEquals("New goals", entity.getObjectifs());
+        assertEquals("Java", entity.getPrerequis());
+        assertEquals("Cloud", entity.getDomaine());
+        assertEquals("Spring,Docker", entity.getTechnologies());
+        assertEquals(4, entity.getCapaciteAccueil());
+        assertEquals(StatutSujet.VALIDE, entity.getStatut());
+        assertEquals(42L, entity.getEncadrantId());
+    }
+
+
+    @Test
     void toResponse_mapsAllFields() {
         LocalDateTime now = LocalDateTime.now();
         SujetProjet entity = SujetProjet.builder()
@@ -67,5 +106,30 @@ class SujetProjetMapperTest {
         assertEquals(List.of("Soft skills", "Java"), response.prerequis());
         assertEquals(List.of("Domaine"), response.domaines());
         assertEquals("Dr. Sami", response.encadrantNom());
+    }
+
+    @Test
+    void toResponse_blankReferenceFields_returnsEmptyLists() {
+        SujetProjet entity = SujetProjet.builder()
+                .id(5L)
+                .titre("Titre")
+                .categorie(CategorieSujet.RDI)
+                .description("Desc")
+                .objectifs("Obj")
+                .prerequis(" ")
+                .domaine(null)
+                .technologies(", ,")
+                .capaciteAccueil(2)
+                .statut(StatutSujet.VALIDE)
+                .eligibleIndustrialisation(false)
+                .catalogue(false)
+                .encadrantId(1001L)
+                .build();
+
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami");
+
+        assertTrue(response.prerequis().isEmpty());
+        assertTrue(response.domaines().isEmpty());
+        assertTrue(response.technologies().isEmpty());
     }
 }
