@@ -4,6 +4,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 
+import java.util.Optional;
+
 @Repository
 public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche, Long> {
 
@@ -14,4 +16,7 @@ public interface EquipeRechercheRepository extends JpaRepository<EquipeRecherche
     boolean existsByChefId(Long chefId);
 
     boolean existsByChefIdAndIdNot(Long chefId, Long id);
+
+    /** Équipe dont l'utilisateur donné est le chef (au plus une). */
+    Optional<EquipeRecherche> findByChefId(Long chefId);
 }

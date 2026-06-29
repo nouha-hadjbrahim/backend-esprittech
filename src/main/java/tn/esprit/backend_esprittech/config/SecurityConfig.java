@@ -15,6 +15,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -29,24 +32,44 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService userDetailsService;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final CsrfTokenResponseFilter csrfTokenResponseFilter;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           CustomUserDetailsService userDetailsService,
-                          CorsConfigurationSource corsConfigurationSource) {
+                          CorsConfigurationSource corsConfigurationSource,
+                          CsrfTokenResponseFilter csrfTokenResponseFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.userDetailsService = userDetailsService;
         this.corsConfigurationSource = corsConfigurationSource;
+        this.csrfTokenResponseFilter = csrfTokenResponseFilter;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // CSRF protection via the OWASP-recommended double-submit-cookie pattern.
+        // The token is published in a non-HttpOnly XSRF-TOKEN cookie so the SPA can read it
+        // and echo it back in the X-XSRF-TOKEN header on mutating requests; the server then
+        // compares cookie and header. The cookie carries NO sensitive data (only the random
+        // CSRF token) — it MUST be JS-readable for the pattern to work, which is exactly what
+        // Angular's built-in XSRF support expects. The auth/session JWTs remain HttpOnly.
+        CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfRepo.setCookiePath("/");
+
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                // CSRF is ignored for the stateless REST API. The JWT now lives in an HttpOnly cookie,
-                // but that cookie is declared SameSite=Strict (see AuthCookieFactory), so the browser
-                // never attaches it to cross-site requests — which is what neutralises CSRF here.
-                .csrf(csrf -> csrf.ignoringRequestMatchers(
-                        new AntPathRequestMatcher("/api/**")))
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfRepo)
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        // Only the unauthenticated bootstrap endpoints are exempt: a client
+                        // cannot present a CSRF token before it has obtained one. login/register
+                        // establish the session, refresh/logout are guarded by the SameSite=Strict
+                        // refresh-token cookie. Every authenticated /api/** mutation IS CSRF-checked.
+                        .ignoringRequestMatchers(
+                                new AntPathRequestMatcher("/api/auth/login"),
+                                new AntPathRequestMatcher("/api/auth/register"),
+                                new AntPathRequestMatcher("/api/auth/refresh"),
+                                new AntPathRequestMatcher("/api/auth/logout")))
+                .addFilterAfter(csrfTokenResponseFilter, CsrfFilter.class)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -54,19 +77,15 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // Endpoints publics
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/auth/logout").permitAll()
-                        // Documentation OpenAPI / Swagger
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html").permitAll()
-                        // Le reste exige une authentification (les rôles sont
-                        // contrôlés finement par @PreAuthorize sur les controllers)
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

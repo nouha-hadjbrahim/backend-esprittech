@@ -20,6 +20,7 @@ import tn.esprit.backend_esprittech.repository.UserRepository;
 import java.util.List;
 import java.util.Map;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -75,6 +76,7 @@ class SujetProjetIntegrationTest {
         );
 
         mockMvc.perform(post("/api/sujet-projets")
+                        .with(csrf())
                         .cookie(new Cookie("access_token", enseignantToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))

@@ -27,6 +27,6 @@ class CorsConfigTest {
         assertEquals(List.of("http://localhost:4200"), config.getAllowedOrigins());
         assertTrue(config.getAllowCredentials());
         assertTrue(config.getAllowedMethods().contains("POST"));
-        assertEquals(List.of("Authorization"), config.getExposedHeaders());
+        assertEquals(List.of("Authorization", "X-XSRF-TOKEN"), config.getExposedHeaders());
     }
 }

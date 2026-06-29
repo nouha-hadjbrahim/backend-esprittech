@@ -15,7 +15,6 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
-import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 @Service
@@ -25,20 +24,20 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final AuthenticationManager authenticationManager;
-    private final UserMapper userMapper;
+    private final UserService userService;
     private final ReferentielService referentielService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider,
                        AuthenticationManager authenticationManager,
-                       UserMapper userMapper,
+                       UserService userService,
                        ReferentielService referentielService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.authenticationManager = authenticationManager;
-        this.userMapper = userMapper;
+        this.userService = userService;
         this.referentielService = referentielService;
     }
 
@@ -98,6 +97,6 @@ public class AuthService {
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = tokenProvider.generateAccessToken(user);
         String refreshToken = tokenProvider.generateRefreshToken(user);
-        return AuthResponse.of(accessToken, refreshToken, userMapper.toResponse(user));
+        return AuthResponse.of(accessToken, refreshToken, userService.toEnrichedResponse(user));
     }
 }
