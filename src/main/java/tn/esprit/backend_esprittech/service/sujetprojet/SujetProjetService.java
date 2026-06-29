@@ -6,7 +6,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
-import tn.esprit.backend_esprittech.dto.sujetprojet.request.InvaliderSujetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
@@ -116,21 +115,6 @@ public class SujetProjetService {
         sujet.setDateValidation(LocalDateTime.now());
         return toResponse(sujetProjetRepository.save(sujet));
     } */
-
-    /** US-13 : invalidation d'un sujet par le chef d'équipe (ou l'admin), motif obligatoire. */
-    public SujetProjetResponse invaliderSujet(Long id, InvaliderSujetRequest request) {
-        SujetProjet sujet = getSujetEntiteOrThrow(id);
-        checkChefOuAdmin(sujet);
-
-        if (sujet.getStatut() != StatutSujet.SOUMIS_EN_VALIDATION) {
-            throw new IllegalStateException("Seul un sujet soumis en validation peut être invalidé.");
-        }
-
-        sujet.setStatut(StatutSujet.INVALIDE);
-        sujet.setMotifInvalidation(request.motif());
-        sujet.setDateValidation(LocalDateTime.now());
-        return toResponse(sujetProjetRepository.save(sujet));
-    }
 
     private SujetProjet getSujetEntiteOrThrow(Long id) {
         return sujetProjetRepository.findById(id)

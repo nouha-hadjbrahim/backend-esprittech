@@ -126,7 +126,7 @@ class SujetProjetMapperTest {
                 .encadrantId(1001L)
                 .build();
 
-        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami");
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", null);
 
         assertTrue(response.prerequis().isEmpty());
         assertTrue(response.domaines().isEmpty());

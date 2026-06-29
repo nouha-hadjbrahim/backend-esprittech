@@ -19,7 +19,7 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
-import tn.esprit.backend_esprittech.repository.EquipeRechercheRepository;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
