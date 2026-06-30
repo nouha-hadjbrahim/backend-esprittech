@@ -35,6 +35,13 @@ public class Evaluation {
     @Column(nullable = false)
     private Boolean bloqueParEliminatoire;
 
+    private Boolean hasEliminatoryWarnings = false;
+
+    private Integer eliminatoryWarningsCount = 0;
+
+    @Column(length = 4000)
+    private String eliminatoryWarningsDetails;
+
     @Column(nullable = false)
     private LocalDateTime dateCalcul;
 

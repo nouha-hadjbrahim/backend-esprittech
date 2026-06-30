@@ -7,7 +7,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
-import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
@@ -17,9 +16,15 @@ import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CritereNoteServiceTest {
@@ -36,14 +41,15 @@ class CritereNoteServiceTest {
     void setUp() {
         critere = new CritereNote();
         critere.setId(1L);
-        critere.setLibelle("Critère note");
+        critere.setLibelle("Critere note");
         critere.setDescription("Description");
         critere.setDomaine("Domaine");
         critere.setOrdre(1);
         critere.setActif(true);
-        critere.setBareme(10.0);
+        critere.setBareme(5.0);
         critere.setPoids(2.0);
-        critere.setSeuil(5.0);
+        critere.setSeuil(3.0);
+        critere.setDefaultNoteValue(3);
     }
 
     @Test
@@ -55,29 +61,39 @@ class CritereNoteServiceTest {
         });
 
         CritereNoteRequest request = new CritereNoteRequest(
-                "Critère note",
+                "Critere note",
                 "Description",
                 "Domaine",
                 1,
-                10.0,
+                null,
                 2.0,
-                5.0,
-                true
+                null,
+                4,
+                true,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
         );
 
-        CritereNoteResponse response = service.create(request);
+        var response = service.create(request);
 
         assertNotNull(response);
         assertEquals(1L, response.id());
-        assertEquals("Critère note", response.libelle());
-        assertEquals(10.0, response.bareme());
+        assertEquals("Critere note", response.libelle());
+        assertEquals(5.0, response.bareme());
+        assertEquals(3.0, response.seuil());
+        assertEquals(4, response.defaultNoteValue());
         verify(repository).save(any(CritereNote.class));
     }
 
     @Test
     void create_invalidBareme_shouldThrowBadRequestException() {
         CritereNoteRequest request = new CritereNoteRequest(
-                "Critère note",
+                "Critere note",
                 "Description",
                 "Domaine",
                 1,
@@ -88,7 +104,35 @@ class CritereNoteServiceTest {
         );
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.create(request));
-        assertEquals("Le barème doit être supérieur à 0.", ex.getMessage());
+
+        assertEquals("Le bareme doit etre superieur a 0.", ex.getMessage());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void create_invalidDefaultNote_shouldThrowBadRequestException() {
+        CritereNoteRequest request = new CritereNoteRequest(
+                "Critere note",
+                "Description",
+                "Domaine",
+                1,
+                null,
+                2.0,
+                null,
+                6,
+                true,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
+        );
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.create(request));
+
+        assertEquals("La note par defaut doit etre comprise entre 1 et 5.", ex.getMessage());
         verify(repository, never()).save(any());
     }
 
@@ -98,22 +142,31 @@ class CritereNoteServiceTest {
         when(repository.save(any(CritereNote.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CritereNoteRequest request = new CritereNoteRequest(
-                "Autre critère",
+                "Autre critere",
                 "Nouvelle description",
-                "Domaine modifié",
+                "Domaine modifie",
                 2,
-                10.0,
+                null,
                 3.0,
-                4.0,
-                false
+                null,
+                2,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
         );
 
-        CritereNoteResponse response = service.update(1L, request);
+        var response = service.update(1L, request);
 
         assertNotNull(response);
         assertEquals(1L, response.id());
-        assertEquals("Autre critère", response.libelle());
+        assertEquals("Autre critere", response.libelle());
         assertEquals(3.0, response.poids());
+        assertEquals(2, response.defaultNoteValue());
         assertFalse(response.actif());
         verify(repository).findById(1L);
         verify(repository).save(any(CritereNote.class));
@@ -124,20 +177,20 @@ class CritereNoteServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.empty());
 
         CritereNoteRequest request = new CritereNoteRequest(
-                "Critère note",
+                "Critere note",
                 "Description",
                 "Domaine",
                 1,
-                10.0,
+                null,
                 2.0,
-                5.0,
+                null,
                 true
         );
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> service.update(1L, request));
 
-        assertEquals("Critère noté introuvable avec id: 1", ex.getMessage());
+        assertEquals("Critere note introuvable avec id: 1", ex.getMessage());
         verify(repository).findById(1L);
         verify(repository, never()).save(any());
     }
@@ -172,7 +225,7 @@ class CritereNoteServiceTest {
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.reorder(List.of(new OrdreCritereRequest(1L, 0))));
 
-        assertEquals("L'ordre doit être supérieur ou égal à 1.", ex.getMessage());
+        assertEquals("L'ordre doit etre superieur ou egal a 1.", ex.getMessage());
         verify(repository, never()).save(any());
     }
 
@@ -184,6 +237,7 @@ class CritereNoteServiceTest {
 
         assertEquals(1, responses.size());
         assertEquals(1L, responses.get(0).id());
+        assertEquals(3, responses.get(0).defaultNoteValue());
         verify(repository).findAll();
     }
 

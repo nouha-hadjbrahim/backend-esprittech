@@ -5,6 +5,14 @@ import tn.esprit.backend_esprittech.entity.industrialisation.TypeIndustrialisati
 
 public record CandidatureIndustrialisationRequest(
         @NotNull TypeIndustrialisation typeIndustrialisation,
-        String commentaire
+        String commentaire,
+        Boolean confirmEliminatoryWarnings
 ) {
+    public CandidatureIndustrialisationRequest(TypeIndustrialisation typeIndustrialisation, String commentaire) {
+        this(typeIndustrialisation, commentaire, false);
+    }
+
+    public boolean isConfirmed() {
+        return Boolean.TRUE.equals(confirmEliminatoryWarnings);
+    }
 }

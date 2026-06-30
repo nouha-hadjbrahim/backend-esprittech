@@ -1,6 +1,5 @@
 package tn.esprit.backend_esprittech.service.CritereEval;
 
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,19 +22,15 @@ public class CritereNoteService {
 
     public CritereNoteResponse create(CritereNoteRequest request) {
         validateRequest(request);
-
         CritereNote critere = new CritereNote();
         applyRequest(critere, request);
-
         return toResponse(repository.save(critere));
     }
 
     public CritereNoteResponse update(Long id, CritereNoteRequest request) {
         validateRequest(request);
-
         CritereNote critere = getEntity(id);
         applyRequest(critere, request);
-
         return toResponse(repository.save(critere));
     }
 
@@ -54,11 +49,9 @@ public class CritereNoteService {
     public void reorder(List<OrdreCritereRequest> requests) {
         for (OrdreCritereRequest request : requests) {
             CritereNote critere = getEntity(request.critereId());
-
             if (request.ordre() == null || request.ordre() < 1) {
-                throw new BadRequestException("L'ordre doit être supérieur ou égal à 1.");
+                throw new BadRequestException("L'ordre doit etre superieur ou egal a 1.");
             }
-
             critere.setOrdre(request.ordre());
             repository.save(critere);
         }
@@ -82,7 +75,7 @@ public class CritereNoteService {
 
     private CritereNote getEntity(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Critère noté introuvable avec id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Critere note introuvable avec id: " + id));
     }
 
     private void applyRequest(CritereNote critere, CritereNoteRequest request) {
@@ -90,9 +83,10 @@ public class CritereNoteService {
         critere.setDescription(request.description());
         critere.setDomaine(request.domaine());
         critere.setOrdre(request.ordre());
-        critere.setBareme(request.bareme());
+        critere.setBareme(request.bareme() == null ? 5.0 : request.bareme());
         critere.setPoids(request.poids());
-        critere.setSeuil(request.seuil());
+        critere.setSeuil(request.seuil() == null ? 3.0 : request.seuil());
+        critere.setDefaultNoteValue(request.defaultNoteValue() == null ? 3 : request.defaultNoteValue());
         critere.setModeEvaluation(request.modeEvaluation());
         critere.setExpectedLivrableTypes(request.expectedLivrableTypes());
         critere.setMinLivrableCount(request.minLivrableCount());
@@ -108,23 +102,22 @@ public class CritereNoteService {
 
     private void validateRequest(CritereNoteRequest request) {
         if (request.libelle() == null || request.libelle().isBlank()) {
-            throw new BadRequestException("Le libellé est obligatoire.");
+            throw new BadRequestException("Le libelle est obligatoire.");
         }
-
         if (request.ordre() == null || request.ordre() < 1) {
-            throw new BadRequestException("L'ordre doit être supérieur ou égal à 1.");
+            throw new BadRequestException("L'ordre doit etre superieur ou egal a 1.");
         }
-
-        if (request.bareme() == null || request.bareme() <= 0) {
-            throw new BadRequestException("Le barème doit être supérieur à 0.");
+        if (request.bareme() != null && request.bareme() <= 0) {
+            throw new BadRequestException("Le bareme doit etre superieur a 0.");
         }
-
         if (request.poids() == null || request.poids() <= 0) {
-            throw new BadRequestException("Le poids doit être supérieur à 0.");
+            throw new BadRequestException("Le poids doit etre superieur a 0.");
         }
-
-        if (request.seuil() == null || request.seuil() < 0 || request.seuil() > request.bareme()) {
-            throw new BadRequestException("Le seuil doit être compris entre 0 et le barème.");
+        if (request.seuil() != null && request.seuil() < 0) {
+            throw new BadRequestException("Le seuil doit etre positif.");
+        }
+        if (request.defaultNoteValue() != null && (request.defaultNoteValue() < 1 || request.defaultNoteValue() > 5)) {
+            throw new BadRequestException("La note par defaut doit etre comprise entre 1 et 5.");
         }
     }
 
@@ -141,6 +134,7 @@ public class CritereNoteService {
                 critere.getBareme(),
                 critere.getPoids(),
                 critere.getSeuil(),
+                critere.getDefaultNoteValue(),
                 critere.getModeEvaluation(),
                 critere.getExpectedLivrableTypes(),
                 critere.getMinLivrableCount(),

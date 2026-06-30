@@ -65,7 +65,9 @@ public class SujetProjetMapper {
                 entity.getDateValidation(),
                 entity.getDateDebutRealisation(),
                 entity.getDateTerminaison(),
-                entity.getMotifInvalidation()
+                entity.getMotifInvalidation(),
+                entity.getHasEliminatoryWarnings(),
+                entity.getEliminatoryWarningsCount()
         );
     }
 

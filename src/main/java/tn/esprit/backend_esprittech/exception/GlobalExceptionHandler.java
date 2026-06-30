@@ -2,6 +2,7 @@ package tn.esprit.backend_esprittech.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -50,6 +51,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
+    }
+
+    @ExceptionHandler(EliminatoryWarningsConfirmationRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleEliminatoryWarningsConfirmation(
+            EliminatoryWarningsConfirmationRequiredException ex
+    ) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("requiresConfirmation", true);
+        body.put("nbCriteresEliminatoires", ex.getCount());
+        body.put("message", ex.getMessage());
+        body.put("details", ex.getDetails());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -57,6 +57,20 @@ public class ResultatCritere {
 
     private Double poids;
 
+    private Integer noteValue;
+
+    @Column(length = 255)
+    private String noteLabel;
+
+    @Column(length = 255)
+    private String matchedRule;
+
+    @Column(length = 2000)
+    private String metadataUsed;
+
+    @Column(length = 2000)
+    private String explanation;
+
     @Column(length = 2000)
     private String evidenceSummary;
 

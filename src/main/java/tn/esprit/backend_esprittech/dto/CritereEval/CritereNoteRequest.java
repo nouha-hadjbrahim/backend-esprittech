@@ -2,6 +2,7 @@ package tn.esprit.backend_esprittech.dto.CritereEval;
 
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -12,9 +13,10 @@ public record CritereNoteRequest(
         String description,
         @NotBlank String domaine,
         @NotNull @Min(1) Integer ordre,
-        @NotNull @Positive Double bareme,
+        @Positive Double bareme,
         @NotNull @Positive Double poids,
-        @NotNull Double seuil,
+        Double seuil,
+        @Min(1) @Max(5) Integer defaultNoteValue,
         Boolean actif,
         ModeEvaluation modeEvaluation,
         String expectedLivrableTypes,
@@ -34,6 +36,6 @@ public record CritereNoteRequest(
             Double seuil,
             Boolean actif
     ) {
-        this(libelle, description, domaine, ordre, bareme, poids, seuil, actif, null, null, null, null, null, false, null);
+        this(libelle, description, domaine, ordre, bareme, poids, seuil, 3, actif, null, null, null, null, null, false, null);
     }
 }
