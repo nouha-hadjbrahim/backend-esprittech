@@ -62,6 +62,12 @@ public class CritereNoteController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        critereNoteService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/ordre")
     public ResponseEntity<Void> reorder(@Valid @RequestBody List<OrdreCritereRequest> requests) {
         critereNoteService.reorder(requests);

@@ -25,6 +25,7 @@ import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
@@ -39,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,6 +135,7 @@ class EvaluationServiceTest {
             case 5 -> "Très satisfait";
             default -> "Niveau";
         });
+        lenient().when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
         lenient().when(critereNoteRuleRepository.findByCritereNoteIdAndActiveTrueOrderByPriorityAscIdAsc(anyLong()))
                 .thenAnswer(invocation -> legacyRulesFor(notesById.get(invocation.getArgument(0, Long.class))));
 
@@ -224,6 +227,42 @@ class EvaluationServiceTest {
     @Test
     void calculerEvaluation_noteAboveBareme_shouldRejectRequest() {
         assertInvalidManualNote(6.0);
+    }
+
+    @Test
+    void calculerEvaluation_withTenPointScale_shouldUseActiveMaxNoteValue() {
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculerEvaluation(1L, new EvaluationRequest(
+                List.of(),
+                List.of(new ResultatNoteRequest(2L, 7.0, "dynamic scale"))
+        ));
+
+        assertEquals(70.0, response.scoreFinal());
+        assertEquals(7, response.resultats().get(0).noteValue());
+        assertEquals(10.0, response.resultats().get(0).bareme());
+        assertEquals(1.4, response.resultats().get(0).scorePondere());
+    }
+
+    @Test
+    void calculerEvaluation_withoutActiveNoteLevels_shouldThrowBusinessConflict() {
+        when(noteLevelService.activeValues()).thenThrow(new BusinessConflictException(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE));
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+
+        BusinessConflictException ex = assertThrows(BusinessConflictException.class,
+                () -> evaluationService.calculerEvaluation(1L, new EvaluationRequest(
+                        List.of(),
+                        List.of(new ResultatNoteRequest(2L, 3.0, "no scale"))
+                )));
+
+        assertEquals(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE, ex.getMessage());
     }
 
     @Test

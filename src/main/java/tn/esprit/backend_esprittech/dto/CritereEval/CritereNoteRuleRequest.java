@@ -1,6 +1,5 @@
 package tn.esprit.backend_esprittech.dto.CritereEval;
 
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -14,7 +13,7 @@ public record CritereNoteRuleRequest(
         String expectedValue,
         Double minValue,
         Double maxValue,
-        @NotNull @Min(1) @Max(5) Integer noteValue,
+        @NotNull @Min(1) Integer noteValue,
         @NotNull @Min(1) Integer priority,
         Boolean active
 ) {

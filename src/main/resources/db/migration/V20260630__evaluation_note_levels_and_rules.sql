@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS evaluation_note_levels (
     date_creation TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_miseajour TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_note_level_value UNIQUE (level_value),
-    CONSTRAINT chk_note_level_value CHECK (level_value BETWEEN 1 AND 5)
+    CONSTRAINT uk_note_level_order UNIQUE (display_order)
 );
 
 INSERT INTO evaluation_note_levels (level_value, label, description, active, display_order, date_creation, date_miseajour)
@@ -62,8 +62,7 @@ CREATE TABLE IF NOT EXISTS critere_note_rules (
     date_creation TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_miseajour TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_critere_note_rules_critere
-        FOREIGN KEY (critere_note_id) REFERENCES criteres_notes (id),
-    CONSTRAINT chk_critere_note_rule_note CHECK (note_value BETWEEN 1 AND 5)
+        FOREIGN KEY (critere_note_id) REFERENCES criteres_notes (id)
 );
 
 ALTER TABLE resultats_criteres
@@ -74,7 +73,7 @@ ALTER TABLE resultats_criteres
     ADD COLUMN IF NOT EXISTS explanation VARCHAR(2000);
 
 UPDATE resultats_criteres
-SET note_value = GREATEST(1, LEAST(5, ROUND(COALESCE(note_obtenue, 3))::INTEGER))
+SET note_value = GREATEST(1, ROUND(COALESCE(note_obtenue, 3))::INTEGER)
 WHERE type_critere = 'NOTE' AND note_value IS NULL;
 
 UPDATE resultats_criteres rc

@@ -19,7 +19,10 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "evaluation_note_levels",
-        uniqueConstraints = @UniqueConstraint(name = "uk_note_level_value", columnNames = "level_value")
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_note_level_value", columnNames = "level_value"),
+                @UniqueConstraint(name = "uk_note_level_order", columnNames = "display_order")
+        }
 )
 public class NoteLevel {
 

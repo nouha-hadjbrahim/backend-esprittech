@@ -26,6 +26,7 @@ import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
@@ -54,7 +55,6 @@ import java.util.stream.Collectors;
 @Transactional
 public class EvaluationService {
 
-    private static final int NOTE_MAX = 5;
     private static final int DEFAULT_NOTE = 3;
 
     private final SujetProjetRepository sujetProjetRepository;
@@ -114,6 +114,8 @@ public class EvaluationService {
     private EvaluationData buildManualEvaluation(EvaluationRequest request) {
         List<CritereEliminatoire> criteresEliminatoires = critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc();
         List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
+        Set<Integer> activeNoteValues = activeNoteValuesFor(criteresNotes);
+        int maxActiveNoteValue = maxActiveNoteValue(activeNoteValues);
 
         Map<Long, ResultatEliminatoireRequest> resultatsEliminatoires = mapEliminatoires(request.eliminatoires());
         Map<Long, ResultatNoteRequest> resultatsNotes = mapNotes(request.notes());
@@ -150,16 +152,16 @@ public class EvaluationService {
             }
 
             int noteValue = resolveManualNoteValue(resultatRequest);
-            validateNoteValue(noteValue, critere);
+            validateNoteValue(noteValue, critere, activeNoteValues);
             double poids = positiveWeight(critere.getPoids());
-            double scoreCritere = scoreCritere(noteValue, poids);
+            double scoreCritere = scoreCritere(noteValue, poids, maxActiveNoteValue);
             sommeScoresCriteres += scoreCritere;
             sommePoids += poids;
 
             ResultatCritere resultat = baseResult(critere, TypeCritere.NOTE);
             resultat.setModeEvaluation(ModeEvaluation.MANUAL_ADMIN_VALUE);
             resultat.setRuleConfigured(true);
-            applyNoteResult(resultat, noteValue, poids, scoreCritere,
+            applyNoteResult(resultat, noteValue, poids, scoreCritere, maxActiveNoteValue,
                     "MANUAL_ADMIN_VALUE", "Valeur saisie manuellement.", "Note saisie manuellement.");
             resultat.setCommentaire(resultatRequest.commentaire());
             resultats.add(resultat);
@@ -171,6 +173,8 @@ public class EvaluationService {
     private EvaluationData buildAutomaticEvaluationFromRules(SujetProjet projet) {
         List<CritereEliminatoire> criteresEliminatoires = critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc();
         List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
+        Set<Integer> activeNoteValues = activeNoteValuesFor(criteresNotes);
+        int maxActiveNoteValue = maxActiveNoteValue(activeNoteValues);
         List<Livrable> livrables = livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
         Map<String, Object> metadata = buildMetadata(projet, livrables);
 
@@ -209,18 +213,18 @@ public class EvaluationService {
         for (CritereNote critere : criteresNotes) {
             List<CritereNoteRule> rules = critereNoteRuleRepository
                     .findByCritereNoteIdAndActiveTrueOrderByPriorityAscIdAsc(critere.getId());
-            NoteRuleOutcome outcome = evaluateNoteRules(critere, rules, metadata);
+            NoteRuleOutcome outcome = evaluateNoteRules(critere, rules, metadata, activeNoteValues);
             int noteValue = outcome.noteValue();
-            validateNoteValue(noteValue, critere);
+            validateNoteValue(noteValue, critere, activeNoteValues);
             double poids = positiveWeight(critere.getPoids());
-            double score = scoreCritere(noteValue, poids);
+            double score = scoreCritere(noteValue, poids, maxActiveNoteValue);
             sommeScoresCriteres += score;
             sommePoids += poids;
 
             ResultatCritere resultat = baseResult(critere, TypeCritere.NOTE);
             resultat.setRuleConfigured(!rules.isEmpty());
             resultat.setModeEvaluation(critere.getModeEvaluation());
-            applyNoteResult(resultat, noteValue, poids, score,
+            applyNoteResult(resultat, noteValue, poids, score, maxActiveNoteValue,
                     outcome.matchedRule(), outcome.metadataUsed(), outcome.explanation());
             resultat.setCommentaire(outcome.explanation());
             resultats.add(resultat);
@@ -274,13 +278,14 @@ public class EvaluationService {
                                  int noteValue,
                                  double poids,
                                  double scoreCritere,
+                                 int maxActiveNoteValue,
                                  String matchedRule,
                                  String metadataUsed,
                                  String explanation) {
         resultat.setNoteValue(noteValue);
         resultat.setNoteLabel(noteLevelService.labelFor(noteValue));
         resultat.setNoteObtenue((double) noteValue);
-        resultat.setBareme((double) NOTE_MAX);
+        resultat.setBareme((double) maxActiveNoteValue);
         resultat.setPoids(poids);
         resultat.setScorePondere(round(scoreCritere));
         resultat.setMatchedRule(matchedRule);
@@ -291,7 +296,8 @@ public class EvaluationService {
 
     private NoteRuleOutcome evaluateNoteRules(CritereNote critere,
                                               List<CritereNoteRule> rules,
-                                              Map<String, Object> metadata) {
+                                              Map<String, Object> metadata,
+                                              Set<Integer> activeNoteValues) {
         for (CritereNoteRule rule : rules) {
             if (matchesRule(rule, metadata)) {
                 return new NoteRuleOutcome(
@@ -304,7 +310,7 @@ public class EvaluationService {
                 );
             }
         }
-        int defaultNote = safeDefaultNote(critere);
+        int defaultNote = safeDefaultNote(critere, activeNoteValues);
         String explanation = rules.isEmpty()
                 ? "Aucune regle active pour ce critere; note par defaut appliquee."
                 : "Aucune regle metadata ne correspond; note par defaut appliquee.";
@@ -664,9 +670,29 @@ public class EvaluationService {
         return key + "=" + String.valueOf(value);
     }
 
-    private int safeDefaultNote(CritereNote critere) {
+    private Set<Integer> activeNoteValuesFor(List<CritereNote> criteresNotes) {
+        return criteresNotes.isEmpty() ? Set.of() : noteLevelService.activeValues();
+    }
+
+    private int maxActiveNoteValue(Set<Integer> activeNoteValues) {
+        return activeNoteValues.stream()
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(0);
+    }
+
+    private int safeDefaultNote(CritereNote critere, Set<Integer> activeNoteValues) {
         Integer configured = critere.getDefaultNoteValue();
-        return configured == null || configured < 1 || configured > 5 ? DEFAULT_NOTE : configured;
+        if (configured != null && activeNoteValues.contains(configured)) {
+            return configured;
+        }
+        if (activeNoteValues.contains(DEFAULT_NOTE)) {
+            return DEFAULT_NOTE;
+        }
+        return activeNoteValues.stream()
+                .mapToInt(Integer::intValue)
+                .min()
+                .orElseThrow(() -> new BusinessConflictException(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE));
     }
 
     private int resolveManualNoteValue(ResultatNoteRequest request) {
@@ -674,17 +700,20 @@ public class EvaluationService {
             return request.noteValue();
         }
         if (request.noteObtenue() == null) {
-            throw new BadRequestException("La note 1..5 est obligatoire pour le critere id: " + request.critereId());
+            throw new BadRequestException("La note est obligatoire pour le critere id: " + request.critereId());
         }
         return request.noteObtenue().intValue();
     }
 
-    private void validateNoteValue(Integer noteValue, CritereNote critere) {
+    private void validateNoteValue(Integer noteValue, CritereNote critere, Set<Integer> activeNoteValues) {
         if (noteValue == null) {
             throw new BadRequestException("La note est obligatoire pour le critere id: " + critere.getId());
         }
-        if (noteValue < 1 || noteValue > NOTE_MAX) {
-            throw new BadRequestException("La note doit etre comprise entre 1 et 5 pour le critere id: " + critere.getId());
+        if (noteValue < 1) {
+            throw new BadRequestException("La note doit etre superieure ou egale a 1 pour le critere id: " + critere.getId());
+        }
+        if (!activeNoteValues.contains(noteValue)) {
+            throw new BadRequestException("La note doit correspondre a un niveau actif configure pour le critere id: " + critere.getId());
         }
         if (critere.getPoids() == null || critere.getPoids() <= 0) {
             throw new BadRequestException("Le poids du critere doit etre superieur a 0.");
@@ -695,8 +724,11 @@ public class EvaluationService {
         return value == null || value <= 0.0 ? 1.0 : value;
     }
 
-    private double scoreCritere(int noteValue, double poids) {
-        return (noteValue / (double) NOTE_MAX) * poids;
+    private double scoreCritere(int noteValue, double poids, int maxActiveNoteValue) {
+        if (maxActiveNoteValue <= 0) {
+            throw new BusinessConflictException(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE);
+        }
+        return (noteValue / (double) maxActiveNoteValue) * poids;
     }
 
     private void ensureCanCalculate(User current, SujetProjet projet) {

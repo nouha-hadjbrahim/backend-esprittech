@@ -43,6 +43,26 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleBusinessConflict_returns409WithMessageProperty() {
+        ProblemDetail pd = handler.handleConflict(new BusinessConflictException("Conflit metier"));
+
+        assertEquals(409, pd.getStatus());
+        assertEquals("Conflit", pd.getTitle());
+        assertEquals("Conflit metier", pd.getDetail());
+        assertEquals("Conflit metier", pd.getProperties().get("message"));
+    }
+
+    @Test
+    void handleDataIntegrityViolation_returns409() {
+        ProblemDetail pd = handler.handleDataIntegrityViolation(
+                new org.springframework.dao.DataIntegrityViolationException("duplicate"));
+
+        assertEquals(409, pd.getStatus());
+        assertEquals("Conflit", pd.getTitle());
+        assertEquals("Contrainte d'unicite ou d'integrite violee.", pd.getDetail());
+    }
+
+    @Test
     void handleAccessDenied_returns403() {
         ProblemDetail pd = handler.handleAccessDenied(new AccessDeniedException("nope"));
 
@@ -72,6 +92,8 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(400, pd.getStatus());
         assertEquals("Validation", pd.getTitle());
+        assertEquals("Format invalide", pd.getDetail());
+        assertEquals("Format invalide", pd.getProperties().get("message"));
         assertNotNull(pd.getProperties().get("errors"));
     }
 
