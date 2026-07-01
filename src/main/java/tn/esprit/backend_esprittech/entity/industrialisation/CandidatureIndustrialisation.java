@@ -66,6 +66,13 @@ public class CandidatureIndustrialisation {
 
     private Double scoreEvaluationProjet;
 
+    private Boolean hasEliminatoryWarnings = false;
+
+    private Integer eliminatoryWarningsCount = 0;
+
+    @Column(length = 4000)
+    private String eliminatoryWarningsDetails;
+
     @Column(length = 2000)
     private String commentaire;
 
@@ -82,6 +89,12 @@ public class CandidatureIndustrialisation {
         }
         if (statut == null) {
             statut = StatutIndustrialisation.BROUILLON;
+        }
+        if (hasEliminatoryWarnings == null) {
+            hasEliminatoryWarnings = false;
+        }
+        if (eliminatoryWarningsCount == null) {
+            eliminatoryWarningsCount = 0;
         }
     }
 }

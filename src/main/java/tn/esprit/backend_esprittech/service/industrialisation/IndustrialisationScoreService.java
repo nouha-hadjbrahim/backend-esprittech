@@ -107,15 +107,18 @@ public class IndustrialisationScoreService {
                 new WeightedComponent(LIVRABLES_WEIGHT, livrableScore),
                 new WeightedComponent(CRITERES_NOTES_WEIGHT, critereScore)
         ));
-        boolean blocked = !blocages.isEmpty();
-        DecisionRecommandeeIndustrialisation decision = recommend(scoreFinal, blocked);
+        boolean hasWarnings = !blocages.isEmpty();
+        DecisionRecommandeeIndustrialisation decision = recommend(scoreFinal);
 
         return new IndustrialisationScoreResponse(
                 candidature.getId(),
                 candidature.getSujetProjet().getId(),
                 scoreFinal,
                 decision,
-                blocked,
+                false,
+                blocages,
+                hasWarnings,
+                blocages.size(),
                 blocages,
                 questionScore.score(),
                 livrableScore.score(),
@@ -153,9 +156,7 @@ public class IndustrialisationScoreService {
             return resultat.getReponseEliminatoire() != null;
         }
         return resultat.getTypeCritere() == TypeCritere.NOTE
-                && resultat.getNoteObtenue() != null
-                && resultat.getBareme() != null
-                && resultat.getBareme() > 0.0;
+                && (resultat.getNoteValue() != null || resultat.getNoteObtenue() != null);
     }
 
     private IndustrialisationScoreResponse emptyCriteriaResponse(CandidatureIndustrialisation candidature) {
@@ -165,6 +166,9 @@ public class IndustrialisationScoreService {
                 0.0,
                 DecisionRecommandeeIndustrialisation.NO_GO,
                 false,
+                List.of(),
+                false,
+                0,
                 List.of(),
                 0.0,
                 0.0,
@@ -359,11 +363,12 @@ public class IndustrialisationScoreService {
             if (resultat.getTypeCritere() != TypeCritere.NOTE || !Boolean.TRUE.equals(resultat.getRuleConfigured())) {
                 continue;
             }
-            if (resultat.getNoteObtenue() == null || resultat.getBareme() == null || resultat.getBareme() <= 0) {
+            if (resultat.getNoteValue() == null && resultat.getNoteObtenue() == null) {
                 continue;
             }
             double weight = positiveWeight(resultat.getPoids());
-            double normalized = clamp((resultat.getNoteObtenue() / resultat.getBareme()) * 100.0);
+            double noteValue = resultat.getNoteValue() != null ? resultat.getNoteValue() : resultat.getNoteObtenue();
+            double normalized = clamp((noteValue / 5.0) * 100.0);
             weightedScores += normalized * weight;
             totalWeight += weight;
             details.add(new ScoreBreakdownDto(
@@ -503,10 +508,7 @@ public class IndustrialisationScoreService {
         return totalWeights > 0.0 ? round(weightedScores / totalWeights) : 0.0;
     }
 
-    private DecisionRecommandeeIndustrialisation recommend(double scoreFinal, boolean blocked) {
-        if (blocked) {
-            return DecisionRecommandeeIndustrialisation.NO_GO;
-        }
+    private DecisionRecommandeeIndustrialisation recommend(double scoreFinal) {
         if (scoreFinal >= 80.0) {
             return DecisionRecommandeeIndustrialisation.GO;
         }
@@ -518,12 +520,13 @@ public class IndustrialisationScoreService {
 
     private String recommendationMessage(DecisionRecommandeeIndustrialisation decision,
                                          double scoreFinal,
-                                         List<BlocageEliminatoireDto> blocages) {
+        List<BlocageEliminatoireDto> blocages) {
         if (!blocages.isEmpty()) {
-            return "NO GO recommande : critere eliminatoire non conforme - " + blocages.get(0).libelle() + ".";
+            return "Alerte eliminatoire non bloquante : " + blocages.size()
+                    + " critere(s) a examiner par la CI. Decision finale manuelle.";
         }
         return switch (decision) {
-            case GO -> "GO recommande : aucun critere eliminatoire bloquant et score superieur au seuil.";
+            case GO -> "GO recommande : score superieur au seuil, decision finale CI requise.";
             case A_INSTRUIRE -> "A instruire : score intermediaire, verification CI requise.";
             case NO_GO -> "NO GO recommande : score inferieur au seuil minimal.";
         };

@@ -12,10 +12,12 @@ import tn.esprit.backend_esprittech.dto.CritereEval.ResultatEliminatoireRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatNoteRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
+import tn.esprit.backend_esprittech.entity.CritereEval.CritereNoteRule;
 import tn.esprit.backend_esprittech.entity.CritereEval.Evaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.ResultatCritere;
+import tn.esprit.backend_esprittech.entity.CritereEval.RuleOperator;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
@@ -27,12 +29,15 @@ import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,6 +46,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +71,12 @@ class EvaluationServiceTest {
     private LivrableRepository livrableRepository;
 
     @Mock
+    private CritereNoteRuleRepository critereNoteRuleRepository;
+
+    @Mock
+    private NoteLevelService noteLevelService;
+
+    @Mock
     private UserService userService;
 
     @InjectMocks
@@ -74,6 +88,7 @@ class EvaluationServiceTest {
     private User admin;
     private User encadrant;
     private User etudiant;
+    private Map<Long, CritereNote> notesById;
 
     @BeforeEach
     void setUp() {
@@ -106,6 +121,20 @@ class EvaluationServiceTest {
         critereNote.setModeEvaluation(ModeEvaluation.LIVRABLE_TYPE_PRESENT);
         critereNote.setExpectedLivrableTypes("RAPPORT");
         critereNote.setNoteMaxAuto(5.0);
+        critereNote.setDefaultNoteValue(3);
+
+        notesById = new HashMap<>();
+        notesById.put(critereNote.getId(), critereNote);
+        lenient().when(noteLevelService.labelFor(anyInt())).thenAnswer(invocation -> switch (invocation.getArgument(0, Integer.class)) {
+            case 1 -> "Très insatisfait";
+            case 2 -> "Insatisfait";
+            case 3 -> "Peu satisfait";
+            case 4 -> "Satisfait";
+            case 5 -> "Très satisfait";
+            default -> "Niveau";
+        });
+        lenient().when(critereNoteRuleRepository.findByCritereNoteIdAndActiveTrueOrderByPriorityAscIdAsc(anyLong()))
+                .thenAnswer(invocation -> legacyRulesFor(notesById.get(invocation.getArgument(0, Long.class))));
 
         admin = new User();
         admin.setId(99L);
@@ -148,6 +177,8 @@ class EvaluationServiceTest {
         assertFalse(response.bloqueParEliminatoire());
         assertEquals(TypeCritere.ELIMINATOIRE, response.resultats().get(0).typeCritere());
         assertEquals(TypeCritere.NOTE, response.resultats().get(1).typeCritere());
+        assertEquals(4, response.resultats().get(1).noteValue());
+        assertEquals("Satisfait", response.resultats().get(1).noteLabel());
     }
 
     @Test
@@ -196,9 +227,21 @@ class EvaluationServiceTest {
     }
 
     @Test
-    void calculerEvaluation_invalidBareme_shouldRejectRequest() {
+    void calculerEvaluation_invalidBareme_shouldBeIgnoredByScaleLogic() {
         critereNote.setBareme(0.0);
-        assertInvalidManualNote(1.0);
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereNote));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculerEvaluation(1L, new EvaluationRequest(
+                List.of(),
+                List.of(new ResultatNoteRequest(2L, 3.0, "scale"))
+        ));
+
+        assertEquals(60.0, response.scoreFinal());
+        assertEquals(5.0, response.resultats().get(0).bareme());
     }
 
     @Test
@@ -208,7 +251,7 @@ class EvaluationServiceTest {
     }
 
     @Test
-    void calculerEvaluation_eliminatoryNotOk_shouldBlockProjectAndPersistSnapshot() {
+    void calculerEvaluation_eliminatoryNotOk_shouldWarnWithoutBlockingProject() {
         when(userService.getCurrentUser()).thenReturn(admin);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
         when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critereEliminatoire));
@@ -221,11 +264,15 @@ class EvaluationServiceTest {
         ));
 
         assertEquals(100.0, response.scoreFinal());
-        assertFalse(response.eligibleIndustrialisation());
+        assertTrue(response.eligibleIndustrialisation());
         assertTrue(response.bloqueParEliminatoire());
+        assertTrue(response.hasEliminatoryWarnings());
+        assertEquals(1, response.eliminatoryWarningsCount());
         assertEquals(100.0, projet.getScoreFinalEvaluation());
-        assertFalse(projet.getEligibleIndustrialisation());
+        assertTrue(projet.getEligibleIndustrialisation());
         assertTrue(projet.getBloqueParEliminatoire());
+        assertTrue(projet.getHasEliminatoryWarnings());
+        assertEquals(1, projet.getEliminatoryWarningsCount());
         verify(sujetProjetRepository).save(projet);
     }
 
@@ -276,11 +323,11 @@ class EvaluationServiceTest {
         var response = evaluationService.calculateAutomaticEvaluation(1L, "Nouveaux livrables déposés");
 
         assertEquals("ROLE_ENSEIGNANT Sami Ben Ali", response.calculatedBy());
-        assertEquals("Nouveaux livrables déposés", response.recalculationReason());
+        assertEquals("Nouveaux livrables deposes", response.recalculationReason());
     }
 
     @Test
-    void calculateAutomaticEvaluation_countMinPartial_shouldCalculatePartialAutoNote() {
+    void calculateAutomaticEvaluation_countMinNoRuleMatch_shouldUseDefaultNote() {
         critereNote.setModeEvaluation(ModeEvaluation.LIVRABLE_COUNT_MIN);
         critereNote.setMinLivrableCount(3);
         critereNote.setNoteMaxAuto(5.0);
@@ -295,13 +342,14 @@ class EvaluationServiceTest {
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "count");
 
-        assertEquals(66.6, response.scoreFinal());
-        assertEquals(3.33, response.resultats().get(0).noteObtenue());
-        assertTrue(response.resultats().get(0).evidenceSummary().contains("Ajoutez au moins 1"));
+        assertEquals(60.0, response.scoreFinal());
+        assertEquals(3, response.resultats().get(0).noteValue());
+        assertEquals("DEFAULT_NOTE", response.resultats().get(0).matchedRule());
+        assertTrue(response.resultats().get(0).explanation().contains("note par defaut"));
     }
 
     @Test
-    void calculateAutomaticEvaluation_noteMaxAutoBelowBareme_shouldCapAutomaticNote() {
+    void calculateAutomaticEvaluation_noteMaxAutoBelowBareme_shouldBeIgnoredByRuleScale() {
         critereNote.setNoteMaxAuto(2.5);
         when(userService.getCurrentUser()).thenReturn(admin);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
@@ -313,8 +361,8 @@ class EvaluationServiceTest {
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "cap");
 
-        assertEquals(50.0, response.scoreFinal());
-        assertEquals(2.5, response.resultats().get(0).noteObtenue());
+        assertEquals(100.0, response.scoreFinal());
+        assertEquals(5, response.resultats().get(0).noteValue());
     }
 
     @Test
@@ -339,11 +387,11 @@ class EvaluationServiceTest {
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "modes");
 
-        assertEquals(75.0, response.scoreFinal());
+        assertEquals(90.0, response.scoreFinal());
         assertEquals(5.0, response.resultats().get(0).noteObtenue());
         assertEquals(5.0, response.resultats().get(1).noteObtenue());
         assertEquals(5.0, response.resultats().get(2).noteObtenue());
-        assertEquals(0.0, response.resultats().get(3).noteObtenue());
+        assertEquals(3.0, response.resultats().get(3).noteObtenue());
     }
 
     @Test
@@ -359,9 +407,10 @@ class EvaluationServiceTest {
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "unconfigured note");
 
-        assertEquals(0.0, response.scoreFinal());
+        assertEquals(60.0, response.scoreFinal());
         assertEquals(1, response.criteresNotesNonConfigures());
         assertFalse(response.resultats().get(0).ruleConfigured());
+        assertEquals("DEFAULT_NOTE", response.resultats().get(0).matchedRule());
         assertTrue(response.scoreCalculationCoverageMessage().contains("1 critere(s)"));
     }
 
@@ -392,7 +441,7 @@ class EvaluationServiceTest {
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> evaluationService.calculateAutomaticEvaluation(1L, "Nouveaux livrables déposés"));
 
-        assertEquals("Le projet doit être en statut REALISATION_TERMINEE pour être évalué.", ex.getMessage());
+        assertEquals("Le projet doit etre en statut REALISATION_TERMINEE pour etre evalue.", ex.getMessage());
     }
 
     @Test
@@ -436,7 +485,7 @@ class EvaluationServiceTest {
     }
 
     @Test
-    void calculateAutomaticEvaluation_fullNotedScoreWithEliminatoryNotOk_shouldRemainNoGo() {
+    void calculateAutomaticEvaluation_fullNotedScoreWithEliminatoryNotOk_shouldRemainEligibleWithWarnings() {
         critereEliminatoire.setModeEvaluation(ModeEvaluation.DOCUMENTATION_PRESENT);
         critereEliminatoire.setExpectedLivrableTypes("DOCUMENTATION,RAPPORT");
         critereNote.setModeEvaluation(ModeEvaluation.GIT_LINK_PRESENT);
@@ -455,8 +504,10 @@ class EvaluationServiceTest {
         var response = evaluationService.calculateAutomaticEvaluation(1L, "Recalcul manuel");
 
         assertEquals(100.0, response.scoreFinal());
-        assertFalse(response.eligibleIndustrialisation());
+        assertTrue(response.eligibleIndustrialisation());
         assertTrue(response.bloqueParEliminatoire());
+        assertTrue(response.hasEliminatoryWarnings());
+        assertEquals(1, response.eliminatoryWarningsCount());
         assertEquals(List.of("Documentation"), response.blockingCriteriaNames());
     }
 
@@ -469,7 +520,7 @@ class EvaluationServiceTest {
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> evaluationService.getLatestEvaluationByProjet(1L));
 
-        assertEquals("Aucune évaluation trouvée pour le projet id: 1", ex.getMessage());
+        assertEquals("Aucune evaluation trouvee pour le projet id: 1", ex.getMessage());
     }
 
     @Test
@@ -536,7 +587,64 @@ class EvaluationServiceTest {
         note.setModeEvaluation(mode);
         note.setExpectedLivrableTypes(expectedTypes);
         note.setNoteMaxAuto(5.0);
+        note.setDefaultNoteValue(3);
+        notesById.put(id, note);
         return note;
+    }
+
+    private List<CritereNoteRule> legacyRulesFor(CritereNote critere) {
+        if (critere == null || critere.getModeEvaluation() == null || !Boolean.TRUE.equals(critere.getRuleEnabled())) {
+            return List.of();
+        }
+        CritereNoteRule rule = new CritereNoteRule();
+        rule.setId(900L + critere.getId());
+        rule.setCritereNote(critere);
+        rule.setRuleName("Legacy metadata rule");
+        rule.setDescription("Regle convertie pour le test");
+        rule.setPriority(1);
+        rule.setActive(true);
+        rule.setNoteValue(5);
+        switch (critere.getModeEvaluation()) {
+            case DOCUMENTATION_PRESENT -> {
+                rule.setMetadataKey("hasDocumentation");
+                rule.setOperator(RuleOperator.EQUALS);
+                rule.setExpectedValue("true");
+            }
+            case GIT_LINK_PRESENT -> {
+                rule.setMetadataKey("hasGitLink");
+                rule.setOperator(RuleOperator.EQUALS);
+                rule.setExpectedValue("true");
+            }
+            case LIVRABLE_TYPE_PRESENT -> {
+                rule.setMetadataKey("livrableTypes");
+                rule.setOperator(RuleOperator.CONTAINS);
+                rule.setExpectedValue(critere.getExpectedLivrableTypes());
+            }
+            case LIVRABLE_LINK_PRESENT -> {
+                rule.setMetadataKey("externalLinkCount");
+                rule.setOperator(RuleOperator.GTE);
+                rule.setMinValue(1.0);
+            }
+            case LIVRABLE_FILE_PRESENT -> {
+                rule.setMetadataKey("fileCount");
+                rule.setOperator(RuleOperator.GTE);
+                rule.setMinValue(1.0);
+            }
+            case LIVRABLE_COUNT_MIN -> {
+                rule.setMetadataKey("livrableCount");
+                rule.setOperator(RuleOperator.GTE);
+                rule.setMinValue((double) (critere.getMinLivrableCount() == null ? 1 : critere.getMinLivrableCount()));
+            }
+            case KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION -> {
+                rule.setMetadataKey("livrableSearchText");
+                rule.setOperator(RuleOperator.CONTAINS);
+                rule.setExpectedValue(critere.getExpectedKeyword());
+            }
+            case MANUAL_ADMIN_VALUE -> {
+                return List.of();
+            }
+        }
+        return List.of(rule);
     }
 
     private Evaluation savedEvaluationWithResult(String evidenceIds) {
@@ -554,6 +662,8 @@ class EvaluationServiceTest {
         resultat.setRuleConfigured(true);
         resultat.setModeEvaluation(ModeEvaluation.LIVRABLE_TYPE_PRESENT);
         resultat.setNoteObtenue(4.0);
+        resultat.setNoteValue(4);
+        resultat.setNoteLabel("Satisfait");
         resultat.setScorePondere(1.6);
         resultat.setBareme(5.0);
         resultat.setPoids(2.0);

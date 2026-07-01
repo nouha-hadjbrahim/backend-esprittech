@@ -8,8 +8,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRuleRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRuleResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.service.CritereEval.CritereNoteService;
+import tn.esprit.backend_esprittech.service.CritereEval.CritereNoteRuleService;
 
 import java.util.List;
 
@@ -20,6 +23,7 @@ import java.util.List;
 public class CritereNoteController {
 
     private final CritereNoteService critereNoteService;
+    private final CritereNoteRuleService critereNoteRuleService;
 
     @GetMapping
     public ResponseEntity<List<CritereNoteResponse>> findAll() {
@@ -61,6 +65,45 @@ public class CritereNoteController {
     @PutMapping("/ordre")
     public ResponseEntity<Void> reorder(@Valid @RequestBody List<OrdreCritereRequest> requests) {
         critereNoteService.reorder(requests);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{critereId}/rules")
+    public ResponseEntity<List<CritereNoteRuleResponse>> findRules(@PathVariable Long critereId) {
+        return ResponseEntity.ok(critereNoteRuleService.findByCritere(critereId));
+    }
+
+    @PostMapping("/{critereId}/rules")
+    public ResponseEntity<CritereNoteRuleResponse> createRule(
+            @PathVariable Long critereId,
+            @Valid @RequestBody CritereNoteRuleRequest request
+    ) {
+        return ResponseEntity.ok(critereNoteRuleService.create(critereId, request));
+    }
+
+    @PutMapping("/rules/{ruleId}")
+    public ResponseEntity<CritereNoteRuleResponse> updateRule(
+            @PathVariable Long ruleId,
+            @Valid @RequestBody CritereNoteRuleRequest request
+    ) {
+        return ResponseEntity.ok(critereNoteRuleService.update(ruleId, request));
+    }
+
+    @DeleteMapping("/rules/{ruleId}")
+    public ResponseEntity<Void> deleteRule(@PathVariable Long ruleId) {
+        critereNoteRuleService.delete(ruleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/rules/{ruleId}/activer")
+    public ResponseEntity<Void> activateRule(@PathVariable Long ruleId) {
+        critereNoteRuleService.activate(ruleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/rules/{ruleId}/desactiver")
+    public ResponseEntity<Void> deactivateRule(@PathVariable Long ruleId) {
+        critereNoteRuleService.deactivate(ruleId);
         return ResponseEntity.noContent().build();
     }
 }

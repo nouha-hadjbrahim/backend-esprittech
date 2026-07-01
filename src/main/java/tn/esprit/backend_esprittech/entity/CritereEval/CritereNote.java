@@ -12,12 +12,14 @@ public class CritereNote extends CritereEvaluation  {
 
 
     @Column(nullable = false)
-    private Double bareme;
+    private Double bareme = 5.0;
 
     @Column(nullable = false)
     private Double poids;
 
     @Column(nullable = false)
-    private Double seuil;
+    private Double seuil = 3.0;
+
+    private Integer defaultNoteValue = 3;
 
 }
