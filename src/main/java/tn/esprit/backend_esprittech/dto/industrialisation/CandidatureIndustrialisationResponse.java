@@ -49,7 +49,8 @@ public record CandidatureIndustrialisationResponse(
         List<ReponseIndustrialisationResponse> reponses,
         List<LivrableResponse> livrables,
         List<HistoriqueIndustrialisationResponse> historique,
-        EvaluationResponse latestEvaluation
+        EvaluationResponse latestEvaluation,
+        List<String> warnings
 ) {
     public CandidatureIndustrialisationResponse(
             Long id,
@@ -82,6 +83,6 @@ public record CandidatureIndustrialisationResponse(
                 Boolean.TRUE.equals(bloqueParEliminatoire) ? 1 : 0, List.of(), typeIndustrialisation, statut, demandeurId, demandeurNom,
                 dateDemande, dateSoumission, dateReceptionCI, ciDecideurId, ciDecideurNom,
                 dateDecisionCI, decisionGoNoGo, orientation, motifDecision, commentaire,
-                reponses, livrables, historique, null);
+                reponses, livrables, historique, null, List.of());
     }
 }

@@ -43,6 +43,9 @@ import java.util.stream.Collectors;
 @Transactional
 public class IndustrialisationService {
 
+    private static final String MISSING_LIVRABLE_WARNING =
+            "Aucun livrable nest déposé pour ce projet. La CI verra cette alerte.";
+
     private static final Set<StatutIndustrialisation> OPEN_STATUSES = Set.of(
             StatutIndustrialisation.BROUILLON,
             StatutIndustrialisation.SOUMISE,
@@ -191,9 +194,7 @@ public class IndustrialisationService {
         if (projet.getScoreFinalEvaluation() == null) {
             throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
         }
-        if (!livrableService.hasActiveLivrables(projet.getId())) {
-            throw new BusinessException("Au moins un livrable projet est requis avant soumission.");
-        }
+        boolean hasActiveLivrables = livrableService.hasActiveLivrables(projet.getId());
 
         validateCompleteness(candidature);
         List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
@@ -210,7 +211,7 @@ public class IndustrialisationService {
         sujetProjetRepository.save(projet);
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
         addHistory(saved, oldStatus, StatutIndustrialisation.SOUMISE, current, null, "Demande soumise a la CI");
-        return toResponse(saved, true);
+        return toResponse(saved, true, !hasActiveLivrables);
     }
 
     @Transactional(readOnly = true)
@@ -497,6 +498,12 @@ public class IndustrialisationService {
     }
 
     private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature, boolean includeDetails) {
+        return toResponse(candidature, includeDetails, false);
+    }
+
+    private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature,
+                                                            boolean includeDetails,
+                                                            boolean forceMissingLivrablesWarning) {
         SujetProjet projet = candidature.getSujetProjet();
         User demandeur = candidature.getDemandeur();
         User decideur = candidature.getCiDecideur();
@@ -515,6 +522,7 @@ public class IndustrialisationService {
                     .toList()
                 : List.of();
         EvaluationResponse latestEvaluation = includeDetails ? findLatestEvaluation(projet.getId()) : null;
+        List<String> warnings = collectSubmissionWarnings(livrables, includeDetails, forceMissingLivrablesWarning);
 
         return new CandidatureIndustrialisationResponse(
                 candidature.getId(),
@@ -554,8 +562,18 @@ public class IndustrialisationService {
                 reponses,
                 livrables,
                 historique,
-                latestEvaluation
+                latestEvaluation,
+                warnings
         );
+    }
+
+    private List<String> collectSubmissionWarnings(List<LivrableResponse> livrables,
+                                                   boolean includeDetails,
+                                                   boolean forceMissingLivrablesWarning) {
+        if (forceMissingLivrablesWarning || (includeDetails && livrables.isEmpty())) {
+            return List.of(MISSING_LIVRABLE_WARNING);
+        }
+        return List.of();
     }
 
     private EvaluationResponse findLatestEvaluation(Long projetId) {

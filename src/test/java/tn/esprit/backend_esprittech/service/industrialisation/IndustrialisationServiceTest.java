@@ -479,15 +479,21 @@ class IndustrialisationServiceTest {
     }
 
     @Test
-    void soumettre_withoutLivrables_shouldReject() {
+    void soumettre_withoutLivrables_shouldSubmitWithWarning() {
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
         when(livrableService.hasActiveLivrables(42L)).thenReturn(false);
+        when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of());
+        when(sujetProjetRepository.save(projet)).thenReturn(projet);
+        when(candidatureRepository.save(candidature)).thenReturn(candidature);
+        when(livrableService.findByProjet(42L)).thenReturn(List.of());
+        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
 
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.soumettre(11L));
+        var response = industrialisationService.soumettre(11L);
 
-        assertEquals("Au moins un livrable projet est requis avant soumission.", ex.getMessage());
+        assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
+        assertTrue(response.warnings().contains("Aucun livrable nest déposé pour ce projet. La CI verra cette alerte."));
     }
 
     @Test
