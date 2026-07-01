@@ -67,7 +67,7 @@ class SujetProjetServiceTest {
         response = new SujetProjetResponse(1L, "Sujet", CategorieSujet.PFE, "Desc", "Obj",
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2, StatutSujet.SOUMIS_EN_VALIDATION,
                 null, false, false, 10L, "Sami Ben Ali", "sami@esprit.tn", null,
-                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null, 0);
+                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null, false, 0, 0);
 
         when(userService.getCurrentUser()).thenReturn(enseignant);
         when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));

@@ -371,7 +371,7 @@ class CandidatureServiceTest {
         when(sujetProjetService.getSujetById(10L)).thenReturn(new SujetProjetResponse(
                 10L, "Sujet", CategorieSujet.PFE, null, null, List.of(), List.of(), List.of(), 2,
                 StatutSujet.CANDIDATURE_OUVERTE, null, false, false, 2L, null, null, null,
-                null, null, null, null, null, null, 0));
+                null, null, null, null, null, null, false, 0, 0));
         when(affectationRepository.findBySujetIdAndStatut(10L, StatutAffectation.ACTIVE))
                 .thenReturn(List.of(affectationActive));
         when(affectationMapper.toResponse(affectationActive)).thenReturn(mockAffectationResponse());

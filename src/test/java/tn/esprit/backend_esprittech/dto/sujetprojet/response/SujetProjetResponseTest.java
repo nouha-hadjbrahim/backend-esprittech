@@ -17,7 +17,7 @@ class SujetProjetResponseTest {
         SujetProjetResponse response = new SujetProjetResponse(
                 1L, "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Soft skills"), List.of("Domaine"),
                 List.of("Java"), 2, StatutSujet.VALIDE, 8.5, false, false, 1001L, "Sami Ben Ali",
-                "sami@esprit.tn", "REEE",                 now, now, null, null, null, null, 0
+                "sami@esprit.tn", "REEE",                 now, now, null, null, null, null, false, 0, 0
         );
 
         assertEquals(1L, response.id());

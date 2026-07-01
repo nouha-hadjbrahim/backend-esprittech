@@ -68,7 +68,8 @@ public class SujetProjetMapper {
                 entity.getDateTerminaison(),
                 entity.getMotifInvalidation(),
                 entity.getHasEliminatoryWarnings(),
-                entity.getEliminatoryWarningsCount()
+                entity.getEliminatoryWarningsCount(),
+                nombreMembresActifs
         );
     }
 

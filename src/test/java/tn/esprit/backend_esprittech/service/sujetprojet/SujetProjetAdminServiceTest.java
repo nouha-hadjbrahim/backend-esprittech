@@ -73,7 +73,7 @@ class SujetProjetAdminServiceTest {
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2,
                 StatutSujet.SOUMIS_EN_VALIDATION, null, false, false,
                 10L, "Sami Ben Ali", "sami@esprit.tn", null,
-                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null, 0);
+                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null, false, 0, 0);
 
         request = new SujetProjetRequest(
                 "Sujet modifié", CategorieSujet.PFE, "Desc", "Obj",
