@@ -29,6 +29,7 @@ import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustr
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
+import tn.esprit.backend_esprittech.service.CritereEval.NoteLevelService;
 
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +62,9 @@ class IndustrialisationScoreServiceTest {
 
     @Mock
     private CritereEliminatoireRepository critereEliminatoireRepository;
+
+    @Mock
+    private NoteLevelService noteLevelService;
 
     @InjectMocks
     private IndustrialisationScoreService service;
@@ -388,6 +392,22 @@ class IndustrialisationScoreServiceTest {
 
         assertEquals(50.0, score.scoreCriteresNotes());
         assertTrue(score.detailsCalcul().stream().anyMatch(detail -> detail.details().equals("preuve fournie")));
+    }
+
+    @Test
+    void calculate_evaluationNoteWithoutBareme_shouldUseActiveMaxNoteValue() {
+        Evaluation evaluation = new Evaluation();
+        evaluation.setId(30L);
+        evaluation.setSujetProjet(projet);
+        ResultatCritere note = noteResult(7L, "Score dynamique", 7.0, null, 1.0, true);
+        note.setNoteValue(7);
+        evaluation.addResultat(note);
+        when(noteLevelService.maxActiveNoteValue()).thenReturn(10);
+        mockBase(List.of(), List.of(), List.of(), Optional.of(evaluation), List.of());
+
+        var score = service.calculate(11L);
+
+        assertEquals(70.0, score.scoreCriteresNotes());
     }
 
     @Test

@@ -127,6 +127,14 @@ class CritereNoteControllerTest {
     }
 
     @Test
+    void delete_callsService_returnsNoContent() {
+        ResponseEntity<Void> result = controller.delete(1L);
+
+        assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
+        verify(critereNoteService).delete(1L);
+    }
+
+    @Test
     void create_withDifferentValues_returnsResponse() {
         CritereNoteRequest newRequest = new CritereNoteRequest("Another Note", "Another Desc", "SECURITE", 2, 20.0, 10.0, 15.0, false);
         CritereNoteResponse newResponse = new CritereNoteResponse(

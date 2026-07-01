@@ -7,6 +7,8 @@ import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRuleRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRuleResponse;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNoteRule;
+import tn.esprit.backend_esprittech.entity.CritereEval.RuleOperator;
+import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
@@ -35,6 +37,7 @@ public class CritereNoteRuleService {
     public CritereNoteRuleResponse create(Long critereId, CritereNoteRuleRequest request) {
         validate(request);
         CritereNote critere = getCritere(critereId);
+        ensureUniqueRuleName(critereId, request.ruleName(), null);
         CritereNoteRule rule = new CritereNoteRule();
         rule.setCritereNote(critere);
         apply(rule, request);
@@ -44,6 +47,7 @@ public class CritereNoteRuleService {
     public CritereNoteRuleResponse update(Long ruleId, CritereNoteRuleRequest request) {
         validate(request);
         CritereNoteRule rule = getRule(ruleId);
+        ensureUniqueRuleName(rule.getCritereNote().getId(), request.ruleName(), ruleId);
         apply(rule, request);
         return toResponse(ruleRepository.save(rule));
     }
@@ -74,15 +78,29 @@ public class CritereNoteRuleService {
         if (request.operator() == null) {
             throw new BadRequestException("L'operateur est obligatoire.");
         }
-        if (request.noteValue() == null || request.noteValue() < 1 || request.noteValue() > 5) {
-            throw new BadRequestException("La note de regle doit etre comprise entre 1 et 5.");
+        if (request.noteValue() == null) {
+            throw new BadRequestException("La note de regle est obligatoire.");
         }
+        if (request.noteValue() < 1) {
+            throw new BadRequestException("La note de regle doit etre superieure ou egale a 1.");
+        }
+        noteLevelService.requireActiveValue(request.noteValue(), "La note de regle");
         if (request.priority() == null || request.priority() < 1) {
             throw new BadRequestException("La priorite doit etre superieure ou egale a 1.");
         }
-        if (request.operator().name().equals("BETWEEN")
+        RuleOperator operator = request.operator();
+        if (operator == RuleOperator.BETWEEN
                 && (request.minValue() == null || request.maxValue() == null)) {
             throw new BadRequestException("Les valeurs min et max sont obligatoires pour BETWEEN.");
+        }
+        if (operator == RuleOperator.BETWEEN && request.minValue() > request.maxValue()) {
+            throw new BadRequestException("La valeur min doit etre inferieure ou egale a la valeur max.");
+        }
+        if ((operator == RuleOperator.GTE || operator == RuleOperator.LTE
+                || operator == RuleOperator.COUNT_GTE || operator == RuleOperator.COUNT_LTE)
+                && request.minValue() == null
+                && (request.expectedValue() == null || request.expectedValue().isBlank())) {
+            throw new BadRequestException("Une valeur numerique est obligatoire pour cet operateur.");
         }
     }
 
@@ -104,10 +122,10 @@ public class CritereNoteRuleService {
 
     private void apply(CritereNoteRule rule, CritereNoteRuleRequest request) {
         rule.setRuleName(request.ruleName().trim());
-        rule.setDescription(request.description());
+        rule.setDescription(trimToNull(request.description()));
         rule.setMetadataKey(request.metadataKey().trim());
         rule.setOperator(request.operator());
-        rule.setExpectedValue(request.expectedValue());
+        rule.setExpectedValue(trimToNull(request.expectedValue()));
         rule.setMinValue(request.minValue());
         rule.setMaxValue(request.maxValue());
         rule.setNoteValue(request.noteValue());
@@ -115,6 +133,21 @@ public class CritereNoteRuleService {
         if (request.active() != null) {
             rule.setActive(request.active());
         }
+    }
+
+    private void ensureUniqueRuleName(Long critereId, String ruleName, Long currentRuleId) {
+        ruleRepository.findByCritereNoteIdAndRuleNameIgnoreCase(critereId, ruleName.trim())
+                .filter(existing -> currentRuleId == null || !existing.getId().equals(currentRuleId))
+                .ifPresent(existing -> {
+                    throw new BusinessConflictException("Une regle existe deja avec le nom: " + ruleName.trim());
+                });
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private CritereNoteRuleResponse toResponse(CritereNoteRule rule) {

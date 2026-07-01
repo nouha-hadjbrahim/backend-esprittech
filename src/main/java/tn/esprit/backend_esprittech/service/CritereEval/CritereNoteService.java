@@ -7,9 +7,12 @@ import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
+import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.ResultatCritereRepository;
 
 import java.util.List;
 
@@ -18,10 +21,17 @@ import java.util.List;
 @Transactional
 public class CritereNoteService {
 
+    private static final String USED_CRITERE_DELETE_MESSAGE =
+            "Ce critère est déjà utilisé dans des évaluations. Vous pouvez le désactiver au lieu de le supprimer.";
+
     private final CritereNoteRepository repository;
+    private final CritereNoteRuleRepository ruleRepository;
+    private final ResultatCritereRepository resultatCritereRepository;
+    private final NoteLevelService noteLevelService;
 
     public CritereNoteResponse create(CritereNoteRequest request) {
         validateRequest(request);
+        ensureUniqueLibelle(request.libelle(), null);
         CritereNote critere = new CritereNote();
         applyRequest(critere, request);
         return toResponse(repository.save(critere));
@@ -30,8 +40,18 @@ public class CritereNoteService {
     public CritereNoteResponse update(Long id, CritereNoteRequest request) {
         validateRequest(request);
         CritereNote critere = getEntity(id);
+        ensureUniqueLibelle(request.libelle(), id);
         applyRequest(critere, request);
         return toResponse(repository.save(critere));
+    }
+
+    public void delete(Long id) {
+        CritereNote critere = getEntity(id);
+        if (resultatCritereRepository.existsByCritereId(id)) {
+            throw new BusinessConflictException(USED_CRITERE_DELETE_MESSAGE);
+        }
+        ruleRepository.deleteAll(ruleRepository.findByCritereNoteIdOrderByPriorityAscIdAsc(id));
+        repository.delete(critere);
     }
 
     public void deactivate(Long id) {
@@ -79,20 +99,20 @@ public class CritereNoteService {
     }
 
     private void applyRequest(CritereNote critere, CritereNoteRequest request) {
-        critere.setLibelle(request.libelle());
-        critere.setDescription(request.description());
-        critere.setDomaine(request.domaine());
+        critere.setLibelle(request.libelle().trim());
+        critere.setDescription(trimToNull(request.description()));
+        critere.setDomaine(request.domaine().trim());
         critere.setOrdre(request.ordre());
         critere.setBareme(request.bareme() == null ? 5.0 : request.bareme());
         critere.setPoids(request.poids());
         critere.setSeuil(request.seuil() == null ? 3.0 : request.seuil());
         critere.setDefaultNoteValue(request.defaultNoteValue() == null ? 3 : request.defaultNoteValue());
         critere.setModeEvaluation(request.modeEvaluation());
-        critere.setExpectedLivrableTypes(request.expectedLivrableTypes());
+        critere.setExpectedLivrableTypes(trimToNull(request.expectedLivrableTypes()));
         critere.setMinLivrableCount(request.minLivrableCount());
-        critere.setExpectedKeyword(request.expectedKeyword());
+        critere.setExpectedKeyword(trimToNull(request.expectedKeyword()));
         critere.setNoteMaxAuto(request.noteMaxAuto());
-        critere.setRuleDescription(request.ruleDescription());
+        critere.setRuleDescription(trimToNull(request.ruleDescription()));
 
         if (request.actif() != null) {
             critere.setActif(request.actif());
@@ -103,6 +123,9 @@ public class CritereNoteService {
     private void validateRequest(CritereNoteRequest request) {
         if (request.libelle() == null || request.libelle().isBlank()) {
             throw new BadRequestException("Le libelle est obligatoire.");
+        }
+        if (request.domaine() == null || request.domaine().isBlank()) {
+            throw new BadRequestException("Le domaine est obligatoire.");
         }
         if (request.ordre() == null || request.ordre() < 1) {
             throw new BadRequestException("L'ordre doit etre superieur ou egal a 1.");
@@ -116,9 +139,30 @@ public class CritereNoteService {
         if (request.seuil() != null && request.seuil() < 0) {
             throw new BadRequestException("Le seuil doit etre positif.");
         }
-        if (request.defaultNoteValue() != null && (request.defaultNoteValue() < 1 || request.defaultNoteValue() > 5)) {
-            throw new BadRequestException("La note par defaut doit etre comprise entre 1 et 5.");
+        if (request.defaultNoteValue() != null) {
+            noteLevelService.requireActiveValue(request.defaultNoteValue(), "La note par defaut");
         }
+        if (request.minLivrableCount() != null && request.minLivrableCount() < 1) {
+            throw new BadRequestException("Le nombre minimum de livrables doit etre superieur ou egal a 1.");
+        }
+        if (request.noteMaxAuto() != null && request.noteMaxAuto() <= 0) {
+            throw new BadRequestException("La note maximale automatique doit etre superieure a 0.");
+        }
+    }
+
+    private void ensureUniqueLibelle(String libelle, Long currentId) {
+        repository.findByLibelleIgnoreCase(libelle.trim())
+                .filter(existing -> currentId == null || !existing.getId().equals(currentId))
+                .ifPresent(existing -> {
+                    throw new BusinessConflictException("Un critere note existe deja avec le libelle: " + libelle.trim());
+                });
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private CritereNoteResponse toResponse(CritereNote critere) {

@@ -129,7 +129,7 @@ public class EvaluationRuleInitializer implements CommandLineRunner {
         rule.setDescription(critere.getRuleDescription());
         rule.setPriority(1);
         rule.setActive(true);
-        rule.setNoteValue(5);
+        rule.setNoteValue(maxConfiguredNoteValue());
 
         switch (critere.getModeEvaluation()) {
             case DOCUMENTATION_PRESENT -> {
@@ -173,6 +173,15 @@ public class EvaluationRuleInitializer implements CommandLineRunner {
             }
         }
         critereNoteRuleRepository.save(rule);
+    }
+
+    private int maxConfiguredNoteValue() {
+        return noteLevelRepository.findTopByActiveTrueOrderByValueDesc()
+                .map(NoteLevel::getValue)
+                .orElseGet(() -> noteLevelRepository.findAllByOrderByOrderIndexAsc().stream()
+                        .mapToInt(NoteLevel::getValue)
+                        .max()
+                        .orElse(1));
     }
 
     private void setRule(CritereEvaluation critere,

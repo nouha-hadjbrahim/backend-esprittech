@@ -9,9 +9,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
+import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.ResultatCritereRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +25,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,6 +38,15 @@ class CritereNoteServiceTest {
 
     @Mock
     private CritereNoteRepository repository;
+
+    @Mock
+    private CritereNoteRuleRepository ruleRepository;
+
+    @Mock
+    private ResultatCritereRepository resultatCritereRepository;
+
+    @Mock
+    private NoteLevelService noteLevelService;
 
     @InjectMocks
     private CritereNoteService service;
@@ -50,6 +66,7 @@ class CritereNoteServiceTest {
         critere.setPoids(2.0);
         critere.setSeuil(3.0);
         critere.setDefaultNoteValue(3);
+        lenient().doNothing().when(noteLevelService).requireActiveValue(anyInt(), anyString());
     }
 
     @Test
@@ -110,7 +127,30 @@ class CritereNoteServiceTest {
     }
 
     @Test
+    void create_duplicateLibelle_shouldThrowBusinessConflictException() {
+        when(repository.findByLibelleIgnoreCase("Critere note")).thenReturn(Optional.of(critere));
+
+        CritereNoteRequest request = new CritereNoteRequest(
+                "Critere note",
+                "Description",
+                "Domaine",
+                1,
+                null,
+                2.0,
+                null,
+                true
+        );
+
+        BusinessConflictException ex = assertThrows(BusinessConflictException.class, () -> service.create(request));
+
+        assertEquals("Un critere note existe deja avec le libelle: Critere note", ex.getMessage());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     void create_invalidDefaultNote_shouldThrowBadRequestException() {
+        doThrow(new BadRequestException("La note par defaut doit correspondre a un niveau de note actif configure."))
+                .when(noteLevelService).requireActiveValue(6, "La note par defaut");
         CritereNoteRequest request = new CritereNoteRequest(
                 "Critere note",
                 "Description",
@@ -132,7 +172,7 @@ class CritereNoteServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.create(request));
 
-        assertEquals("La note par defaut doit etre comprise entre 1 et 5.", ex.getMessage());
+        assertEquals("La note par defaut doit correspondre a un niveau de note actif configure.", ex.getMessage());
         verify(repository, never()).save(any());
     }
 
@@ -196,6 +236,40 @@ class CritereNoteServiceTest {
     }
 
     @Test
+    void delete_missingCriterion_shouldThrowResourceNotFoundException() {
+        when(repository.findById(404L)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> service.delete(404L));
+
+        assertEquals("Critere note introuvable avec id: 404", ex.getMessage());
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void delete_usedCriterion_shouldThrowBusinessConflictException() {
+        when(repository.findById(1L)).thenReturn(Optional.of(critere));
+        when(resultatCritereRepository.existsByCritereId(1L)).thenReturn(true);
+
+        BusinessConflictException ex = assertThrows(BusinessConflictException.class, () -> service.delete(1L));
+
+        assertEquals("Ce critère est déjà utilisé dans des évaluations. Vous pouvez le désactiver au lieu de le supprimer.",
+                ex.getMessage());
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void delete_unusedCriterion_shouldDeleteRulesThenCriterion() {
+        when(repository.findById(1L)).thenReturn(Optional.of(critere));
+        when(resultatCritereRepository.existsByCritereId(1L)).thenReturn(false);
+        when(ruleRepository.findByCritereNoteIdOrderByPriorityAscIdAsc(1L)).thenReturn(List.of());
+
+        service.delete(1L);
+
+        verify(ruleRepository).deleteAll(List.of());
+        verify(repository).delete(critere);
+    }
+
+    @Test
     void deactivate_shouldSetActifFalse() {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
         when(repository.save(any(CritereNote.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -216,6 +290,22 @@ class CritereNoteServiceTest {
 
         assertTrue(critere.getActif());
         verify(repository).save(critere);
+    }
+
+    @Test
+    void activate_missingCriterion_shouldThrowResourceNotFoundException() {
+        when(repository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.activate(404L));
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deactivate_missingCriterion_shouldThrowResourceNotFoundException() {
+        when(repository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.deactivate(404L));
+        verify(repository, never()).save(any());
     }
 
     @Test

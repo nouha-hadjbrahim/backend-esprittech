@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNoteRule;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CritereNoteRuleRepository extends JpaRepository<CritereNoteRule, Long> {
 
@@ -12,4 +13,8 @@ public interface CritereNoteRuleRepository extends JpaRepository<CritereNoteRule
     List<CritereNoteRule> findByCritereNoteIdAndActiveTrueOrderByPriorityAscIdAsc(Long critereNoteId);
 
     boolean existsByCritereNoteId(Long critereNoteId);
+
+    boolean existsByNoteValue(Integer noteValue);
+
+    Optional<CritereNoteRule> findByCritereNoteIdAndRuleNameIgnoreCase(Long critereNoteId, String ruleName);
 }

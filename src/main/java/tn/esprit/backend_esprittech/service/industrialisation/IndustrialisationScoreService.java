@@ -29,6 +29,7 @@ import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndu
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
+import tn.esprit.backend_esprittech.service.CritereEval.NoteLevelService;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -73,6 +74,7 @@ public class IndustrialisationScoreService {
     private final EvaluationRepository evaluationRepository;
     private final CritereNoteRepository critereNoteRepository;
     private final CritereEliminatoireRepository critereEliminatoireRepository;
+    private final NoteLevelService noteLevelService;
 
     public IndustrialisationScoreResponse calculate(Long candidatureId) {
         CandidatureIndustrialisation candidature = candidatureRepository.findById(candidatureId)
@@ -368,7 +370,7 @@ public class IndustrialisationScoreService {
             }
             double weight = positiveWeight(resultat.getPoids());
             double noteValue = resultat.getNoteValue() != null ? resultat.getNoteValue() : resultat.getNoteObtenue();
-            double normalized = clamp((noteValue / 5.0) * 100.0);
+            double normalized = clamp((noteValue / noteScale(resultat)) * 100.0);
             weightedScores += normalized * weight;
             totalWeight += weight;
             details.add(new ScoreBreakdownDto(
@@ -534,6 +536,13 @@ public class IndustrialisationScoreService {
 
     private double positiveWeight(Double value) {
         return value == null || value <= 0.0 ? 1.0 : value;
+    }
+
+    private double noteScale(ResultatCritere resultat) {
+        if (resultat.getBareme() != null && resultat.getBareme() > 0) {
+            return resultat.getBareme();
+        }
+        return noteLevelService.maxActiveNoteValue();
     }
 
     private double clamp(double value) {

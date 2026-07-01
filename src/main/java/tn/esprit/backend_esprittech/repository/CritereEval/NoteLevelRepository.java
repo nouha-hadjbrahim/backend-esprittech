@@ -14,5 +14,11 @@ public interface NoteLevelRepository extends JpaRepository<NoteLevel, Long> {
 
     Optional<NoteLevel> findByValue(Integer value);
 
+    Optional<NoteLevel> findByValueAndActiveTrue(Integer value);
+
+    Optional<NoteLevel> findByOrderIndex(Integer orderIndex);
+
+    Optional<NoteLevel> findTopByActiveTrueOrderByValueDesc();
+
     boolean existsByValue(Integer value);
 }

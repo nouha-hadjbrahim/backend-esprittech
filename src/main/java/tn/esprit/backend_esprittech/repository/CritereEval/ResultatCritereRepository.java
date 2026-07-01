@@ -9,4 +9,8 @@ import java.util.List;
 public interface ResultatCritereRepository extends JpaRepository<ResultatCritere, Long> {
 
     List<ResultatCritere> findByEvaluationId(Long evaluationId);
+
+    boolean existsByCritereId(Long critereId);
+
+    boolean existsByNoteValue(Integer noteValue);
 }
