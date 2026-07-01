@@ -17,6 +17,7 @@ public record CritereNoteResponse(
         Double bareme,
         Double poids,
         Double seuil,
+        Integer defaultNoteValue,
         ModeEvaluation modeEvaluation,
         String expectedLivrableTypes,
         Integer minLivrableCount,
@@ -39,6 +40,6 @@ public record CritereNoteResponse(
             Double seuil
     ) {
         this(id, libelle, description, domaine, ordre, actif, dateCreation, dateMiseAJour, bareme, poids, seuil,
-                null, null, null, null, null, false, null);
+                3, null, null, null, null, null, false, null);
     }
 }

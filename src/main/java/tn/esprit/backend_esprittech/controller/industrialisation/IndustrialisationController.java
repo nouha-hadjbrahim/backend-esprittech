@@ -10,6 +10,7 @@ import tn.esprit.backend_esprittech.dto.industrialisation.CandidatureIndustriali
 import tn.esprit.backend_esprittech.dto.industrialisation.CandidatureIndustrialisationResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.IndustrialisationFormResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.ReponsesIndustrialisationRequest;
+import tn.esprit.backend_esprittech.dto.industrialisation.SubmitIndustrialisationRequest;
 import tn.esprit.backend_esprittech.service.industrialisation.IndustrialisationService;
 
 import java.util.List;
@@ -62,8 +63,11 @@ public class IndustrialisationController {
 
     @PostMapping("/api/industrialisation/{id}/soumettre")
     @PreAuthorize("hasRole('ENSEIGNANT')")
-    public CandidatureIndustrialisationResponse soumettre(@PathVariable Long id) {
-        return industrialisationService.soumettre(id);
+    public CandidatureIndustrialisationResponse soumettre(
+            @PathVariable Long id,
+            @RequestBody(required = false) SubmitIndustrialisationRequest request
+    ) {
+        return industrialisationService.soumettre(id, request);
     }
 
     @GetMapping("/api/industrialisation/mes-demandes")

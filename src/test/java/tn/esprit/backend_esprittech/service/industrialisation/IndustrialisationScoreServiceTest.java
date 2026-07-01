@@ -29,6 +29,7 @@ import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustr
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
+import tn.esprit.backend_esprittech.service.CritereEval.NoteLevelService;
 
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +62,9 @@ class IndustrialisationScoreServiceTest {
 
     @Mock
     private CritereEliminatoireRepository critereEliminatoireRepository;
+
+    @Mock
+    private NoteLevelService noteLevelService;
 
     @InjectMocks
     private IndustrialisationScoreService service;
@@ -125,7 +129,7 @@ class IndustrialisationScoreServiceTest {
     }
 
     @Test
-    void calculate_eliminatoryNotOkWithHighNumericScore_shouldRecommendNoGo() {
+    void calculate_eliminatoryNotOkWithHighNumericScore_shouldExposeWarningAndKeepNumericRecommendation() {
         QuestionIndustrialisation note = question(1L, "Documentation", TypeCritere.NOTE, TypeReponseIndustrialisation.BOOLEAN, 1.0, true);
         ReponseIndustrialisation noteResponse = response(note);
         noteResponse.setValeurBoolean(true);
@@ -139,8 +143,10 @@ class IndustrialisationScoreServiceTest {
         var score = service.calculate(11L);
 
         assertEquals(100.0, score.scoreFinal());
-        assertEquals(DecisionRecommandeeIndustrialisation.NO_GO, score.decisionRecommandee());
-        assertTrue(score.estBloqueParEliminatoire());
+        assertEquals(DecisionRecommandeeIndustrialisation.GO, score.decisionRecommandee());
+        assertFalse(score.estBloqueParEliminatoire());
+        assertTrue(score.hasEliminatoryWarnings());
+        assertEquals(1, score.eliminatoryWarningsCount());
         assertEquals("Depot Git disponible ?", score.blocagesEliminatoires().get(0).libelle());
     }
 
@@ -156,7 +162,7 @@ class IndustrialisationScoreServiceTest {
     }
 
     @Test
-    void calculate_projectEvaluationEliminatoryNotOk_shouldBlockEvenWithHighScore() {
+    void calculate_projectEvaluationEliminatoryNotOk_shouldExposeWarningWithoutForcingNoGo() {
         Evaluation evaluation = evaluationWithNote(95.0);
         ResultatCritere eliminatory = new ResultatCritere();
         eliminatory.setCritereId(77L);
@@ -169,10 +175,11 @@ class IndustrialisationScoreServiceTest {
 
         var score = service.calculate(11L);
 
-        assertTrue(score.estBloqueParEliminatoire());
-        assertEquals(DecisionRecommandeeIndustrialisation.NO_GO, score.decisionRecommandee());
+        assertFalse(score.estBloqueParEliminatoire());
+        assertTrue(score.hasEliminatoryWarnings());
+        assertEquals(DecisionRecommandeeIndustrialisation.GO, score.decisionRecommandee());
         assertEquals("Licence incompatible", score.blocagesEliminatoires().get(0).libelle());
-        assertTrue(score.message().contains("critere eliminatoire"));
+        assertTrue(score.message().contains("Alerte eliminatoire"));
     }
 
     @Test
@@ -255,8 +262,8 @@ class IndustrialisationScoreServiceTest {
 
         var score = service.calculate(11L);
 
-        assertEquals(DecisionRecommandeeIndustrialisation.NO_GO, score.decisionRecommandee());
-        assertTrue(score.estBloqueParEliminatoire());
+        assertEquals(DecisionRecommandeeIndustrialisation.GO, score.decisionRecommandee());
+        assertFalse(score.estBloqueParEliminatoire());
         assertTrue(score.elementsManquants().stream().anyMatch(item -> item.contains("Depot Git")));
     }
 
@@ -358,9 +365,9 @@ class IndustrialisationScoreServiceTest {
         evaluation.setId(30L);
         evaluation.setSujetProjet(projet);
         evaluation.setScoreFinal(66.0);
-        evaluation.addResultat(noteResult(1L, "Disabled", 100.0, 100.0, 1.0, false));
-        evaluation.addResultat(noteResult(2L, "No bareme", 10.0, null, 1.0, true));
-        evaluation.addResultat(noteResult(3L, "Zero bareme", 10.0, 0.0, 1.0, true));
+        evaluation.addResultat(noteResult(1L, "Disabled", 5.0, 5.0, 1.0, false));
+        evaluation.addResultat(noteResult(2L, "No note", null, null, 1.0, true));
+        evaluation.addResultat(noteResult(3L, "No note value", null, 5.0, 1.0, true));
         mockBase(List.of(), List.of(), List.of(), Optional.of(evaluation), List.of(livrableRule(TypeLivrable.RAPPORT)));
 
         var score = service.calculate(11L);
@@ -388,7 +395,23 @@ class IndustrialisationScoreServiceTest {
     }
 
     @Test
-    void calculate_noLatestEvaluationButProjectSnapshot_shouldUseSnapshotAndBlockIfProjectBlocked() {
+    void calculate_evaluationNoteWithoutBareme_shouldUseActiveMaxNoteValue() {
+        Evaluation evaluation = new Evaluation();
+        evaluation.setId(30L);
+        evaluation.setSujetProjet(projet);
+        ResultatCritere note = noteResult(7L, "Score dynamique", 7.0, null, 1.0, true);
+        note.setNoteValue(7);
+        evaluation.addResultat(note);
+        when(noteLevelService.maxActiveNoteValue()).thenReturn(10);
+        mockBase(List.of(), List.of(), List.of(), Optional.of(evaluation), List.of());
+
+        var score = service.calculate(11L);
+
+        assertEquals(70.0, score.scoreCriteresNotes());
+    }
+
+    @Test
+    void calculate_noLatestEvaluationButProjectSnapshot_shouldUseSnapshotAndExposeProjectWarning() {
         projet.setBloqueParEliminatoire(true);
         mockBase(List.of(), List.of(), List.of(livrable(TypeLivrable.RAPPORT, null, "rapport.pdf")),
                 Optional.empty(), List.of(livrableRule(TypeLivrable.RAPPORT)));
@@ -396,8 +419,9 @@ class IndustrialisationScoreServiceTest {
         var score = service.calculate(11L);
 
         assertEquals(90.0, score.scoreCriteresNotes());
-        assertTrue(score.estBloqueParEliminatoire());
-        assertEquals(DecisionRecommandeeIndustrialisation.NO_GO, score.decisionRecommandee());
+        assertFalse(score.estBloqueParEliminatoire());
+        assertTrue(score.hasEliminatoryWarnings());
+        assertEquals(DecisionRecommandeeIndustrialisation.GO, score.decisionRecommandee());
     }
 
     @Test
@@ -417,12 +441,15 @@ class IndustrialisationScoreServiceTest {
 
     @Test
     void calculate_noLivrablesAvailable_shouldReturnCoherentMissingState() {
-        mockBase(List.of(), List.of(), List.of(), Optional.of(evaluationWithNote(80.0)), List.of());
+        Evaluation evaluation = evaluationWithNote(80.0);
+        evaluation.addResultat(noteResult(1L, "Score projet", 4.0, 5.0, 1.0, true));
+        mockBase(List.of(), List.of(), List.of(), Optional.of(evaluation), List.of());
 
         var score = service.calculate(11L);
 
         assertEquals(0.0, score.scoreLivrables());
-        assertTrue(score.elementsManquants().stream().anyMatch(item -> item.contains("Aucun livrable")));
+        assertTrue(score.detailsCalcul().stream().anyMatch(detail ->
+                "LIVRABLES".equals(detail.composant()) && "MANQUANT".equals(detail.statut())));
     }
 
     @Test
@@ -570,16 +597,6 @@ class IndustrialisationScoreServiceTest {
         evaluation.setScoreFinal(normalizedScore);
         evaluation.setEligibleIndustrialisation(true);
         evaluation.setBloqueParEliminatoire(false);
-
-        ResultatCritere resultat = new ResultatCritere();
-        resultat.setCritereId(300L);
-        resultat.setCritereLibelle("Evaluation projet");
-        resultat.setTypeCritere(TypeCritere.NOTE);
-        resultat.setRuleConfigured(true);
-        resultat.setNoteObtenue(normalizedScore);
-        resultat.setBareme(100.0);
-        resultat.setPoids(1.0);
-        evaluation.addResultat(resultat);
         return evaluation;
     }
 }

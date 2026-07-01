@@ -8,13 +8,15 @@ import jakarta.validation.constraints.Positive;
 import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 
 public record CritereNoteRequest(
-        @NotBlank String libelle,
+        @NotBlank(message = "Le libelle est obligatoire.") String libelle,
         String description,
-        @NotBlank String domaine,
-        @NotNull @Min(1) Integer ordre,
-        @NotNull @Positive Double bareme,
-        @NotNull @Positive Double poids,
-        @NotNull Double seuil,
+        @NotBlank(message = "Le domaine est obligatoire.") String domaine,
+        @NotNull(message = "L'ordre est obligatoire.") @Min(value = 1, message = "L'ordre doit etre superieur ou egal a 1.") Integer ordre,
+        @Positive(message = "Le bareme doit etre superieur a 0.") Double bareme,
+        @NotNull(message = "Le poids est obligatoire.") @Positive(message = "Le poids doit etre superieur a 0.") Double poids,
+        Double seuil,
+        @Min(value = 1, message = "La note par defaut doit etre superieure ou egale a 1.")
+        Integer defaultNoteValue,
         Boolean actif,
         ModeEvaluation modeEvaluation,
         String expectedLivrableTypes,
@@ -34,6 +36,6 @@ public record CritereNoteRequest(
             Double seuil,
             Boolean actif
     ) {
-        this(libelle, description, domaine, ordre, bareme, poids, seuil, actif, null, null, null, null, null, false, null);
+        this(libelle, description, domaine, ordre, bareme, poids, seuil, 3, actif, null, null, null, null, null, false, null);
     }
 }

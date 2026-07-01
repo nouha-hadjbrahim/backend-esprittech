@@ -16,6 +16,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.function.Supplier;
+
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
@@ -42,9 +51,18 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                // API stateless JWT : cookies HttpOnly SameSite + CORS restreint remplacent le CSRF
-                // formulaire classique (incompatible avec les POST JSON du SPA via proxy dev).
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfRepo)
+                        .csrfTokenRequestHandler(new EagerCsrfTokenRequestHandler())
+                        // Only the unauthenticated bootstrap endpoints are exempt: a client
+                        // cannot present a CSRF token before it has obtained one. login/register
+                        // establish the session, refresh/logout are guarded by the SameSite=Strict
+                        // refresh-token cookie. Every authenticated /api/** mutation IS CSRF-checked.
+                        .ignoringRequestMatchers(
+                                new AntPathRequestMatcher("/api/auth/login"),
+                                new AntPathRequestMatcher("/api/auth/register"),
+                                new AntPathRequestMatcher("/api/auth/refresh"),
+                                new AntPathRequestMatcher("/api/auth/logout")))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -84,5 +102,21 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Eagerly resolves the deferred CSRF token during the CsrfFilter.handle() call,
+     * which runs for ALL requests (including CSRF-exempt auth endpoints).
+     * Without this, the XSRF-TOKEN cookie is never written on exempt endpoints
+     * because Spring Security 6 defers token resolution and only resolves it
+     * when checking the token on non-exempt requests.
+     */
+    private static class EagerCsrfTokenRequestHandler extends CsrfTokenRequestAttributeHandler {
+        @Override
+        public void handle(HttpServletRequest request, HttpServletResponse response,
+                Supplier<CsrfToken> deferredCsrfToken) {
+            deferredCsrfToken.get(); // force resolution → triggers saveToken() → cookie set
+            super.handle(request, response, deferredCsrfToken);
+        }
     }
 }

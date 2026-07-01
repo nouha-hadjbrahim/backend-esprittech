@@ -11,6 +11,7 @@ import tn.esprit.backend_esprittech.dto.industrialisation.CandidatureIndustriali
 import tn.esprit.backend_esprittech.dto.industrialisation.CandidatureIndustrialisationResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.IndustrialisationFormResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.ReponsesIndustrialisationRequest;
+import tn.esprit.backend_esprittech.dto.industrialisation.SubmitIndustrialisationRequest;
 import tn.esprit.backend_esprittech.entity.industrialisation.StatutIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeIndustrialisation;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
@@ -121,6 +122,7 @@ class IndustrialisationControllerTest {
 
     @Test
     void soumettre_existingDraft_shouldDelegateToService() {
+        SubmitIndustrialisationRequest request = new SubmitIndustrialisationRequest(true);
         CandidatureIndustrialisationResponse submitted = new CandidatureIndustrialisationResponse(
                 candidatureResponse.id(),
                 candidatureResponse.projetId(),
@@ -147,12 +149,12 @@ class IndustrialisationControllerTest {
                 List.of(),
                 List.of()
         );
-        when(industrialisationService.soumettre(11L)).thenReturn(submitted);
+        when(industrialisationService.soumettre(11L, request)).thenReturn(submitted);
 
-        CandidatureIndustrialisationResponse result = controller.soumettre(11L);
+        CandidatureIndustrialisationResponse result = controller.soumettre(11L, request);
 
         assertEquals(StatutIndustrialisation.SOUMISE, result.statut());
-        verify(industrialisationService).soumettre(11L);
+        verify(industrialisationService).soumettre(11L, request);
     }
 
     @Test

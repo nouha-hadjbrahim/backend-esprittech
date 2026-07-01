@@ -68,6 +68,12 @@ public class SujetProjet {
     private Boolean bloqueParEliminatoire;
 
     @Builder.Default
+    private Boolean hasEliminatoryWarnings = false;
+
+    @Builder.Default
+    private Integer eliminatoryWarningsCount = 0;
+
+    @Builder.Default
     @Column(nullable = false)
     private Boolean eligibleIndustrialisation = false;
 
@@ -125,6 +131,12 @@ public class SujetProjet {
         }
         if (dateSoumission == null) {
             dateSoumission = LocalDateTime.now();
+        }
+        if (hasEliminatoryWarnings == null) {
+            hasEliminatoryWarnings = false;
+        }
+        if (eliminatoryWarningsCount == null) {
+            eliminatoryWarningsCount = 0;
         }
     }
 }

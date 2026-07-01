@@ -9,12 +9,16 @@ import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.backend_esprittech.dto.industrialisation.*;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
+import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.*;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
+import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.HistoriqueIndustrialisationRepository;
@@ -38,6 +42,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class IndustrialisationService {
+
+    private static final String MISSING_LIVRABLE_WARNING =
+            "Aucun livrable nest déposé pour ce projet. La CI verra cette alerte.";
 
     private static final Set<StatutIndustrialisation> OPEN_STATUSES = Set.of(
             StatutIndustrialisation.BROUILLON,
@@ -85,6 +92,8 @@ public class IndustrialisationService {
             }
             throw new BusinessException("Une demande d'industrialisation est deja en cours pour ce projet.");
         }
+        List<BlocageEliminatoireDto> warnings = collectProjectEvaluationWarnings(projet);
+        requireConfirmationIfNeeded(warnings, request.isConfirmed());
 
         CandidatureIndustrialisation candidature = new CandidatureIndustrialisation();
         candidature.setSujetProjet(projet);
@@ -92,6 +101,7 @@ public class IndustrialisationService {
         candidature.setDemandeur(current);
         candidature.setCommentaire(trimToNull(request.commentaire()));
         candidature.setScoreEvaluationProjet(projet.getScoreFinalEvaluation());
+        applyWarnings(candidature, warnings);
 
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
         addHistory(saved, null, StatutIndustrialisation.BROUILLON, current, null, "Demande creee");
@@ -171,6 +181,10 @@ public class IndustrialisationService {
     }
 
     public CandidatureIndustrialisationResponse soumettre(Long candidatureId) {
+        return soumettre(candidatureId, null);
+    }
+
+    public CandidatureIndustrialisationResponse soumettre(Long candidatureId, SubmitIndustrialisationRequest request) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
         ensureOwner(current, candidature.getSujetProjet());
@@ -180,14 +194,12 @@ public class IndustrialisationService {
         if (projet.getScoreFinalEvaluation() == null) {
             throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
         }
-        if (!Boolean.TRUE.equals(projet.getEligibleIndustrialisation()) || Boolean.TRUE.equals(projet.getBloqueParEliminatoire())) {
-            throw new BusinessException("Projet non eligible a l'industrialisation: critere eliminatoire non conforme.");
-        }
-        if (!livrableService.hasActiveLivrables(projet.getId())) {
-            throw new BusinessException("Au moins un livrable projet est requis avant soumission.");
-        }
+        boolean hasActiveLivrables = livrableService.hasActiveLivrables(projet.getId());
 
         validateCompleteness(candidature);
+        List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
+        requireConfirmationIfNeeded(warnings, request != null && request.isConfirmed());
+        applyWarnings(candidature, warnings);
 
         StatutIndustrialisation oldStatus = candidature.getStatut();
         candidature.setStatut(StatutIndustrialisation.SOUMISE);
@@ -199,7 +211,7 @@ public class IndustrialisationService {
         sujetProjetRepository.save(projet);
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
         addHistory(saved, oldStatus, StatutIndustrialisation.SOUMISE, current, null, "Demande soumise a la CI");
-        return toResponse(saved, true);
+        return toResponse(saved, true, !hasActiveLivrables);
     }
 
     @Transactional(readOnly = true)
@@ -315,6 +327,67 @@ public class IndustrialisationService {
         }
     }
 
+    private List<BlocageEliminatoireDto> collectEliminatoryWarnings(CandidatureIndustrialisation candidature) {
+        List<BlocageEliminatoireDto> warnings = new java.util.ArrayList<>(collectProjectEvaluationWarnings(candidature.getSujetProjet()));
+        Map<Long, ReponseIndustrialisation> reponsesByQuestion = reponseRepository
+                .findByCandidatureIndustrialisationId(candidature.getId())
+                .stream()
+                .collect(Collectors.toMap(r -> r.getQuestion().getId(), Function.identity()));
+        for (QuestionIndustrialisation question : questionRepository.findByActifTrueOrderByOrdreAsc()) {
+            if (question.getTypeCritere() != TypeCritere.ELIMINATOIRE) {
+                continue;
+            }
+            ReponseIndustrialisation reponse = reponsesByQuestion.get(question.getId());
+            ReponseEliminatoire result = IndustrialisationQuestionEvaluator.eliminatoryResult(question, reponse);
+            if (result == ReponseEliminatoire.NOT_OK) {
+                warnings.add(new BlocageEliminatoireDto(
+                        "QUESTIONNAIRE",
+                        question.getId(),
+                        question.getLibelle(),
+                        "Reponse non conforme pour une question eliminatoire."
+                ));
+            }
+        }
+        return warnings;
+    }
+
+    private List<BlocageEliminatoireDto> collectProjectEvaluationWarnings(SujetProjet projet) {
+        EvaluationResponse latestEvaluation = findLatestEvaluation(projet.getId());
+        if (latestEvaluation == null || latestEvaluation.resultats() == null) {
+            return List.of();
+        }
+        return latestEvaluation.resultats().stream()
+                .filter(resultat -> resultat.typeCritere() == TypeCritere.ELIMINATOIRE)
+                .filter(resultat -> resultat.reponseEliminatoire() == ReponseEliminatoire.NOT_OK)
+                .map(this::toWarning)
+                .toList();
+    }
+
+    private BlocageEliminatoireDto toWarning(ResultatCritereResponse resultat) {
+        return new BlocageEliminatoireDto(
+                "EVALUATION_PROJET",
+                resultat.critereId(),
+                resultat.critereLibelle(),
+                StringUtils.hasText(resultat.explanation())
+                        ? resultat.explanation()
+                        : "Critere eliminatoire projet NOT_OK."
+        );
+    }
+
+    private void requireConfirmationIfNeeded(List<BlocageEliminatoireDto> warnings, boolean confirmed) {
+        if (!warnings.isEmpty() && !confirmed) {
+            throw new EliminatoryWarningsConfirmationRequiredException(warnings.size(), warnings);
+        }
+    }
+
+    private void applyWarnings(CandidatureIndustrialisation candidature, List<BlocageEliminatoireDto> warnings) {
+        candidature.setHasEliminatoryWarnings(!warnings.isEmpty());
+        candidature.setEliminatoryWarningsCount(warnings.size());
+        candidature.setEliminatoryWarningsDetails(warnings.stream()
+                .map(warning -> warning.source() + "|" + warning.referenceId() + "|" + warning.libelle() + "|" + warning.raison())
+                .collect(Collectors.joining("\n")));
+    }
+
     private String missingAnswerReason(QuestionIndustrialisation question, ReponseIndustrialisation reponse) {
         if (reponse == null) {
             return "Reponse obligatoire manquante: " + question.getLibelle();
@@ -425,6 +498,12 @@ public class IndustrialisationService {
     }
 
     private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature, boolean includeDetails) {
+        return toResponse(candidature, includeDetails, false);
+    }
+
+    private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature,
+                                                            boolean includeDetails,
+                                                            boolean forceMissingLivrablesWarning) {
         SujetProjet projet = candidature.getSujetProjet();
         User demandeur = candidature.getDemandeur();
         User decideur = candidature.getCiDecideur();
@@ -443,6 +522,7 @@ public class IndustrialisationService {
                     .toList()
                 : List.of();
         EvaluationResponse latestEvaluation = includeDetails ? findLatestEvaluation(projet.getId()) : null;
+        List<String> warnings = collectSubmissionWarnings(livrables, includeDetails, forceMissingLivrablesWarning);
 
         return new CandidatureIndustrialisationResponse(
                 candidature.getId(),
@@ -462,6 +542,9 @@ public class IndustrialisationService {
                 projet.getScoreFinalEvaluation(),
                 projet.getEligibleIndustrialisation(),
                 projet.getBloqueParEliminatoire(),
+                candidature.getHasEliminatoryWarnings(),
+                candidature.getEliminatoryWarningsCount(),
+                parseWarnings(candidature.getEliminatoryWarningsDetails()),
                 candidature.getTypeIndustrialisation(),
                 candidature.getStatut(),
                 demandeur.getId(),
@@ -479,8 +562,18 @@ public class IndustrialisationService {
                 reponses,
                 livrables,
                 historique,
-                latestEvaluation
+                latestEvaluation,
+                warnings
         );
+    }
+
+    private List<String> collectSubmissionWarnings(List<LivrableResponse> livrables,
+                                                   boolean includeDetails,
+                                                   boolean forceMissingLivrablesWarning) {
+        if (forceMissingLivrablesWarning || (includeDetails && livrables.isEmpty())) {
+            return List.of(MISSING_LIVRABLE_WARNING);
+        }
+        return List.of();
     }
 
     private EvaluationResponse findLatestEvaluation(Long projetId) {
@@ -489,6 +582,16 @@ public class IndustrialisationService {
         } catch (tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex) {
             return null;
         }
+    }
+
+    private List<String> parseWarnings(String value) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(value.split("\\n"))
+                .map(line -> line.split("\\|", 4))
+                .map(parts -> parts.length >= 4 ? parts[2] + " - " + parts[3] : String.join(" ", parts))
+                .toList();
     }
 
     private QuestionIndustrialisationResponse toQuestionResponse(QuestionIndustrialisation question) {

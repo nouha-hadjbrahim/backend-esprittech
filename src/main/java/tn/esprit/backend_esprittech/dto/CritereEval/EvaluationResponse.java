@@ -10,6 +10,9 @@ public record EvaluationResponse(
         Double scoreFinal,
         Boolean eligibleIndustrialisation,
         Boolean bloqueParEliminatoire,
+        Boolean hasEliminatoryWarnings,
+        Integer eliminatoryWarningsCount,
+        List<String> eliminatoryWarningsDetails,
         LocalDateTime dateCalcul,
         String commentaire,
         String calculatedBy,
@@ -37,7 +40,8 @@ public record EvaluationResponse(
             String recalculationReason,
             List<ResultatCritereResponse> resultats
     ) {
-        this(id, sujetProjetId, scoreFinal, eligibleIndustrialisation, bloqueParEliminatoire, dateCalcul,
+        this(id, sujetProjetId, scoreFinal, eligibleIndustrialisation, bloqueParEliminatoire,
+                Boolean.TRUE.equals(bloqueParEliminatoire), 0, List.of(), dateCalcul,
                 commentaire, calculatedBy, recalculationReason, resultats,
                 null, null, null, null, null, null, null, null, List.of());
     }

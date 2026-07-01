@@ -14,6 +14,9 @@ import tn.esprit.backend_esprittech.dto.industrialisation.DecisionGoRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.DecisionNoGoRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.ReponseIndustrialisationRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.ReponsesIndustrialisationRequest;
+import tn.esprit.backend_esprittech.dto.industrialisation.SubmitIndustrialisationRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
 import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
@@ -30,6 +33,7 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
+import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.HistoriqueIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
@@ -125,16 +129,45 @@ class IndustrialisationServiceTest {
     }
 
     @Test
-    void soumettre_nonEligibleProject_shouldBlockIndustrialisation() {
-        projet.setEligibleIndustrialisation(false);
-        projet.setBloqueParEliminatoire(true);
+    void soumettre_eliminatoryNotOkWithoutConfirmation_shouldRequireConfirmation() {
+        QuestionIndustrialisation question = gitQuestion();
+        ReponseIndustrialisation reponse = responseFor(question);
+        reponse.setValeurBoolean(false);
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
+        when(livrableService.hasActiveLivrables(42L)).thenReturn(true);
+        when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(question));
+        when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of(reponse));
 
-        BusinessException ex = assertThrows(BusinessException.class,
+        EliminatoryWarningsConfirmationRequiredException ex = assertThrows(EliminatoryWarningsConfirmationRequiredException.class,
                 () -> industrialisationService.soumettre(11L));
 
-        assertEquals("Projet non eligible a l'industrialisation: critere eliminatoire non conforme.", ex.getMessage());
+        assertEquals(1, ex.getCount());
+        assertEquals("Depot Git disponible ?", ex.getDetails().get(0).libelle());
+        verify(candidatureRepository, never()).save(any());
+    }
+
+    @Test
+    void soumettre_eliminatoryNotOkWithConfirmation_shouldSubmitWithWarnings() {
+        QuestionIndustrialisation question = gitQuestion();
+        ReponseIndustrialisation reponse = responseFor(question);
+        reponse.setValeurBoolean(false);
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
+        when(livrableService.hasActiveLivrables(42L)).thenReturn(true);
+        when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(question));
+        when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of(reponse));
+        when(sujetProjetRepository.save(projet)).thenReturn(projet);
+        when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(livrableService.findByProjet(42L)).thenReturn(List.of());
+        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+
+        var response = industrialisationService.soumettre(11L, new SubmitIndustrialisationRequest(true));
+
+        assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
+        assertTrue(response.hasEliminatoryWarnings());
+        assertEquals(1, response.eliminatoryWarningsCount());
+        assertTrue(response.eliminatoryWarningsDetails().get(0).contains("Depot Git disponible"));
     }
 
     @Test
@@ -212,6 +245,44 @@ class IndustrialisationServiceTest {
 
         assertEquals("Le projet doit etre termine avant une demande d'industrialisation.", ex.getMessage());
         verify(candidatureRepository, never()).save(any());
+    }
+
+    @Test
+    void create_projectEvaluationWarningWithoutConfirmation_shouldRequireConfirmation() {
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
+        when(candidatureRepository.findBySujetProjetIdOrderByDateDemandeDesc(42L)).thenReturn(List.of());
+        when(evaluationService.getLatestEvaluationByProjet(42L)).thenReturn(evaluationWithWarning());
+
+        EliminatoryWarningsConfirmationRequiredException ex = assertThrows(EliminatoryWarningsConfirmationRequiredException.class,
+                () -> industrialisationService.create(42L,
+                        new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null)));
+
+        assertEquals(1, ex.getCount());
+        assertEquals("Licence incompatible", ex.getDetails().get(0).libelle());
+        verify(candidatureRepository, never()).save(any());
+    }
+
+    @Test
+    void create_projectEvaluationWarningWithConfirmation_shouldCreateDraftWithWarnings() {
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
+        when(candidatureRepository.findBySujetProjetIdOrderByDateDemandeDesc(42L)).thenReturn(List.of());
+        when(evaluationService.getLatestEvaluationByProjet(42L)).thenReturn(evaluationWithWarning());
+        when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> {
+            CandidatureIndustrialisation saved = invocation.getArgument(0);
+            saved.setId(14L);
+            return saved;
+        });
+        stubDetails(14L, 42L);
+
+        var response = industrialisationService.create(42L,
+                new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null, true));
+
+        assertEquals(14L, response.id());
+        assertTrue(response.hasEliminatoryWarnings());
+        assertEquals(1, response.eliminatoryWarningsCount());
+        assertTrue(response.eliminatoryWarningsDetails().get(0).contains("Licence incompatible"));
     }
 
     @Test
@@ -408,15 +479,21 @@ class IndustrialisationServiceTest {
     }
 
     @Test
-    void soumettre_withoutLivrables_shouldReject() {
+    void soumettre_withoutLivrables_shouldSubmitWithWarning() {
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
         when(livrableService.hasActiveLivrables(42L)).thenReturn(false);
+        when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of());
+        when(sujetProjetRepository.save(projet)).thenReturn(projet);
+        when(candidatureRepository.save(candidature)).thenReturn(candidature);
+        when(livrableService.findByProjet(42L)).thenReturn(List.of());
+        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
 
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.soumettre(11L));
+        var response = industrialisationService.soumettre(11L);
 
-        assertEquals("Au moins un livrable projet est requis avant soumission.", ex.getMessage());
+        assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
+        assertTrue(response.warnings().contains("Aucun livrable nest déposé pour ce projet. La CI verra cette alerte."));
     }
 
     @Test
@@ -798,5 +875,55 @@ class IndustrialisationServiceTest {
         question.setActif(true);
         question.setOrdre(1);
         return question;
+    }
+
+    private EvaluationResponse evaluationWithWarning() {
+        ResultatCritereResponse warning = new ResultatCritereResponse(
+                91L,
+                77L,
+                "Licence incompatible",
+                "Licence non compatible",
+                "Juridique",
+                TypeCritere.ELIMINATOIRE,
+                null,
+                ReponseEliminatoire.NOT_OK,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "projectStatus=REALISATION_TERMINEE",
+                "Critere eliminatoire projet NOT_OK.",
+                "Licence detectee",
+                List.of(),
+                true,
+                "Licence detectee"
+        );
+        return new EvaluationResponse(
+                90L,
+                42L,
+                88.0,
+                true,
+                true,
+                true,
+                1,
+                List.of("Licence incompatible"),
+                LocalDateTime.now(),
+                "Projet evalue avec alertes",
+                "SYSTEM",
+                "test",
+                List.of(warning),
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                true,
+                "Score calcule",
+                List.of("Licence incompatible")
+        );
     }
 }

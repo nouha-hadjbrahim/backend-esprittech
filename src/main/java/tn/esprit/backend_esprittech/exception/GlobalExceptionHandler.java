@@ -2,6 +2,8 @@ package tn.esprit.backend_esprittech.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -47,9 +49,26 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "Accès refusé", ex.getMessage());
     }
 
-    @ExceptionHandler(ConflictException.class)
-    public ProblemDetail handleConflict(ConflictException ex) {
+    @ExceptionHandler({ConflictException.class, BusinessConflictException.class})
+    public ProblemDetail handleConflict(RuntimeException ex) {
         return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        return build(HttpStatus.CONFLICT, "Conflit", "Contrainte d'unicite ou d'integrite violee.");
+    }
+
+    @ExceptionHandler(EliminatoryWarningsConfirmationRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleEliminatoryWarningsConfirmation(
+            EliminatoryWarningsConfirmationRequiredException ex
+    ) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("requiresConfirmation", true);
+        body.put("nbCriteresEliminatoires", ex.getCount());
+        body.put("message", ex.getMessage());
+        body.put("details", ex.getDetails());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -83,7 +102,10 @@ public class GlobalExceptionHandler {
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             errors.put(fe.getField(), fe.getDefaultMessage());
         }
-        ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "Validation", "Champs invalides");
+        String detail = errors.values().stream()
+                .findFirst()
+                .orElse("Champs invalides");
+        ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "Validation", detail);
         pd.setProperty("errors", errors);
         return pd;
     }
@@ -96,6 +118,7 @@ public class GlobalExceptionHandler {
     private ProblemDetail build(HttpStatus status, String title, String detail) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
         pd.setTitle(title);
+        pd.setProperty("message", detail);
         pd.setProperty("timestamp", Instant.now());
         return pd;
     }

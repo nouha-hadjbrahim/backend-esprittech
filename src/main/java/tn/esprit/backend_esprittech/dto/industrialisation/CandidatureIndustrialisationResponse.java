@@ -29,6 +29,9 @@ public record CandidatureIndustrialisationResponse(
         Double scoreEvaluationProjet,
         Boolean eligibleIndustrialisation,
         Boolean bloqueParEliminatoire,
+        Boolean hasEliminatoryWarnings,
+        Integer eliminatoryWarningsCount,
+        List<String> eliminatoryWarningsDetails,
         TypeIndustrialisation typeIndustrialisation,
         StatutIndustrialisation statut,
         Long demandeurId,
@@ -46,7 +49,8 @@ public record CandidatureIndustrialisationResponse(
         List<ReponseIndustrialisationResponse> reponses,
         List<LivrableResponse> livrables,
         List<HistoriqueIndustrialisationResponse> historique,
-        EvaluationResponse latestEvaluation
+        EvaluationResponse latestEvaluation,
+        List<String> warnings
 ) {
     public CandidatureIndustrialisationResponse(
             Long id,
@@ -75,9 +79,10 @@ public record CandidatureIndustrialisationResponse(
             List<HistoriqueIndustrialisationResponse> historique
     ) {
         this(id, projetId, projetTitre, projetStatut, null, null, null, null, null, null, null, null, null, null,
-                scoreEvaluationProjet, eligibleIndustrialisation, bloqueParEliminatoire, typeIndustrialisation, statut, demandeurId, demandeurNom,
+                scoreEvaluationProjet, eligibleIndustrialisation, bloqueParEliminatoire, Boolean.TRUE.equals(bloqueParEliminatoire),
+                Boolean.TRUE.equals(bloqueParEliminatoire) ? 1 : 0, List.of(), typeIndustrialisation, statut, demandeurId, demandeurNom,
                 dateDemande, dateSoumission, dateReceptionCI, ciDecideurId, ciDecideurNom,
                 dateDecisionCI, decisionGoNoGo, orientation, motifDecision, commentaire,
-                reponses, livrables, historique, null);
+                reponses, livrables, historique, null, List.of());
     }
 }

@@ -6,11 +6,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereEvaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
+import tn.esprit.backend_esprittech.entity.CritereEval.CritereNoteRule;
 import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
+import tn.esprit.backend_esprittech.entity.CritereEval.NoteLevel;
+import tn.esprit.backend_esprittech.entity.CritereEval.RuleOperator;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
+import tn.esprit.backend_esprittech.repository.CritereEval.NoteLevelRepository;
 
 import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 
 @Component
@@ -19,23 +25,66 @@ public class EvaluationRuleInitializer implements CommandLineRunner {
 
     private final CritereEliminatoireRepository critereEliminatoireRepository;
     private final CritereNoteRepository critereNoteRepository;
+    private final CritereNoteRuleRepository critereNoteRuleRepository;
+    private final NoteLevelRepository noteLevelRepository;
 
     @Override
     @Transactional
     public void run(String... args) {
+        seedNoteLevels();
         critereEliminatoireRepository.findAll().forEach(critere -> {
             if (critere.getModeEvaluation() == null && applyDefaultRule(critere)) {
                 critereEliminatoireRepository.save(critere);
             }
         });
         critereNoteRepository.findAll().forEach(critere -> {
+            boolean changed = false;
+            if (critere.getDefaultNoteValue() == null) {
+                critere.setDefaultNoteValue(3);
+                changed = true;
+            }
+            if (critere.getBareme() == null || critere.getBareme() <= 0) {
+                critere.setBareme(5.0);
+                changed = true;
+            }
+            if (critere.getSeuil() == null) {
+                critere.setSeuil(3.0);
+                changed = true;
+            }
             if (critere.getModeEvaluation() == null && applyDefaultRule(critere)) {
-                if (critere.getNoteMaxAuto() == null) {
-                    critere.setNoteMaxAuto(critere.getBareme());
-                }
+                changed = true;
+            }
+            if (Boolean.TRUE.equals(critere.getRuleEnabled())
+                    && critere.getModeEvaluation() != null
+                    && !critereNoteRuleRepository.existsByCritereNoteId(critere.getId())) {
+                createRuleFromLegacyMode(critere);
+            }
+            if (changed) {
                 critereNoteRepository.save(critere);
             }
         });
+    }
+
+    private void seedNoteLevels() {
+        if (noteLevelRepository.count() > 0) {
+            return;
+        }
+        List<String> labels = List.of(
+                "Très insatisfait",
+                "Insatisfait",
+                "Peu satisfait",
+                "Satisfait",
+                "Très satisfait"
+        );
+        for (int i = 0; i < labels.size(); i++) {
+            NoteLevel level = new NoteLevel();
+            level.setValue(i + 1);
+            level.setLabel(labels.get(i));
+            level.setDescription(labels.get(i));
+            level.setOrderIndex(i + 1);
+            level.setActive(true);
+            noteLevelRepository.save(level);
+        }
     }
 
     private boolean applyDefaultRule(CritereEvaluation critere) {
@@ -71,6 +120,68 @@ public class EvaluationRuleInitializer implements CommandLineRunner {
             return true;
         }
         return false;
+    }
+
+    private void createRuleFromLegacyMode(CritereNote critere) {
+        CritereNoteRule rule = new CritereNoteRule();
+        rule.setCritereNote(critere);
+        rule.setRuleName("Regle automatique existante");
+        rule.setDescription(critere.getRuleDescription());
+        rule.setPriority(1);
+        rule.setActive(true);
+        rule.setNoteValue(maxConfiguredNoteValue());
+
+        switch (critere.getModeEvaluation()) {
+            case DOCUMENTATION_PRESENT -> {
+                rule.setMetadataKey("hasDocumentation");
+                rule.setOperator(RuleOperator.EQUALS);
+                rule.setExpectedValue("true");
+            }
+            case GIT_LINK_PRESENT -> {
+                rule.setMetadataKey("hasGitLink");
+                rule.setOperator(RuleOperator.EQUALS);
+                rule.setExpectedValue("true");
+            }
+            case LIVRABLE_TYPE_PRESENT -> {
+                rule.setMetadataKey("livrableTypes");
+                rule.setOperator(RuleOperator.CONTAINS);
+                rule.setExpectedValue(critere.getExpectedLivrableTypes());
+            }
+            case LIVRABLE_LINK_PRESENT -> {
+                rule.setMetadataKey("externalLinkCount");
+                rule.setOperator(RuleOperator.GTE);
+                rule.setMinValue(1.0);
+            }
+            case LIVRABLE_FILE_PRESENT -> {
+                rule.setMetadataKey("fileCount");
+                rule.setOperator(RuleOperator.GTE);
+                rule.setMinValue(1.0);
+            }
+            case LIVRABLE_COUNT_MIN -> {
+                rule.setMetadataKey("livrableCount");
+                rule.setOperator(RuleOperator.GTE);
+                rule.setMinValue((double) (critere.getMinLivrableCount() == null ? 1 : critere.getMinLivrableCount()));
+            }
+            case KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION -> {
+                rule.setMetadataKey("livrableSearchText");
+                rule.setOperator(RuleOperator.CONTAINS);
+                rule.setExpectedValue(critere.getExpectedKeyword());
+            }
+            case MANUAL_ADMIN_VALUE -> {
+                rule.setMetadataKey("manual");
+                rule.setOperator(RuleOperator.NOT_EXISTS);
+            }
+        }
+        critereNoteRuleRepository.save(rule);
+    }
+
+    private int maxConfiguredNoteValue() {
+        return noteLevelRepository.findTopByActiveTrueOrderByValueDesc()
+                .map(NoteLevel::getValue)
+                .orElseGet(() -> noteLevelRepository.findAllByOrderByOrderIndexAsc().stream()
+                        .mapToInt(NoteLevel::getValue)
+                        .max()
+                        .orElse(1));
     }
 
     private void setRule(CritereEvaluation critere,
