@@ -77,7 +77,7 @@ class AdminControllerTest {
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2,
                 StatutSujet.SOUMIS_EN_VALIDATION, null, false, false,
                 10L, "Sami Ben Ali", "sami@esprit.tn", null,
-                LocalDateTime.now(), LocalDateTime.now(), null, null, null, null);
+                LocalDateTime.now(), LocalDateTime.now(), null, null, null, null, false, 0, 0);
     }
 
     private Map<String, Object> validSujetPayload() {

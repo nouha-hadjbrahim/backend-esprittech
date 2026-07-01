@@ -21,6 +21,7 @@ class AffectationMapperTest {
         etudiant.setId(8L);
         etudiant.setNom("Trabelsi");
         etudiant.setPrenom("Nour");
+        etudiant.setEmail("nour.trabelsi@esprit.tn");
         Affectation affectation = Affectation.builder()
                 .id(200L)
                 .sujetId(42L)
@@ -38,6 +39,7 @@ class AffectationMapperTest {
         assertEquals(8L, response.etudiantId());
         assertEquals("Trabelsi", response.etudiantNom());
         assertEquals("Nour", response.etudiantPrenom());
+        assertEquals("nour.trabelsi@esprit.tn", response.etudiantEmail());
         assertEquals(StatutAffectation.RETIREE_ARCHIVEE, response.statut());
         assertEquals(dateDebut, response.dateDebut());
         assertEquals(dateRetrait, response.dateRetrait());

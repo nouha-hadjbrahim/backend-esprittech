@@ -9,6 +9,7 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,20 +48,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        // CSRF protection via the OWASP-recommended double-submit-cookie pattern.
-        // The token is published in a non-HttpOnly XSRF-TOKEN cookie so the SPA can read it
-        // and echo it back in the X-XSRF-TOKEN header on mutating requests; the server then
-        // compares cookie and header. The cookie carries NO sensitive data (only the random
-        // CSRF token) — it MUST be JS-readable for the pattern to work, which is exactly what
-        // Angular's built-in XSRF support expects. The auth/session JWTs remain HttpOnly.
-        CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrfRepo.setCookiePath("/");
+    public CookieCsrfTokenRepository csrfTokenRepository() {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieName("XSRF-TOKEN");
+        repository.setHeaderName("X-XSRF-TOKEN");
+        return repository;
+    }
 
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(csrfRepo)
+                        .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new EagerCsrfTokenRequestHandler())
                         // Only the unauthenticated bootstrap endpoints are exempt: a client
                         // cannot present a CSRF token before it has obtained one. login/register

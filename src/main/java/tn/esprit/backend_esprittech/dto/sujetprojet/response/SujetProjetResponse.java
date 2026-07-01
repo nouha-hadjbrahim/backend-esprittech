@@ -31,7 +31,8 @@ public record SujetProjetResponse(
         LocalDateTime dateTerminaison,
         String motifInvalidation,
         Boolean hasEliminatoryWarnings,
-        Integer eliminatoryWarningsCount
+        Integer eliminatoryWarningsCount,
+        Integer nombreMembresActifs
 ) {
     public SujetProjetResponse(
             Long id,
@@ -61,6 +62,6 @@ public record SujetProjetResponse(
         this(id, titre, categorie, description, objectifs, prerequis, domaines, technologies, capaciteAccueil,
                 statut, scoreFinal, eligibleIndustrialisation, catalogue, encadrantId, encadrantNom,
                 encadrantEmail, equipeNom, dateCreation, dateSoumission, dateValidation, dateDebutRealisation,
-                dateTerminaison, motifInvalidation, false, 0);
+                dateTerminaison, motifInvalidation, false, 0, 0);
     }
 }

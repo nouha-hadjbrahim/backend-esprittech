@@ -10,9 +10,13 @@ public record CandidatureResponse(
         Long etudiantId,
         String etudiantNom,
         String etudiantPrenom,
+        String etudiantEmail,
         StatutCandidature statut,
         String motifRefus,
         String messageEtudiant,
         Instant dateDepot,
-        Instant dateDecision
+        Instant dateDecision,
+        String sujetTitre,
+        String sujetCategorie,
+        String encadrantNom
 ) {}

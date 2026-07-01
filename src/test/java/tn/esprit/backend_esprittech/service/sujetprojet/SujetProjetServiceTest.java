@@ -17,6 +17,7 @@ import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
@@ -39,6 +40,7 @@ class SujetProjetServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private SujetReferenceService referenceService;
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
+    @Mock private AffectationRepository affectationRepository;
 
     @InjectMocks private SujetProjetService service;
 
@@ -65,18 +67,19 @@ class SujetProjetServiceTest {
         response = new SujetProjetResponse(1L, "Sujet", CategorieSujet.PFE, "Desc", "Obj",
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2, StatutSujet.SOUMIS_EN_VALIDATION,
                 null, false, false, 10L, "Sami Ben Ali", "sami@esprit.tn", null,
-                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null);
+                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null, false, 0, 0);
 
         when(userService.getCurrentUser()).thenReturn(enseignant);
         when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
         when(userRepository.findAllById(any())).thenReturn(List.of(enseignant));
+        when(affectationRepository.countBySujetIdAndStatut(anyLong(), any())).thenReturn(0L);
     }
 
     @Test
     void creerSujet_savesAndReturnsResponse() {
         when(sujetProjetMapper.toEntity(request, 10L)).thenReturn(entity);
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
 
         assertEquals(response, service.creerSujet(request));
     }
@@ -90,7 +93,7 @@ class SujetProjetServiceTest {
     @Test
     void getMesSujets_returnsSubjectsForCurrentTeacher() {
         when(sujetProjetRepository.findByEncadrantIdOrderByDateCreationDesc(10L)).thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
 
         assertEquals(1, service.getMesSujets(null, null).size());
     }
@@ -98,7 +101,7 @@ class SujetProjetServiceTest {
     @Test
     void getSujetById_owner_canAccess() {
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
 
         assertEquals(response, service.getSujetById(1L));
     }
@@ -114,7 +117,7 @@ class SujetProjetServiceTest {
     @Test
     void getSujetsPourCandidatures_returnsAllowedStatuses() {
         when(sujetProjetRepository.findByStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         List<SujetProjetResponse> result = service.getSujetsPourCandidatures();
 
@@ -133,7 +136,7 @@ class SujetProjetServiceTest {
         enseignant.setRole(Role.ROLE_ADMIN);
         when(sujetProjetRepository.findByStatutOrderByDateCreationDesc(StatutSujet.SOUMIS_EN_VALIDATION))
                 .thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getSujetsEnAttenteValidation());
     }
@@ -150,11 +153,11 @@ class SujetProjetServiceTest {
         when(equipeRechercheRepository.findByChefId(10L)).thenReturn(Optional.empty());
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         service.validerSujet(1L);
 
-        assertEquals(StatutSujet.CANDIDATURE_OUVERTE, entity.getStatut());
+        assertEquals(StatutSujet.VALIDE, entity.getStatut());
         assertTrue(entity.getCatalogue());
         assertNotNull(entity.getDateValidation());
     }
@@ -191,7 +194,7 @@ class SujetProjetServiceTest {
         entity.setStatut(StatutSujet.SOUMIS_EN_VALIDATION);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         service.invaliderSujet(1L, new SujetInvalidationRequest("Sujet incomplet"));
 
@@ -227,7 +230,7 @@ class SujetProjetServiceTest {
                 .encadrantId(10L)
                 .build();
         when(sujetProjetRepository.findByEncadrantIdOrderByDateCreationDesc(10L)).thenReturn(List.of(matching, other));
-        when(sujetProjetMapper.toResponse(eq(matching), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(matching), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         List<SujetProjetResponse> result = service.getMesSujets(CategorieSujet.PFE, StatutSujet.VALIDE);
 
@@ -238,7 +241,7 @@ class SujetProjetServiceTest {
     void getMesSujets_withCategorieUsesRepositoryFilter() {
         when(sujetProjetRepository.findByEncadrantIdAndCategorieOrderByDateCreationDesc(10L, CategorieSujet.PFE))
                 .thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getMesSujets(CategorieSujet.PFE, null));
     }
@@ -247,7 +250,7 @@ class SujetProjetServiceTest {
     void getMesSujets_withStatutUsesRepositoryFilter() {
         when(sujetProjetRepository.findByEncadrantIdAndStatutOrderByDateCreationDesc(10L, StatutSujet.SOUMIS_EN_VALIDATION))
                 .thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getMesSujets(null, StatutSujet.SOUMIS_EN_VALIDATION));
     }
@@ -255,7 +258,7 @@ class SujetProjetServiceTest {
     @Test
     void getSujetsDisponibles_withoutCategorieReturnsAllAvailable() {
         when(sujetProjetRepository.findByStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getSujetsDisponibles(null));
     }
@@ -267,7 +270,7 @@ class SujetProjetServiceTest {
         SujetProjet other = SujetProjet.builder().id(3L).categorie(CategorieSujet.RDI)
                 .statut(StatutSujet.VALIDE).encadrantId(10L).build();
         when(sujetProjetRepository.findByStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(matching, other));
-        when(sujetProjetMapper.toResponse(eq(matching), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(matching), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getSujetsDisponibles(CategorieSujet.PFE));
     }
@@ -278,7 +281,7 @@ class SujetProjetServiceTest {
         entity.setCatalogue(true);
         entity.setStatut(StatutSujet.CANDIDATURE_OUVERTE);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
-        when(sujetProjetMapper.toResponse(entity, "Encadrant inconnu", null, null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Encadrant inconnu", null, null, 0)).thenReturn(response);
 
         assertEquals(response, service.getSujetById(1L));
     }
@@ -294,7 +297,7 @@ class SujetProjetServiceTest {
     void modifierSujet_ownerUpdatesSubject() {
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
 
         assertEquals(response, service.modifierSujet(1L, request));
 
@@ -341,7 +344,7 @@ class SujetProjetServiceTest {
     void toResponse_unknownEncadrantUsesFallbackName() {
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(userRepository.findById(10L)).thenReturn(Optional.empty());
-        when(sujetProjetMapper.toResponse(entity, "Encadrant inconnu", null, null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Encadrant inconnu", null, null, 0)).thenReturn(response);
 
         assertEquals(response, service.getSujetById(1L));
     }
@@ -352,7 +355,7 @@ class SujetProjetServiceTest {
         entity.setStatut(StatutSujet.REALISATION_TERMINEE);
         when(sujetProjetRepository.findByStatutOrderByDateCreationDesc(StatutSujet.REALISATION_TERMINEE))
                 .thenReturn(List.of(entity));
-        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull())).thenReturn(response);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getProjetsEvaluables());
     }
@@ -367,7 +370,7 @@ class SujetProjetServiceTest {
         entity.setStatut(StatutSujet.REALISATION_EN_COURS);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
 
         assertEquals(response, service.declarerTerminaison(1L));
         assertEquals(StatutSujet.REALISATION_TERMINEE, entity.getStatut());

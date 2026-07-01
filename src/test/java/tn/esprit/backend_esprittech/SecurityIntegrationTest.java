@@ -83,7 +83,8 @@ class SecurityIntegrationTest {
                 .andExpect(cookie().exists("access_token"))
                 .andExpect(cookie().httpOnly("access_token", true))
                 .andExpect(cookie().exists("refresh_token"))
-                .andExpect(cookie().httpOnly("refresh_token", true));
+                .andExpect(cookie().httpOnly("refresh_token", true))
+                .andExpect(header().string("Authorization", org.hamcrest.Matchers.startsWith("Bearer ")));
     }
 
     @Test

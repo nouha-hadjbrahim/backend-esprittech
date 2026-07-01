@@ -37,10 +37,11 @@ class CandidatureControllerTest {
 
     @BeforeEach
     void setUp() {
-        candidatureResponse = new CandidatureResponse(100L, 10L, 1L, "Ben Ali", "Sami",
-                StatutCandidature.DEPOSEE, null, "Motivé", Instant.now(), null);
+        candidatureResponse = new CandidatureResponse(100L, 10L, 1L, "Ben Ali", "Sami", "sami@esprit.tn",
+                StatutCandidature.DEPOSEE, null, "Motivé", Instant.now(), null,
+                "Sujet test", "PFE", "Nadia Trabelsi");
 
-        affectationResponse = new AffectationResponse(200L, 10L, 1L, "Ben Ali", "Sami",
+        affectationResponse = new AffectationResponse(200L, 10L, 1L, "Ben Ali", "Sami", "sami@esprit.tn",
                 StatutAffectation.RETIREE_ARCHIVEE, Instant.now(), Instant.now(), "Abandon");
     }
 
@@ -146,6 +147,13 @@ class CandidatureControllerTest {
         when(candidatureService.getMesCandidatures()).thenReturn(List.of(candidatureResponse));
         ResponseEntity<List<CandidatureResponse>> response = controller.getMesCandidatures();
         assertEquals(1, response.getBody().size());
+    }
+
+    @Test
+    void retirerMaCandidature_appelleService_retourneNoContent() {
+        ResponseEntity<Void> response = controller.retirerMaCandidature(100L);
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(candidatureService).retirerMaCandidature(100L);
     }
 
     @Test
