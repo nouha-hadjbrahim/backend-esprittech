@@ -25,9 +25,14 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 /**
  * Service Candidature — couvre US-14, US-16, US-17, US-18, US-19, US-20, US-22.
  */
@@ -42,6 +47,7 @@ public class CandidatureService {
     private final CandidatureMapper candidatureMapper;
     private final AffectationMapper affectationMapper;
     private final UserService userService;
+    private final SujetProjetService sujetProjetService;
 
     // US-14 : Ouvrir candidatures
     @Transactional
@@ -190,14 +196,33 @@ public class CandidatureService {
     @Transactional(readOnly = true)
     public List<CandidatureResponse> getMesCandidatures() {
         User etudiant = userService.getCurrentUser();
-        return candidatureRepository.findByEtudiantIdOrderByDateDepotDesc(etudiant.getId())
-                .stream().map(candidatureMapper::toResponse).toList();
+        List<Candidature> candidatures = candidatureRepository.findByEtudiantIdOrderByDateDepotDesc(etudiant.getId());
+        return mapWithSujetContext(candidatures);
+    }
+
+    /** US-16 : retrait par l'étudiant tant que la candidature n'a pas été traitée. */
+    @Transactional
+    public void retirerMaCandidature(Long candidatureId) {
+        User etudiant = userService.getCurrentUser();
+        Candidature candidature = getCandidatureOrThrow(candidatureId);
+
+        if (!candidature.getEtudiant().getId().equals(etudiant.getId())) {
+            throw new AccessDeniedException("Vous ne pouvez retirer que vos propres candidatures.");
+        }
+        if (candidature.getStatut() != StatutCandidature.DEPOSEE) {
+            throw new IllegalStateException("Seule une candidature en attente peut être retirée.");
+        }
+
+        candidatureRepository.delete(candidature);
     }
 
     @Transactional(readOnly = true)
     public List<AffectationResponse> getAffectationsParSujet(Long sujetId) {
-        return affectationRepository.findBySujetId(sujetId)
-                .stream().map(affectationMapper::toResponse).toList();
+        sujetProjetService.getSujetById(sujetId);
+        return affectationRepository.findBySujetIdAndStatut(sujetId, StatutAffectation.ACTIVE)
+                .stream()
+                .map(affectationMapper::toResponse)
+                .toList();
     }
 
     // Helpers
@@ -214,6 +239,38 @@ public class CandidatureService {
     private Affectation getAffectationOrThrow(Long id) {
         return affectationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Affectation introuvable : " + id));
+    }
+
+    private List<CandidatureResponse> mapWithSujetContext(List<Candidature> candidatures) {
+        if (candidatures.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> sujetIds = candidatures.stream()
+                .map(Candidature::getSujetId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, SujetProjet> sujets = sujetProjetRepository.findAllById(sujetIds).stream()
+                .collect(Collectors.toMap(SujetProjet::getId, Function.identity()));
+
+        List<Long> encadrantIds = sujets.values().stream()
+                .map(SujetProjet::getEncadrantId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, User> encadrants = userRepository.findAllById(encadrantIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        return candidatures.stream()
+                .map(c -> {
+                    SujetProjet sujet = sujets.get(c.getSujetId());
+                    User encadrant = sujet != null ? encadrants.get(sujet.getEncadrantId()) : null;
+                    return candidatureMapper.toResponse(c, sujet, encadrant);
+                })
+                .toList();
     }
 
     private void checkSujetAccess(SujetProjet sujet) {

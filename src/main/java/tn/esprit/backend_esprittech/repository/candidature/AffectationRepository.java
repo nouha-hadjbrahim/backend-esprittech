@@ -17,5 +17,7 @@ public interface AffectationRepository extends JpaRepository<Affectation, Long> 
 
     Optional<Affectation> findBySujetIdAndEtudiantId(Long sujetId, Long etudiantId);
 
+    long countBySujetIdAndStatut(Long sujetId, StatutAffectation statut);
+
     Optional<Affectation> findByCandidatureId(Long candidatureId);
 }

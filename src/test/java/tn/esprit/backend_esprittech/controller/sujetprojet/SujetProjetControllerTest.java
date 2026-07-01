@@ -61,7 +61,7 @@ class SujetProjetControllerTest {
                 1L, "Sujet test", CategorieSujet.PFE, "Description", "Objectifs",
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2,
                 StatutSujet.SOUMIS_EN_VALIDATION, null, false, false, 10L, "Sami Ben Ali",
-                "sami@esprit.tn", null, LocalDateTime.now(), LocalDateTime.now(), null, null, null, null
+                "sami@esprit.tn", null, LocalDateTime.now(), LocalDateTime.now(), null, null, null, null, 0
         );
         when(sujetProjetService.creerSujet(any(SujetProjetRequest.class))).thenReturn(sample);
 

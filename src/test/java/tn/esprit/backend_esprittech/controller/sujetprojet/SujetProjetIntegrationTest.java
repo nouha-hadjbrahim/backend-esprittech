@@ -13,14 +13,18 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.backend_esprittech.config.JwtTokenProvider;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
+import tn.esprit.backend_esprittech.enums.equipe.StatutEquipe;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeDomaineRepository;
+import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +47,8 @@ class SujetProjetIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private UserRepository userRepository;
+    @Autowired private EquipeDomaineRepository equipeDomaineRepository;
+    @Autowired private EquipeRechercheRepository equipeRechercheRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JwtTokenProvider tokenProvider;
 
@@ -50,20 +56,78 @@ class SujetProjetIntegrationTest {
 
     @BeforeEach
     void seedEnseignant() {
-        if (userRepository.findByEmail("enseignant@esprit.tn").isEmpty()) {
-            userRepository.save(User.builder()
-                    .nom("Ben Ali").prenom("Sami").email("enseignant@esprit.tn")
-                    .identifiant("ENS-100").password(passwordEncoder.encode("Password123"))
-                    .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
-                    .departement("Informatique").enabled(true).build());
-        }
-        User enseignant = userRepository.findByEmail("enseignant@esprit.tn").orElseThrow();
+        User chef = userRepository.findByEmail("chef@esprit.tn").orElseGet(() ->
+                userRepository.save(User.builder()
+                        .nom("Chef").prenom("Equipe").email("chef@esprit.tn")
+                        .identifiant("CHEF-1").password(passwordEncoder.encode("Password123"))
+                        .role(Role.ROLE_CHEF_EQUIPE).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
+                        .departement("Informatique").enabled(true).build()));
+
+        EquipeDomaine domaine = equipeDomaineRepository.findAll().stream().findFirst().orElseGet(() ->
+                equipeDomaineRepository.save(EquipeDomaine.builder().nom("Informatique").build()));
+
+        EquipeRecherche equipe = equipeRechercheRepository.findAll().stream().findFirst().orElseGet(() ->
+                equipeRechercheRepository.save(EquipeRecherche.builder()
+                        .nom("Equipe Integration")
+                        .description("Equipe pour tests integration")
+                        .domaine(domaine)
+                        .chef(chef)
+                        .statut(StatutEquipe.ACTIF)
+                        .build()));
+
+        User enseignant = userRepository.findByEmail("enseignant@esprit.tn").orElseGet(() ->
+                userRepository.save(User.builder()
+                        .nom("Ben Ali").prenom("Sami").email("enseignant@esprit.tn")
+                        .identifiant("ENS-100").password(passwordEncoder.encode("Password123"))
+                        .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
+                        .departement("Informatique").enabled(true).build()));
+
+        enseignant.setEquipeRecherche(equipe);
+        userRepository.save(enseignant);
         enseignantToken = tokenProvider.generateAccessToken(enseignant);
     }
 
     @Test
     void endpoints_withoutAuth_return401() throws Exception {
         mockMvc.perform(get("/api/sujet-projets/technologies")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void creerSujet_withoutAuth_returns401() throws Exception {
+        Map<String, Object> payload = Map.of(
+                "titre", "Sujet sans CSRF", "categorie", "PFE",
+                "description", "Description", "objectifs", "Objectif",
+                "prerequis", List.of("Soft skills"), "domaines", List.of("Info"),
+                "technologies", List.of("Java"), "capaciteAccueil", 2
+        );
+
+        mockMvc.perform(post("/api/sujet-projets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void creerSujet_asEnseignantWithoutEquipe_returns400() throws Exception {
+        User sansEquipe = userRepository.save(User.builder()
+                .nom("Solo").prenom("Enseignant").email("solo@esprit.tn")
+                .identifiant("ENS-SOLO").password(passwordEncoder.encode("Password123"))
+                .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
+                .departement("Informatique").enabled(true).build());
+        String soloToken = tokenProvider.generateAccessToken(sansEquipe);
+
+        Map<String, Object> payload = Map.of(
+                "titre", "Sujet sans equipe", "categorie", "PFE",
+                "description", "Description", "objectifs", "Objectif",
+                "prerequis", List.of("Soft skills"), "domaines", List.of("Info"),
+                "technologies", List.of("Java"), "capaciteAccueil", 2
+        );
+
+        mockMvc.perform(post("/api/sujet-projets")
+                        .cookie(new Cookie("access_token", soloToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -76,7 +140,6 @@ class SujetProjetIntegrationTest {
         );
 
         mockMvc.perform(post("/api/sujet-projets")
-                        .with(csrf())
                         .cookie(new Cookie("access_token", enseignantToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -88,5 +151,29 @@ class SujetProjetIntegrationTest {
                         .cookie(new Cookie("access_token", enseignantToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].titre").value("Sujet intégration"));
+    }
+
+    @Test
+    void chefEquipe_voitLesDemandesDeSonEquipe() throws Exception {
+        User chef = userRepository.findByEmail("chef@esprit.tn").orElseThrow();
+        String chefToken = tokenProvider.generateAccessToken(chef);
+
+        Map<String, Object> payload = Map.of(
+                "titre", "Sujet pour chef", "categorie", "PFE",
+                "description", "Description chef test", "objectifs", "Objectif chef",
+                "prerequis", List.of("Soft skills"), "domaines", List.of("Informatique"),
+                "technologies", List.of("Java"), "capaciteAccueil", 2
+        );
+
+        mockMvc.perform(post("/api/sujet-projets")
+                        .cookie(new Cookie("access_token", enseignantToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/sujet-projets/a-valider")
+                        .cookie(new Cookie("access_token", chefToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.titre == 'Sujet pour chef')]").exists());
     }
 }

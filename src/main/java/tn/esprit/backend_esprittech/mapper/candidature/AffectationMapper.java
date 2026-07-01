@@ -14,6 +14,7 @@ public class AffectationMapper {
                 a.getEtudiant().getId(),
                 a.getEtudiant().getNom(),
                 a.getEtudiant().getPrenom(),
+                a.getEtudiant().getEmail(),
                 a.getStatut(),
                 a.getDateDebut(),
                 a.getDateRetrait(),

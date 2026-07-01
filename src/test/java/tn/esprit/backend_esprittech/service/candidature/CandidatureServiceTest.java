@@ -12,10 +12,12 @@ import tn.esprit.backend_esprittech.dto.candidature.request.DecisionCandidatureR
 import tn.esprit.backend_esprittech.dto.candidature.request.RetraitEtudiantRequest;
 import tn.esprit.backend_esprittech.dto.candidature.response.AffectationResponse;
 import tn.esprit.backend_esprittech.dto.candidature.response.CandidatureResponse;
+import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.*;
 import tn.esprit.backend_esprittech.entity.candidature.Affectation;
 import tn.esprit.backend_esprittech.entity.candidature.Candidature;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.*;
 import tn.esprit.backend_esprittech.mapper.candidature.AffectationMapper;
@@ -25,6 +27,7 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 import java.util.List;
 import java.util.Optional;
@@ -43,6 +46,7 @@ class CandidatureServiceTest {
     @Mock private CandidatureMapper candidatureMapper;
     @Mock private AffectationMapper affectationMapper;
     @Mock private UserService userService;
+    @Mock private SujetProjetService sujetProjetService;
 
     @InjectMocks
     private CandidatureService candidatureService;
@@ -324,7 +328,10 @@ class CandidatureServiceTest {
     void getMesCandidatures_utiliseUtilisateurCourant() {
         when(userService.getCurrentUser()).thenReturn(etudiant);
         when(candidatureRepository.findByEtudiantIdOrderByDateDepotDesc(1L)).thenReturn(List.of(candidatureDeposee));
-        when(candidatureMapper.toResponse(candidatureDeposee)).thenReturn(mockCandidatureResponse());
+        when(sujetProjetRepository.findAllById(List.of(10L))).thenReturn(List.of(sujetOuvert));
+        when(userRepository.findAllById(List.of(2L))).thenReturn(List.of(encadrant));
+        when(candidatureMapper.toResponse(candidatureDeposee, sujetOuvert, encadrant))
+                .thenReturn(mockCandidatureResponse());
 
         List<CandidatureResponse> result = candidatureService.getMesCandidatures();
 
@@ -332,13 +339,47 @@ class CandidatureServiceTest {
     }
 
     @Test
+    void retirerMaCandidature_deposee_supprime() {
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+
+        candidatureService.retirerMaCandidature(100L);
+
+        verify(candidatureRepository).delete(candidatureDeposee);
+    }
+
+    @Test
+    void retirerMaCandidature_autreEtudiant_interdit() {
+        User autre = user(Role.ROLE_ETUDIANT, 99L);
+        when(userService.getCurrentUser()).thenReturn(autre);
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+
+        assertThrows(AccessDeniedException.class, () -> candidatureService.retirerMaCandidature(100L));
+    }
+
+    @Test
+    void retirerMaCandidature_dejaTraitee_interdit() {
+        candidatureDeposee.setStatut(StatutCandidature.ACCEPTEE);
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+
+        assertThrows(IllegalStateException.class, () -> candidatureService.retirerMaCandidature(100L));
+    }
+
+    @Test
     void getAffectationsParSujet_mappeLesResponses() {
-        when(affectationRepository.findBySujetId(10L)).thenReturn(List.of(affectationActive));
+        when(sujetProjetService.getSujetById(10L)).thenReturn(new SujetProjetResponse(
+                10L, "Sujet", CategorieSujet.PFE, null, null, List.of(), List.of(), List.of(), 2,
+                StatutSujet.CANDIDATURE_OUVERTE, null, false, false, 2L, null, null, null,
+                null, null, null, null, null, null, 0));
+        when(affectationRepository.findBySujetIdAndStatut(10L, StatutAffectation.ACTIVE))
+                .thenReturn(List.of(affectationActive));
         when(affectationMapper.toResponse(affectationActive)).thenReturn(mockAffectationResponse());
 
         List<AffectationResponse> result = candidatureService.getAffectationsParSujet(10L);
 
         assertEquals(1, result.size());
+        verify(sujetProjetService).getSujetById(10L);
         verify(affectationMapper).toResponse(affectationActive);
     }
 
@@ -401,13 +442,14 @@ class CandidatureServiceTest {
     // Helpers
     // ─────────────────────────────────────────────────────────────────
     private CandidatureResponse mockCandidatureResponse() {
-        return new CandidatureResponse(100L, 10L, 1L, "Ben Ali", "Sami",
+        return new CandidatureResponse(100L, 10L, 1L, "Ben Ali", "Sami", "sami@esprit.tn",
                 StatutCandidature.DEPOSEE, null, null,
-                java.time.Instant.parse("2026-06-25T10:00:00Z"), null);
+                java.time.Instant.parse("2026-06-25T10:00:00Z"), null,
+                "Sujet test", "PFE", "Nadia Trabelsi");
     }
 
     private AffectationResponse mockAffectationResponse() {
-        return new AffectationResponse(200L, 10L, 1L, "Ben Ali", "Sami",
+        return new AffectationResponse(200L, 10L, 1L, "Ben Ali", "Sami", "sami@esprit.tn",
                 StatutAffectation.RETIREE_ARCHIVEE,
                 java.time.Instant.parse("2026-06-25T10:00:00Z"),
                 java.time.Instant.parse("2026-06-25T11:00:00Z"),

@@ -15,19 +15,21 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.StatutAffectation;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @Transactional
@@ -35,8 +37,7 @@ public class SujetProjetService {
 
     private static final List<StatutSujet> STATUTS_DISPONIBLES = List.of(
             StatutSujet.VALIDE,
-            StatutSujet.CANDIDATURE_OUVERTE,
-            StatutSujet.CANDIDATURE_FERMEE
+            StatutSujet.CANDIDATURE_OUVERTE
     );
 
     private static final List<StatutSujet> STATUTS_A_VALIDER = List.of(
@@ -50,23 +51,27 @@ public class SujetProjetService {
     private final UserRepository userRepository;
     private final SujetReferenceService referenceService;
     private final EquipeRechercheRepository equipeRechercheRepository;
+    private final AffectationRepository affectationRepository;
 
     public SujetProjetService(SujetProjetRepository sujetProjetRepository,
                               SujetProjetMapper sujetProjetMapper,
                               UserService userService,
                               UserRepository userRepository,
                               SujetReferenceService referenceService,
-                              EquipeRechercheRepository equipeRechercheRepository) {
+                              EquipeRechercheRepository equipeRechercheRepository,
+                              AffectationRepository affectationRepository) {
         this.sujetProjetRepository = sujetProjetRepository;
         this.sujetProjetMapper = sujetProjetMapper;
         this.userService = userService;
         this.userRepository = userRepository;
         this.referenceService = referenceService;
         this.equipeRechercheRepository = equipeRechercheRepository;
+        this.affectationRepository = affectationRepository;
     }
 
     public SujetProjetResponse creerSujet(SujetProjetRequest request) {
         User encadrant = getCurrentEnseignant();
+        ensureEncadrantAffilie(encadrant);
         SujetProjet sujet = sujetProjetMapper.toEntity(request, encadrant.getId());
         return toResponse(sujetProjetRepository.save(sujet));
     }
@@ -85,11 +90,8 @@ public class SujetProjetService {
 
     /**
      * US-12 / BF-03 : sujets en attente de validation.
-     *
-     * TEMPORAIRE : le module Équipes de recherche n'est pas encore finalisé (en cours de
-     * développement par un autre membre de l'équipe). En attendant, tout CHEF_EQUIPE voit
-     * et peut valider l'ensemble des sujets soumis, sans filtrage par équipe. Une fois le
-     * module Équipes prêt, réintroduire le filtrage via {@link #getMembresEquipeIds}.
+     * L'admin voit toutes les demandes ; chaque chef d'équipe ne voit que celles
+     * des membres affiliés à son équipe.
      */
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getSujetsEnAttenteValidation() {
@@ -100,6 +102,11 @@ public class SujetProjetService {
 
         List<SujetProjet> enAttente = sujetProjetRepository
                 .findByStatutOrderByDateCreationDesc(StatutSujet.SOUMIS_EN_VALIDATION);
+
+        if (current.getRole() == Role.ROLE_CHEF_EQUIPE) {
+            enAttente = filterByChefEquipe(current, enAttente);
+        }
+
         return toResponses(enAttente);
     }
 /* 
@@ -129,19 +136,6 @@ public class SujetProjetService {
         }
     }
 
-    /** Identifiants de l'encadrant lui-même + des membres de son équipe (le chef peut être encadrant aussi). */
-    private Set<Long> getMembresEquipeIds(User chef) {
-        // Check if the chef has an equipe
-        boolean hasEquipe = equipeRechercheRepository.existsByChefId(chef.getId());
-
-        if (!hasEquipe) {
-            return Set.of(chef.getId());
-        }
-
-
-        return Set.of(chef.getId());
-    }
-
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getMesSujets(CategorieSujet categorie, StatutSujet statut) {
         Long encadrantId = getCurrentEnseignant().getId();
@@ -165,11 +159,8 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getSujetsDisponibles(CategorieSujet categorie) {
-        // Le statut CANDIDATURE_OUVERTE est le seul filtre nécessaire.
-        // Le champ catalogue est mis à true automatiquement à l'ouverture (CandidatureService).
-        List<SujetProjet> sujets = sujetProjetRepository.findByStatutInOrderByDateCreationDesc(STATUTS_DISPONIBLES)
-                .stream()
-                .toList();
+        List<SujetProjet> sujets = sujetProjetRepository
+                .findByCatalogueTrueAndStatutInOrderByDateCreationDesc(STATUTS_DISPONIBLES);
 
         if (categorie != null) {
             sujets = sujets.stream().filter(s -> s.getCategorie() == categorie).toList();
@@ -197,10 +188,42 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getSujetsAValider(CategorieSujet categorie, StatutSujet statut) {
-        getCurrentChefEquipe();
+        User chef = getCurrentChefEquipe();
         List<StatutSujet> statuts = statut != null ? List.of(statut) : STATUTS_A_VALIDER;
 
         List<SujetProjet> sujets = sujetProjetRepository.findByStatutInOrderByDateCreationDesc(statuts);
+        sujets = filterByChefEquipe(chef, sujets);
+
+        if (categorie != null) {
+            sujets = sujets.stream().filter(s -> s.getCategorie() == categorie).toList();
+        }
+
+        return toResponses(sujets);
+    }
+
+    /**
+     * Sujets déposés par les enseignants affiliés à l'équipe du chef connecté.
+     */
+    @Transactional(readOnly = true)
+    public List<SujetProjetResponse> getSujetsEquipe(CategorieSujet categorie, StatutSujet statut) {
+        User chef = getCurrentChefEquipe();
+        Optional<EquipeRecherche> equipeOpt = resolveEquipeForChef(chef);
+        if (equipeOpt.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> encadrantIds = getVisibleEncadrantIds(chef.getId(), equipeOpt.get().getId());
+        if (encadrantIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<StatutSujet> statuts = statut != null
+                ? List.of(statut)
+                : List.of(StatutSujet.values());
+
+        List<SujetProjet> sujets = sujetProjetRepository
+                .findByEncadrantIdInAndStatutInOrderByDateCreationDesc(
+                        encadrantIds.stream().toList(), statuts);
 
         if (categorie != null) {
             sujets = sujets.stream().filter(s -> s.getCategorie() == categorie).toList();
@@ -217,7 +240,7 @@ public class SujetProjetService {
             throw new IllegalArgumentException("Ce sujet n'est pas en attente de validation");
         }
 
-        sujet.setStatut(StatutSujet.CANDIDATURE_OUVERTE);
+        sujet.setStatut(StatutSujet.VALIDE);
         sujet.setCatalogue(true);
         sujet.setDateValidation(LocalDateTime.now());
         sujet.setMotifInvalidation(null);
@@ -281,13 +304,22 @@ public class SujetProjetService {
         return current;
     }
 
+    private void ensureEncadrantAffilie(User encadrant) {
+        User managed = userRepository.findById(encadrant.getId()).orElse(encadrant);
+        if (managed.getEquipeRecherche() == null) {
+            throw new IllegalArgumentException(
+                    "Vous devez être affilié à une équipe de recherche pour déposer un sujet.");
+        }
+    }
+
     private SujetProjetResponse toResponse(SujetProjet sujet) {
         User encadrant = userRepository.findById(sujet.getEncadrantId()).orElse(null);
         return sujetProjetMapper.toResponse(
                 sujet,
                 formatNom(encadrant),
                 encadrant != null ? encadrant.getEmail() : null,
-                getEquipeNom(encadrant)
+                getEquipeNom(encadrant),
+                countMembresActifs(sujet.getId())
         );
     }
 
@@ -303,10 +335,18 @@ public class SujetProjetService {
                             s,
                             formatNom(encadrant),
                             encadrant != null ? encadrant.getEmail() : null,
-                            getEquipeNom(encadrant)
+                            getEquipeNom(encadrant),
+                            countMembresActifs(s.getId())
                     );
                 })
                 .toList();
+    }
+
+    private int countMembresActifs(Long sujetId) {
+        if (sujetId == null) {
+            return 0;
+        }
+        return (int) affectationRepository.countBySujetIdAndStatut(sujetId, StatutAffectation.ACTIVE);
     }
 
     private User getCurrentChefEquipe() {
@@ -355,37 +395,53 @@ public class SujetProjetService {
         if (STATUTS_A_VALIDER.contains(sujet.getStatut())) {
             return canChefValidateSujet(user, sujet);
         }
-        return equipeRechercheRepository.findByChefId(user.getId())
+        return resolveEquipeForChef(user)
                 .map(equipe -> isEncadrantVisibleForChef(user.getId(), equipe.getId(), sujet.getEncadrantId()))
                 .orElse(false);
     }
 
     /**
-     * Sans équipe : toutes les demandes en attente.
-     * Avec équipe : sujets du chef, des membres de l'équipe, ou des enseignants non encore affectés.
+     * Chaque chef ne voit que les demandes des membres de l'équipe qu'il dirige
+     * (y compris ses propres sujets s'il est aussi encadrant).
      */
     private List<SujetProjet> filterByChefEquipe(User chef, List<SujetProjet> sujets) {
-        Optional<EquipeRecherche> equipeOpt = equipeRechercheRepository.findByChefId(chef.getId());
+        Optional<EquipeRecherche> equipeOpt = resolveEquipeForChef(chef);
         if (equipeOpt.isEmpty()) {
-            return sujets;
+            return List.of();
         }
 
         Long equipeId = equipeOpt.get().getId();
+        Set<Long> visibleEncadrantIds = getVisibleEncadrantIds(chef.getId(), equipeId);
         return sujets.stream()
-                .filter(s -> isEncadrantVisibleForChef(chef.getId(), equipeId, s.getEncadrantId()))
+                .filter(s -> visibleEncadrantIds.contains(s.getEncadrantId()))
                 .toList();
     }
 
-    private boolean isEncadrantVisibleForChef(Long chefId, Long equipeId, Long encadrantId) {
-        if (encadrantId.equals(chefId)) {
-            return true;
+    /**
+     * Équipe dirigée par le chef : priorité à {@code equipe_recherche.chef_id},
+     * repli sur {@code user.equipe_id} (aligné avec /auth/me).
+     */
+    private Optional<EquipeRecherche> resolveEquipeForChef(User chef) {
+        Optional<EquipeRecherche> equipeDirigee = equipeRechercheRepository.findByChefId(chef.getId());
+        if (equipeDirigee.isPresent()) {
+            return equipeDirigee;
         }
-        return userRepository.findById(encadrantId)
-                .map(encadrant -> {
-                    EquipeRecherche encadrantEquipe = encadrant.getEquipeRecherche();
-                    return encadrantEquipe == null || encadrantEquipe.getId().equals(equipeId);
-                })
-                .orElse(false);
+
+        return userRepository.findById(chef.getId())
+                .map(User::getEquipeRecherche)
+                .filter(Objects::nonNull);
+    }
+
+    private Set<Long> getVisibleEncadrantIds(Long chefId, Long equipeId) {
+        Set<Long> ids = userRepository.findByEquipeRechercheId(equipeId).stream()
+                .map(User::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+        ids.add(chefId);
+        return ids;
+    }
+
+    private boolean isEncadrantVisibleForChef(Long chefId, Long equipeId, Long encadrantId) {
+        return getVisibleEncadrantIds(chefId, equipeId).contains(encadrantId);
     }
 
     private boolean canChefValidateSujet(User chef, SujetProjet sujet) {
@@ -445,7 +501,7 @@ public class SujetProjetService {
             throw new IllegalArgumentException("Ce sujet n'est pas en attente de validation");
         }
 
-        sujet.setStatut(StatutSujet.CANDIDATURE_OUVERTE);
+        sujet.setStatut(StatutSujet.VALIDE);
         sujet.setCatalogue(true);
         sujet.setDateValidation(LocalDateTime.now());
         sujet.setMotifInvalidation(null);
@@ -506,15 +562,16 @@ public class SujetProjetService {
 
     @Transactional
     public SujetProjetResponse declarerTerminaison(Long id) {
+        Long encadrantId = getCurrentEnseignant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable avec l'id: " + id));
+                .filter(s -> s.getEncadrantId().equals(encadrantId))
+                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
 
         if (sujet.getStatut() != StatutSujet.REALISATION_EN_COURS) {
             throw new IllegalStateException("Impossible de déclarer la terminaison : le sujet n'est pas en cours de réalisation.");
         }
 
         sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
-        // sujet.setDateFin(LocalDateTime.now());   ← removed because field doesn't exist
 
         SujetProjet saved = sujetProjetRepository.save(sujet);
         return toResponse(saved);

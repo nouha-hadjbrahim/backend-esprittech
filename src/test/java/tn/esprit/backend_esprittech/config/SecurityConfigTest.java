@@ -20,11 +20,10 @@ class SecurityConfigTest {
     @Mock private JwtAuthenticationFilter jwtFilter;
     @Mock private CustomUserDetailsService userDetailsService;
     @Mock private CorsConfigurationSource corsConfigSource;
-    @Mock private CsrfTokenResponseFilter csrfTokenResponseFilter;
 
     @Test
     void passwordEncoder_returnsBCrypt() {
-        SecurityConfig config = new SecurityConfig(jwtFilter, userDetailsService, corsConfigSource, csrfTokenResponseFilter);
+        SecurityConfig config = new SecurityConfig(jwtFilter, userDetailsService, corsConfigSource);
 
         PasswordEncoder encoder = config.passwordEncoder();
 
@@ -33,7 +32,7 @@ class SecurityConfigTest {
 
     @Test
     void authenticationProvider_configured() {
-        SecurityConfig config = new SecurityConfig(jwtFilter, userDetailsService, corsConfigSource, csrfTokenResponseFilter);
+        SecurityConfig config = new SecurityConfig(jwtFilter, userDetailsService, corsConfigSource);
 
         DaoAuthenticationProvider provider = config.authenticationProvider();
 
@@ -42,7 +41,7 @@ class SecurityConfigTest {
 
     @Test
     void authenticationManager_delegatesToConfiguration() throws Exception {
-        SecurityConfig config = new SecurityConfig(jwtFilter, userDetailsService, corsConfigSource, csrfTokenResponseFilter);
+        SecurityConfig config = new SecurityConfig(jwtFilter, userDetailsService, corsConfigSource);
         AuthenticationConfiguration authConfig = mock(AuthenticationConfiguration.class);
         AuthenticationManager mockManager = mock(AuthenticationManager.class);
         when(authConfig.getAuthenticationManager()).thenReturn(mockManager);

@@ -41,7 +41,8 @@ public class SujetProjetMapper {
     }
 
     public SujetProjetResponse toResponse(SujetProjet entity, String encadrantNom,
-                                          String encadrantEmail, String equipeNom) {
+                                          String encadrantEmail, String equipeNom,
+                                          int nombreMembresActifs) {
         return new SujetProjetResponse(
                 entity.getId(),
                 entity.getTitre(),
@@ -65,7 +66,8 @@ public class SujetProjetMapper {
                 entity.getDateValidation(),
                 entity.getDateDebutRealisation(),
                 entity.getDateTerminaison(),
-                entity.getMotifInvalidation()
+                entity.getMotifInvalidation(),
+                nombreMembresActifs
         );
     }
 

@@ -46,7 +46,7 @@ class EvaluationControllerTest {
                 1L, "Titre", CategorieSujet.PFE, "Desc", "Obj", List.of("Pre"),
                 List.of("Dom"), List.of("Java"), 2, StatutSujet.REALISATION_TERMINEE,
                 88.0, true, false, 1001L, "Encadrant 1", "encadrant@esprit.tn", null,
-                now, now, null, null, null, null
+                now, now, null, null, null, null, 0
         );
     }
 

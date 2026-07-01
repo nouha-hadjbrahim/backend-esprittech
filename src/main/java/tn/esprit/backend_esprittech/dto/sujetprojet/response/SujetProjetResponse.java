@@ -29,6 +29,7 @@ public record SujetProjetResponse(
         LocalDateTime dateValidation,
         LocalDateTime dateDebutRealisation,
         LocalDateTime dateTerminaison,
-        String motifInvalidation
+        String motifInvalidation,
+        Integer nombreMembresActifs
 ) {
 }

@@ -96,8 +96,15 @@ public class CandidatureController {
         return ResponseEntity.ok(candidatureService.getMesCandidatures());
     }
 
+    @DeleteMapping("/candidatures/{candidatureId}")
+    @PreAuthorize("hasRole('ETUDIANT')")
+    public ResponseEntity<Void> retirerMaCandidature(@PathVariable Long candidatureId) {
+        candidatureService.retirerMaCandidature(candidatureId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/sujets/{sujetId}/affectations")
-    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<AffectationResponse>> getAffectationsParSujet(@PathVariable Long sujetId) {
         return ResponseEntity.ok(candidatureService.getAffectationsParSujet(sujetId));
     }
