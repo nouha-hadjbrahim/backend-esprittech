@@ -1,53 +1,58 @@
 package tn.esprit.backend_esprittech.service.CritereEval;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationOverrideRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationValidationRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlCriterionRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlCriterionResult;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlDeliverableContent;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlEvaluationRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlEvaluationResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlEvidenceResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlProjectContext;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatEliminatoireRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatNoteRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereEvaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
-import tn.esprit.backend_esprittech.entity.CritereEval.CritereNoteRule;
 import tn.esprit.backend_esprittech.entity.CritereEval.Evaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.ResultatCritere;
-import tn.esprit.backend_esprittech.entity.CritereEval.RuleOperator;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
-import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
+import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
-import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 
-import java.time.ZoneOffset;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -55,16 +60,18 @@ import java.util.stream.Collectors;
 @Transactional
 public class EvaluationService {
 
-    private static final int DEFAULT_NOTE = 3;
-
     private final SujetProjetRepository sujetProjetRepository;
     private final CritereEliminatoireRepository critereEliminatoireRepository;
     private final CritereNoteRepository critereNoteRepository;
     private final EvaluationRepository evaluationRepository;
     private final LivrableRepository livrableRepository;
-    private final CritereNoteRuleRepository critereNoteRuleRepository;
     private final NoteLevelService noteLevelService;
     private final UserService userService;
+    private final DeliverableContentExtractionService contentExtractionService;
+    private final MlEvaluationClient mlEvaluationClient;
+
+    @Value("${evaluation.ml.recalculation-cooldown-seconds:0}")
+    private long recalculationCooldownSeconds;
 
     public EvaluationResponse calculerEvaluation(Long projetId, EvaluationRequest request) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
@@ -76,7 +83,8 @@ public class EvaluationService {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
         User currentUser = userService.getCurrentUser();
         ensureCanCalculate(currentUser, projet);
-        EvaluationData data = buildAutomaticEvaluationFromRules(projet);
+        ensureNoDuplicateEvaluation(projetId);
+        EvaluationData data = buildAutomaticEvaluationFromMl(projet);
         String effectiveReason = currentUser.getRole() == Role.ROLE_ENSEIGNANT
                 ? "Nouveaux livrables deposes"
                 : recalculationReason;
@@ -85,7 +93,7 @@ public class EvaluationService {
 
     public EvaluationResponse calculateEvaluationForSystem(Long projetId) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
-        EvaluationData data = buildAutomaticEvaluationFromRules(projet);
+        EvaluationData data = buildAutomaticEvaluationFromMl(projet);
         return persistEvaluation(projet, data, "SYSTEM", "Calcul automatique apres terminaison du projet");
     }
 
@@ -101,14 +109,79 @@ public class EvaluationService {
         return toResponse(evaluation);
     }
 
-    private SujetProjet getProjetAndValidateTerminated(Long projetId) {
+    @Transactional(readOnly = true)
+    public List<EvaluationResponse> getEvaluationHistoryByProjet(Long projetId) {
         SujetProjet projet = sujetProjetRepository.findById(projetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+        ensureCanView(userService.getCurrentUser(), projet);
+        return evaluationRepository.findBySujetProjetIdOrderByDateCalculDesc(projetId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public EvaluationResponse validateLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
+        SujetProjet projet = getProjet(projetId);
+        User current = userService.getCurrentUser();
+        ensureCanValidate(current);
+        Evaluation evaluation = latestEvaluation(projetId);
+        evaluation.setValidationStatus("VALIDATED");
+        evaluation.setFinalValidatedScore(evaluation.getScoreFinal());
+        evaluation.setValidatedBy(resolveActorName(current));
+        evaluation.setValidatedAt(LocalDateTime.now());
+        if (request != null && StringUtils.hasText(request.commentaire())) {
+            evaluation.setCommentaire(request.commentaire().trim());
+        }
+        projet.setScoreFinalEvaluation(evaluation.getScoreFinal());
+        sujetProjetRepository.save(projet);
+        return toResponse(evaluationRepository.save(evaluation));
+    }
+
+    public EvaluationResponse rejectLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
+        User current = userService.getCurrentUser();
+        ensureCanValidate(current);
+        Evaluation evaluation = latestEvaluation(projetId);
+        evaluation.setValidationStatus("REJECTED");
+        evaluation.setValidatedBy(resolveActorName(current));
+        evaluation.setValidatedAt(LocalDateTime.now());
+        if (request != null && StringUtils.hasText(request.commentaire())) {
+            evaluation.setCommentaire(request.commentaire().trim());
+        }
+        return toResponse(evaluationRepository.save(evaluation));
+    }
+
+    public EvaluationResponse overrideLatestEvaluation(Long projetId, EvaluationOverrideRequest request) {
+        SujetProjet projet = getProjet(projetId);
+        User current = userService.getCurrentUser();
+        ensureCanOverride(current);
+        Evaluation evaluation = latestEvaluation(projetId);
+        evaluation.setValidationStatus("OVERRIDDEN");
+        evaluation.setFinalValidatedScore(round(request.finalScore()));
+        evaluation.setOverrideReason(safeValue(request.reason()));
+        evaluation.setValidatedBy(resolveActorName(current));
+        evaluation.setValidatedAt(LocalDateTime.now());
+        projet.setScoreFinalEvaluation(evaluation.getFinalValidatedScore());
+        sujetProjetRepository.save(projet);
+        return toResponse(evaluationRepository.save(evaluation));
+    }
+
+    private SujetProjet getProjetAndValidateTerminated(Long projetId) {
+        SujetProjet projet = getProjet(projetId);
 
         if (projet.getStatut() != StatutSujet.REALISATION_TERMINEE) {
             throw new BadRequestException("Le projet doit etre en statut REALISATION_TERMINEE pour etre evalue.");
         }
         return projet;
+    }
+
+    private SujetProjet getProjet(Long projetId) {
+        return sujetProjetRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+    }
+
+    private Evaluation latestEvaluation(Long projetId) {
+        return evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
     }
 
     private EvaluationData buildManualEvaluation(EvaluationRequest request) {
@@ -170,13 +243,20 @@ public class EvaluationService {
         return buildEvaluationData(resultats, warnings, sommeScoresCriteres, sommePoids);
     }
 
-    private EvaluationData buildAutomaticEvaluationFromRules(SujetProjet projet) {
+    private EvaluationData buildAutomaticEvaluationFromMl(SujetProjet projet) {
         List<CritereEliminatoire> criteresEliminatoires = critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc();
         List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
         Set<Integer> activeNoteValues = activeNoteValuesFor(criteresNotes);
         int maxActiveNoteValue = maxActiveNoteValue(activeNoteValues);
         List<Livrable> livrables = livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
-        Map<String, Object> metadata = buildMetadata(projet, livrables);
+        List<MlDeliverableContent> extractedContent = contentExtractionService.extract(livrables);
+        MlEvaluationResponse mlResponse = mlEvaluationClient.evaluate(
+                buildMlRequest(projet, criteresEliminatoires, criteresNotes, extractedContent, maxActiveNoteValue)
+        );
+        validateMlResponse(mlResponse, criteresEliminatoires, criteresNotes);
+        Map<Long, MlCriterionResult> mlResults = mlResponse.results()
+                .stream()
+                .collect(Collectors.toMap(MlCriterionResult::criterionId, Function.identity()));
 
         List<ResultatCritere> resultats = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
@@ -185,23 +265,13 @@ public class EvaluationService {
 
         for (CritereEliminatoire critere : criteresEliminatoires) {
             ResultatCritere resultat = baseResult(critere, TypeCritere.ELIMINATOIRE);
-            if (!isRuleConfigured(critere)) {
-                markUnconfigured(resultat);
-                resultats.add(resultat);
-                continue;
-            }
-
-            RuleOutcome outcome = evaluateLegacyRule(critere, livrables);
-            ReponseEliminatoire resultatAuto = outcome.satisfied() ? ReponseEliminatoire.OK : ReponseEliminatoire.NOT_OK;
+            MlCriterionResult mlResult = mlResults.get(critere.getId());
+            boolean satisfied = Boolean.TRUE.equals(mlResult.satisfied());
+            ReponseEliminatoire resultatAuto = satisfied ? ReponseEliminatoire.OK : ReponseEliminatoire.NOT_OK;
             resultat.setRuleConfigured(true);
-            resultat.setModeEvaluation(critere.getModeEvaluation());
+            resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             resultat.setReponseEliminatoire(resultatAuto);
-            resultat.setEvidenceSummary(outcome.evidenceSummary());
-            resultat.setEvidenceLivrableIds(joinLivrableIds(outcome.matchedLivrables()));
-            resultat.setMetadataUsed(outcome.evidenceSummary());
-            resultat.setExplanation(StringUtils.hasText(critere.getRuleDescription())
-                    ? critere.getRuleDescription()
-                    : "Regle eliminatoire automatique appliquee.");
+            applyMlResult(resultat, mlResult, evidenceSummary(mlResult), evidenceLivrableIds(mlResult));
             resultat.setCommentaire(resultat.getExplanation());
             resultats.add(resultat);
 
@@ -211,38 +281,67 @@ public class EvaluationService {
         }
 
         for (CritereNote critere : criteresNotes) {
-            List<CritereNoteRule> rules = critereNoteRuleRepository
-                    .findByCritereNoteIdAndActiveTrueOrderByPriorityAscIdAsc(critere.getId());
-            NoteRuleOutcome outcome = evaluateNoteRules(critere, rules, metadata, activeNoteValues);
-            int noteValue = outcome.noteValue();
-            validateNoteValue(noteValue, critere, activeNoteValues);
+            MlCriterionResult mlResult = mlResults.get(critere.getId());
+            double normalized = normalizedScore(mlResult);
+            int noteValue = noteValueFromNormalized(normalized, maxActiveNoteValue);
             double poids = positiveWeight(critere.getPoids());
-            double score = scoreCritere(noteValue, poids, maxActiveNoteValue);
+            double score = normalized * poids;
             sommeScoresCriteres += score;
             sommePoids += poids;
 
             ResultatCritere resultat = baseResult(critere, TypeCritere.NOTE);
-            resultat.setRuleConfigured(!rules.isEmpty());
-            resultat.setModeEvaluation(critere.getModeEvaluation());
+            resultat.setRuleConfigured(true);
+            resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             applyNoteResult(resultat, noteValue, poids, score, maxActiveNoteValue,
-                    outcome.matchedRule(), outcome.metadataUsed(), outcome.explanation());
-            resultat.setCommentaire(outcome.explanation());
+                    "ML_CONTENT_ANALYSIS", null, mlResult.justification());
+            applyMlResult(resultat, mlResult, evidenceSummary(mlResult), evidenceLivrableIds(mlResult));
+            resultat.setCommentaire(mlResult.justification());
             resultats.add(resultat);
         }
 
-        return buildEvaluationData(resultats, warnings, sommeScoresCriteres, sommePoids);
+        return buildEvaluationData(
+                resultats,
+                warnings,
+                sommeScoresCriteres,
+                sommePoids,
+                mlResponse
+        );
     }
 
     private EvaluationData buildEvaluationData(List<ResultatCritere> resultats,
                                                List<String> eliminatoryWarnings,
                                                double sommeScoresCriteres,
                                                double sommePoids) {
+        return buildEvaluationData(resultats, eliminatoryWarnings, sommeScoresCriteres, sommePoids, null);
+    }
+
+    private EvaluationData buildEvaluationData(List<ResultatCritere> resultats,
+                                               List<String> eliminatoryWarnings,
+                                               double sommeScoresCriteres,
+                                               double sommePoids,
+                                               MlEvaluationResponse mlResponse) {
         double scoreFinal = sommePoids > 0 ? round((sommeScoresCriteres / sommePoids) * 100) : 0.0;
         boolean hasWarnings = !eliminatoryWarnings.isEmpty();
         String commentaire = hasWarnings
                 ? "Projet evalue avec alertes eliminatoires non bloquantes."
                 : "Projet evalue avec succes.";
-        return new EvaluationData(resultats, scoreFinal, true, hasWarnings, eliminatoryWarnings, commentaire);
+        return new EvaluationData(
+                resultats,
+                scoreFinal,
+                true,
+                hasWarnings,
+                eliminatoryWarnings,
+                commentaire,
+                mlResponse == null ? "MANUAL" : safeValue(mlResponse.status()),
+                mlResponse == null ? null : mlResponse.modelVersion(),
+                mlResponse == null ? null : mlResponse.globalConfidence(),
+                mlResponse == null ? scoreFinal : scoreFinal,
+                mlResponse == null ? List.of() : safeList(mlResponse.warnings()),
+                mlResponse == null ? List.of() : safeList(mlResponse.strengths()),
+                mlResponse == null ? List.of() : safeList(mlResponse.weaknesses()),
+                mlResponse == null ? List.of() : safeList(mlResponse.recommendations()),
+                null
+        );
     }
 
     private EvaluationResponse persistEvaluation(SujetProjet projet,
@@ -252,6 +351,17 @@ public class EvaluationService {
         Evaluation evaluation = new Evaluation();
         evaluation.setSujetProjet(projet);
         evaluation.setScoreFinal(data.scoreFinal());
+        evaluation.setMlScore(data.mlScore());
+        evaluation.setMlStatus(data.mlStatus());
+        evaluation.setMlModelVersion(data.mlModelVersion());
+        evaluation.setMlGlobalConfidence(data.mlGlobalConfidence());
+        evaluation.setMlWarnings(joinLines(data.mlWarnings()));
+        evaluation.setStrengths(joinLines(data.strengths()));
+        evaluation.setWeaknesses(joinLines(data.weaknesses()));
+        evaluation.setRecommendations(joinLines(data.recommendations()));
+        evaluation.setFinalValidatedScore(null);
+        evaluation.setValidationStatus("PENDING");
+        evaluation.setErrorMessage(data.errorMessage());
         evaluation.setEligibleIndustrialisation(data.eligibleIndustrialisation());
         evaluation.setBloqueParEliminatoire(data.hasEliminatoryWarnings());
         evaluation.setHasEliminatoryWarnings(data.hasEliminatoryWarnings());
@@ -283,7 +393,7 @@ public class EvaluationService {
                                  String metadataUsed,
                                  String explanation) {
         resultat.setNoteValue(noteValue);
-        resultat.setNoteLabel(noteLevelService.labelFor(noteValue));
+        resultat.setNoteLabel(noteValue == 0 ? "Non evaluable" : noteLevelService.labelFor(noteValue));
         resultat.setNoteObtenue((double) noteValue);
         resultat.setBareme((double) maxActiveNoteValue);
         resultat.setPoids(poids);
@@ -294,160 +404,121 @@ public class EvaluationService {
         resultat.setEvidenceSummary(metadataUsed);
     }
 
-    private NoteRuleOutcome evaluateNoteRules(CritereNote critere,
-                                              List<CritereNoteRule> rules,
-                                              Map<String, Object> metadata,
-                                              Set<Integer> activeNoteValues) {
-        for (CritereNoteRule rule : rules) {
-            if (matchesRule(rule, metadata)) {
-                return new NoteRuleOutcome(
-                        rule.getNoteValue(),
-                        rule.getRuleName(),
-                        metadataSummary(rule.getMetadataKey(), metadata.get(rule.getMetadataKey())),
-                        StringUtils.hasText(rule.getDescription())
-                                ? rule.getDescription()
-                                : "Regle metadata appliquee: " + rule.getRuleName()
-                );
-            }
-        }
-        int defaultNote = safeDefaultNote(critere, activeNoteValues);
-        String explanation = rules.isEmpty()
-                ? "Aucune regle active pour ce critere; note par defaut appliquee."
-                : "Aucune regle metadata ne correspond; note par defaut appliquee.";
-        return new NoteRuleOutcome(
-                defaultNote,
-                "DEFAULT_NOTE",
-                metadataSummary("defaultNoteValue", defaultNote),
-                explanation
+    private MlEvaluationRequest buildMlRequest(SujetProjet projet,
+                                               List<CritereEliminatoire> criteresEliminatoires,
+                                               List<CritereNote> criteresNotes,
+                                               List<MlDeliverableContent> extractedContent,
+                                               int maxActiveNoteValue) {
+        List<MlCriterionRequest> criteria = new ArrayList<>();
+        criteresEliminatoires.forEach(critere -> criteria.add(new MlCriterionRequest(
+                critere.getId(),
+                TypeCritere.ELIMINATOIRE.name(),
+                critere.getLibelle(),
+                critere.getDescription(),
+                critere.getDomaine(),
+                1.0,
+                0.0,
+                true
+        )));
+        criteresNotes.forEach(critere -> criteria.add(new MlCriterionRequest(
+                critere.getId(),
+                TypeCritere.NOTE.name(),
+                critere.getLibelle(),
+                critere.getDescription(),
+                critere.getDomaine(),
+                (double) maxActiveNoteValue,
+                positiveWeight(critere.getPoids()),
+                false
+        )));
+        return new MlEvaluationRequest(
+                new MlProjectContext(
+                        projet.getId(),
+                        safeValue(projet.getTitre()),
+                        safeValue(projet.getDomaine()),
+                        safeValue(projet.getTechnologies()),
+                        projet.getCategorie() == null ? null : projet.getCategorie().name()
+                ),
+                criteria,
+                extractedContent
         );
     }
 
-    private boolean matchesRule(CritereNoteRule rule, Map<String, Object> metadata) {
-        Object raw = metadata.get(rule.getMetadataKey());
-        RuleOperator operator = rule.getOperator();
-        return switch (operator) {
-            case EXISTS -> exists(raw);
-            case NOT_EXISTS -> !exists(raw);
-            case EQUALS -> equalsExpected(raw, rule.getExpectedValue());
-            case NOT_EQUALS -> !equalsExpected(raw, rule.getExpectedValue());
-            case CONTAINS -> containsExpected(raw, rule.getExpectedValue());
-            case GTE, COUNT_GTE -> numeric(raw) >= numericThreshold(rule);
-            case LTE, COUNT_LTE -> numeric(raw) <= numericThreshold(rule);
-            case BETWEEN -> numeric(raw) >= nullToDouble(rule.getMinValue())
-                    && numeric(raw) <= nullToDouble(rule.getMaxValue());
-        };
+    private void validateMlResponse(MlEvaluationResponse response,
+                                    List<CritereEliminatoire> criteresEliminatoires,
+                                    List<CritereNote> criteresNotes) {
+        Set<Long> expectedIds = new java.util.HashSet<>();
+        criteresEliminatoires.forEach(critere -> expectedIds.add(critere.getId()));
+        criteresNotes.forEach(critere -> expectedIds.add(critere.getId()));
+        Set<Long> returnedIds = response.results().stream()
+                .map(MlCriterionResult::criterionId)
+                .collect(Collectors.toSet());
+        if (!returnedIds.containsAll(expectedIds)) {
+            throw new BusinessException("La reponse ML ne couvre pas tous les criteres actifs.");
+        }
+        response.results().forEach(result -> {
+            if (result.normalizedScore() == null && (result.score() == null || result.maxScore() == null)) {
+                throw new BusinessException("La reponse ML contient un score invalide pour le critere " + result.criterionId());
+            }
+            if (result.confidence() == null || result.confidence() < 0.0 || result.confidence() > 1.0) {
+                throw new BusinessException("La confiance ML est invalide pour le critere " + result.criterionId());
+            }
+        });
     }
 
-    private Map<String, Object> buildMetadata(SujetProjet projet, List<Livrable> livrables) {
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        List<String> types = livrables.stream()
-                .map(Livrable::getTypeLivrable)
-                .filter(Objects::nonNull)
-                .map(Enum::name)
-                .distinct()
-                .toList();
-        List<String> extensions = livrables.stream()
-                .map(this::extensionOf)
+    private void applyMlResult(ResultatCritere resultat,
+                               MlCriterionResult mlResult,
+                               String evidenceSummary,
+                               String evidenceLivrableIds) {
+        resultat.setMlScore(nullToZero(mlResult.score()));
+        resultat.setMlMaxScore(nullToZero(mlResult.maxScore()));
+        resultat.setNormalizedScore(normalizedScore(mlResult));
+        resultat.setConfidence(nullToZero(mlResult.confidence()));
+        resultat.setExplanation(mlResult.justification());
+        resultat.setEvidenceSummary(evidenceSummary);
+        resultat.setEvidenceLivrableIds(evidenceLivrableIds);
+        resultat.setStrengths(joinLines(safeList(mlResult.strengths())));
+        resultat.setWeaknesses(joinLines(safeList(mlResult.weaknesses())));
+        resultat.setRecommendations(joinLines(safeList(mlResult.recommendations())));
+        resultat.setMetadataUsed(null);
+    }
+
+    private double normalizedScore(MlCriterionResult mlResult) {
+        if (mlResult.normalizedScore() != null) {
+            return clamp01(mlResult.normalizedScore());
+        }
+        double maxScore = nullToZero(mlResult.maxScore());
+        if (maxScore <= 0.0) {
+            return 0.0;
+        }
+        return clamp01(nullToZero(mlResult.score()) / maxScore);
+    }
+
+    private int noteValueFromNormalized(double normalized, int maxActiveNoteValue) {
+        if (normalized <= 0.0 || maxActiveNoteValue <= 0) {
+            return 0;
+        }
+        return Math.max(1, Math.min(maxActiveNoteValue, (int) Math.round(normalized * maxActiveNoteValue)));
+    }
+
+    private String evidenceSummary(MlCriterionResult mlResult) {
+        List<MlEvidenceResponse> evidence = safeList(mlResult.evidence());
+        if (evidence.isEmpty()) {
+            return mlResult.justification();
+        }
+        return evidence.stream()
+                .limit(3)
+                .map(MlEvidenceResponse::excerpt)
                 .filter(StringUtils::hasText)
-                .distinct()
-                .toList();
+                .collect(Collectors.joining(" | "));
+    }
 
-        metadata.put("livrableCount", livrables.size());
-        metadata.put("livrableTypes", String.join(",", types));
-        metadata.put("fileExtensions", String.join(",", extensions));
-        metadata.put("fileCount", livrables.stream().filter(l -> StringUtils.hasText(l.getObjectName())).count());
-        metadata.put("externalLinkCount", livrables.stream().filter(l -> StringUtils.hasText(l.getLienExterne())).count());
-        metadata.put("hasGitLink", livrables.stream().anyMatch(this::isGitLivrable));
-        metadata.put("hasDocumentation", livrables.stream().anyMatch(this::isDocumentationLivrable));
-        metadata.put("hasPdfDocumentation", livrables.stream().anyMatch(this::isPdfDocumentationLivrable));
-        metadata.put("hasImage", livrables.stream().anyMatch(this::isImageLivrable));
-        metadata.put("totalFileSize", livrables.stream().map(Livrable::getSize).filter(Objects::nonNull).mapToLong(Long::longValue).sum());
-        metadata.put("maxFileSize", livrables.stream().map(Livrable::getSize).filter(Objects::nonNull).mapToLong(Long::longValue).max().orElse(0));
-        metadata.put("minFileSize", livrables.stream().map(Livrable::getSize).filter(Objects::nonNull).mapToLong(Long::longValue).min().orElse(0));
-        metadata.put("latestUploadedAtEpoch", livrables.stream()
-                .map(Livrable::getDateDepot)
+    private String evidenceLivrableIds(MlCriterionResult mlResult) {
+        return safeList(mlResult.evidence()).stream()
+                .map(MlEvidenceResponse::deliverableId)
                 .filter(Objects::nonNull)
-                .mapToLong(date -> date.toEpochSecond(ZoneOffset.UTC))
-                .max()
-                .orElse(0));
-        metadata.put("projectStatus", projet.getStatut() == null ? "" : projet.getStatut().name());
-        metadata.put("projectTitle", safeValue(projet.getTitre()));
-        metadata.put("projectDomaine", safeValue(projet.getDomaine()));
-        metadata.put("projectTechnologies", safeValue(projet.getTechnologies()));
-        metadata.put("projectCategory", projet.getCategorie() == null ? "" : projet.getCategorie().name());
-        metadata.put("livrableSearchText", livrables.stream().map(this::searchableLivrableText).collect(Collectors.joining(" ")));
-        return metadata;
-    }
-
-    private boolean exists(Object raw) {
-        if (raw == null) {
-            return false;
-        }
-        if (raw instanceof Boolean bool) {
-            return bool;
-        }
-        if (raw instanceof Number number) {
-            return number.doubleValue() > 0.0;
-        }
-        return StringUtils.hasText(String.valueOf(raw));
-    }
-
-    private boolean equalsExpected(Object raw, String expected) {
-        if (raw == null || expected == null) {
-            return raw == null && expected == null;
-        }
-        if (raw instanceof Boolean bool) {
-            return bool == Boolean.parseBoolean(expected);
-        }
-        Double rawNumber = parseDouble(raw);
-        Double expectedNumber = parseDouble(expected);
-        if (rawNumber != null && expectedNumber != null) {
-            return Double.compare(rawNumber, expectedNumber) == 0;
-        }
-        return String.valueOf(raw).equalsIgnoreCase(expected.trim());
-    }
-
-    private boolean containsExpected(Object raw, String expected) {
-        if (raw == null || !StringUtils.hasText(expected)) {
-            return false;
-        }
-        String source = String.valueOf(raw).toLowerCase(Locale.ROOT);
-        return Arrays.stream(expected.split("[,;]"))
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .map(value -> value.toLowerCase(Locale.ROOT))
-                .anyMatch(source::contains);
-    }
-
-    private double numeric(Object raw) {
-        Double value = parseDouble(raw);
-        return value == null ? 0.0 : value;
-    }
-
-    private Double parseDouble(Object raw) {
-        if (raw instanceof Number number) {
-            return number.doubleValue();
-        }
-        if (raw == null) {
-            return null;
-        }
-        try {
-            return Double.valueOf(String.valueOf(raw).trim());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private double numericThreshold(CritereNoteRule rule) {
-        if (rule.getMinValue() != null) {
-            return rule.getMinValue();
-        }
-        Double expected = parseDouble(rule.getExpectedValue());
-        return expected == null ? 0.0 : expected;
-    }
-
-    private double nullToDouble(Double value) {
-        return value == null ? 0.0 : value;
+                .distinct()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
     }
 
     private ResultatCritere baseResult(Long critereId, String libelle, String domaine, TypeCritere typeCritere) {
@@ -462,212 +533,13 @@ public class EvaluationService {
     private ResultatCritere baseResult(CritereEvaluation critere, TypeCritere typeCritere) {
         ResultatCritere resultat = baseResult(critere.getId(), critere.getLibelle(), critere.getDomaine(), typeCritere);
         resultat.setCritereDescription(critere.getDescription());
-        resultat.setModeEvaluation(critere.getModeEvaluation());
-        resultat.setRuleConfigured(isRuleConfigured(critere));
+        resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
+        resultat.setRuleConfigured(true);
         return resultat;
-    }
-
-    private boolean isRuleConfigured(CritereEvaluation critere) {
-        return Boolean.TRUE.equals(critere.getRuleEnabled()) && critere.getModeEvaluation() != null;
-    }
-
-    private void markUnconfigured(ResultatCritere resultat) {
-        resultat.setRuleConfigured(false);
-        resultat.setEvidenceSummary("Aucune regle automatique configuree pour ce critere.");
-        resultat.setExplanation("Ce critere necessite une regle d'evaluation automatique.");
-        resultat.setCommentaire(resultat.getExplanation());
-    }
-
-    private RuleOutcome evaluateLegacyRule(CritereEvaluation critere, List<Livrable> livrables) {
-        ModeEvaluation mode = critere.getModeEvaluation();
-        List<TypeLivrable> expectedTypes = expectedTypesFor(critere);
-        int minCount = minCountFor(critere);
-        String keyword = critere.getExpectedKeyword();
-        List<Livrable> matches = switch (mode) {
-            case DOCUMENTATION_PRESENT -> livrablesByTypes(livrables, expectedTypes);
-            case GIT_LINK_PRESENT -> livrables.stream()
-                    .filter(livrable -> hasType(livrable, expectedTypes) || containsIgnoreCase(livrable.getLienExterne(), "git"))
-                    .toList();
-            case LIVRABLE_TYPE_PRESENT -> livrablesByTypes(livrables, expectedTypes);
-            case LIVRABLE_LINK_PRESENT -> livrables.stream()
-                    .filter(livrable -> StringUtils.hasText(livrable.getLienExterne()))
-                    .filter(livrable -> expectedTypes.isEmpty() || hasType(livrable, expectedTypes))
-                    .toList();
-            case LIVRABLE_FILE_PRESENT -> livrables.stream()
-                    .filter(livrable -> StringUtils.hasText(livrable.getObjectName()))
-                    .filter(livrable -> expectedTypes.isEmpty() || hasType(livrable, expectedTypes))
-                    .toList();
-            case LIVRABLE_COUNT_MIN -> livrables;
-            case KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION -> livrables.stream()
-                    .filter(livrable -> StringUtils.hasText(keyword) && searchableLivrableText(livrable).contains(keyword.toLowerCase(Locale.ROOT)))
-                    .toList();
-            case MANUAL_ADMIN_VALUE -> List.of();
-        };
-
-        boolean satisfied = switch (mode) {
-            case LIVRABLE_COUNT_MIN -> livrables.size() >= minCount;
-            case MANUAL_ADMIN_VALUE -> false;
-            default -> !matches.isEmpty();
-        };
-
-        return new RuleOutcome(satisfied, matches, evidenceFor(mode, expectedTypes, minCount, keyword, matches, livrables.size()));
-    }
-
-    private List<Livrable> livrablesByTypes(List<Livrable> livrables, List<TypeLivrable> types) {
-        if (types.isEmpty()) {
-            return livrables;
-        }
-        return livrables.stream()
-                .filter(livrable -> hasType(livrable, types))
-                .toList();
-    }
-
-    private boolean hasType(Livrable livrable, List<TypeLivrable> types) {
-        return livrable.getTypeLivrable() != null && types.contains(livrable.getTypeLivrable());
-    }
-
-    private List<TypeLivrable> expectedTypesFor(CritereEvaluation critere) {
-        List<TypeLivrable> configured = parseLivrableTypes(critere.getExpectedLivrableTypes());
-        if (!configured.isEmpty()) {
-            return configured;
-        }
-        if (critere.getModeEvaluation() == ModeEvaluation.DOCUMENTATION_PRESENT) {
-            return List.of(TypeLivrable.DOCUMENTATION, TypeLivrable.RAPPORT);
-        }
-        if (critere.getModeEvaluation() == ModeEvaluation.GIT_LINK_PRESENT) {
-            return List.of(TypeLivrable.LIEN_GIT, TypeLivrable.CODE_SOURCE);
-        }
-        return List.of();
-    }
-
-    private List<TypeLivrable> parseLivrableTypes(String csv) {
-        if (!StringUtils.hasText(csv)) {
-            return List.of();
-        }
-        return Arrays.stream(csv.split("[,;\\s]+"))
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .map(value -> {
-                    try {
-                        return TypeLivrable.valueOf(value.toUpperCase(Locale.ROOT));
-                    } catch (IllegalArgumentException ex) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .toList();
-    }
-
-    private int minCountFor(CritereEvaluation critere) {
-        return critere.getMinLivrableCount() == null || critere.getMinLivrableCount() <= 0
-                ? 1
-                : critere.getMinLivrableCount();
-    }
-
-    private String evidenceFor(ModeEvaluation mode,
-                               List<TypeLivrable> expectedTypes,
-                               int minCount,
-                               String keyword,
-                               List<Livrable> matches,
-                               int livrableCount) {
-        if (mode == ModeEvaluation.LIVRABLE_COUNT_MIN) {
-            int missing = Math.max(0, minCount - livrableCount);
-            String message = livrableCount + " livrable(s) actif(s) trouve(s) sur " + minCount + " requis.";
-            return missing > 0
-                    ? message + " Ajoutez au moins " + missing + " livrable(s) supplementaire(s) pour satisfaire ce critere."
-                    : message;
-        }
-        if (matches.isEmpty()) {
-            if (mode == ModeEvaluation.KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION) {
-                return "Aucun livrable contenant le mot-cle \"" + safeValue(keyword) + "\" trouve.";
-            }
-            return "Aucun livrable correspondant trouve"
-                    + (expectedTypes.isEmpty() ? "." : " pour les types " + joinTypes(expectedTypes) + ".");
-        }
-        if (mode == ModeEvaluation.GIT_LINK_PRESENT) {
-            return "Lien Git ou code source trouve: " + displayLivrable(matches.get(0));
-        }
-        return matches.size() + " livrable(s) trouve(s): "
-                + matches.stream().limit(3).map(this::displayLivrable).collect(Collectors.joining(", "));
-    }
-
-    private String displayLivrable(Livrable livrable) {
-        if (StringUtils.hasText(livrable.getLienExterne())) {
-            return livrable.getLienExterne();
-        }
-        if (StringUtils.hasText(livrable.getOriginalFileName())) {
-            return livrable.getOriginalFileName();
-        }
-        return livrable.getNom();
-    }
-
-    private String joinTypes(List<TypeLivrable> types) {
-        return types.stream().map(Enum::name).collect(Collectors.joining(", "));
-    }
-
-    private String joinLivrableIds(List<Livrable> livrables) {
-        return livrables.stream()
-                .map(Livrable::getId)
-                .filter(Objects::nonNull)
-                .map(String::valueOf)
-                .collect(Collectors.joining(","));
-    }
-
-    private boolean containsIgnoreCase(String source, String expected) {
-        return StringUtils.hasText(source) && source.toLowerCase(Locale.ROOT).contains(expected.toLowerCase(Locale.ROOT));
-    }
-
-    private boolean isGitLivrable(Livrable livrable) {
-        return livrable.getTypeLivrable() == TypeLivrable.LIEN_GIT
-                || livrable.getTypeLivrable() == TypeLivrable.CODE_SOURCE
-                || containsIgnoreCase(livrable.getLienExterne(), "git");
-    }
-
-    private boolean isDocumentationLivrable(Livrable livrable) {
-        return livrable.getTypeLivrable() == TypeLivrable.DOCUMENTATION
-                || livrable.getTypeLivrable() == TypeLivrable.RAPPORT;
-    }
-
-    private boolean isPdfDocumentationLivrable(Livrable livrable) {
-        return isDocumentationLivrable(livrable) && "pdf".equalsIgnoreCase(extensionOf(livrable));
-    }
-
-    private boolean isImageLivrable(Livrable livrable) {
-        String extension = extensionOf(livrable);
-        return livrable.getTypeLivrable() == TypeLivrable.IMAGE
-                || Set.of("png", "jpg", "jpeg").contains(extension);
-    }
-
-    private String extensionOf(Livrable livrable) {
-        String name = StringUtils.hasText(livrable.getOriginalFileName())
-                ? livrable.getOriginalFileName()
-                : livrable.getObjectName();
-        if (!StringUtils.hasText(name) || !name.contains(".")) {
-            return "";
-        }
-        return name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private String searchableLivrableText(Livrable livrable) {
-        return String.join(" ",
-                safeLower(livrable.getTypeLivrable() == null ? null : livrable.getTypeLivrable().name()),
-                safeLower(livrable.getNom()),
-                safeLower(livrable.getDescription()),
-                safeLower(livrable.getOriginalFileName()),
-                safeLower(livrable.getLienExterne())
-        );
-    }
-
-    private String safeLower(String value) {
-        return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
     private String safeValue(String value) {
         return value == null ? "" : value;
-    }
-
-    private String metadataSummary(String key, Object value) {
-        return key + "=" + String.valueOf(value);
     }
 
     private Set<Integer> activeNoteValuesFor(List<CritereNote> criteresNotes) {
@@ -679,20 +551,6 @@ public class EvaluationService {
                 .mapToInt(Integer::intValue)
                 .max()
                 .orElse(0);
-    }
-
-    private int safeDefaultNote(CritereNote critere, Set<Integer> activeNoteValues) {
-        Integer configured = critere.getDefaultNoteValue();
-        if (configured != null && activeNoteValues.contains(configured)) {
-            return configured;
-        }
-        if (activeNoteValues.contains(DEFAULT_NOTE)) {
-            return DEFAULT_NOTE;
-        }
-        return activeNoteValues.stream()
-                .mapToInt(Integer::intValue)
-                .min()
-                .orElseThrow(() -> new BusinessConflictException(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE));
     }
 
     private int resolveManualNoteValue(ResultatNoteRequest request) {
@@ -724,11 +582,59 @@ public class EvaluationService {
         return value == null || value <= 0.0 ? 1.0 : value;
     }
 
+    private double nullToZero(Double value) {
+        return value == null ? 0.0 : value;
+    }
+
+    private double clamp01(Double value) {
+        if (value == null) {
+            return 0.0;
+        }
+        return Math.max(0.0, Math.min(1.0, value));
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
+    }
+
+    private String joinLines(List<String> values) {
+        return safeList(values).stream()
+                .filter(StringUtils::hasText)
+                .collect(Collectors.joining("\n"));
+    }
+
+    private List<String> splitLines(String value) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split("\\n"))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
+    }
+
     private double scoreCritere(int noteValue, double poids, int maxActiveNoteValue) {
         if (maxActiveNoteValue <= 0) {
             throw new BusinessConflictException(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE);
         }
         return (noteValue / (double) maxActiveNoteValue) * poids;
+    }
+
+    private void ensureNoDuplicateEvaluation(Long projetId) {
+        if (recalculationCooldownSeconds <= 0) {
+            return;
+        }
+        Evaluation latest = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId).orElse(null);
+        if (latest == null || latest.getDateCalcul() == null) {
+            return;
+        }
+        LocalDateTime allowedAt = latest.getDateCalcul().plusSeconds(recalculationCooldownSeconds);
+        if (allowedAt.isAfter(LocalDateTime.now())) {
+            long retryAfterSeconds = Math.max(1, java.time.Duration.between(LocalDateTime.now(), allowedAt).toSeconds());
+            throw new BusinessConflictException(
+                    "Une evaluation vient deja d'etre calculee. Reessayez dans " + retryAfterSeconds + " seconde(s)."
+            );
+        }
     }
 
     private void ensureCanCalculate(User current, SujetProjet projet) {
@@ -749,6 +655,20 @@ public class EvaluationService {
             return;
         }
         throw new AccessDeniedException("Vous n'etes pas autorise a consulter cette evaluation.");
+    }
+
+    private void ensureCanValidate(User current) {
+        if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CI) {
+            return;
+        }
+        throw new AccessDeniedException("Vous n'etes pas autorise a valider cette evaluation.");
+    }
+
+    private void ensureCanOverride(User current) {
+        if (current.getRole() == Role.ROLE_ADMIN) {
+            return;
+        }
+        throw new AccessDeniedException("Seul un administrateur peut surcharger le score final.");
     }
 
     private String resolveActorName(User currentUser) {
@@ -833,7 +753,14 @@ public class EvaluationService {
                         resultat.getEvidenceSummary(),
                         parseEvidenceLivrableIds(resultat.getEvidenceLivrableIds()),
                         resultat.getRuleConfigured(),
-                        resultat.getCommentaire()
+                        resultat.getCommentaire(),
+                        resultat.getMlScore(),
+                        resultat.getMlMaxScore(),
+                        resultat.getNormalizedScore(),
+                        resultat.getConfidence(),
+                        splitLines(resultat.getStrengths()),
+                        splitLines(resultat.getWeaknesses()),
+                        splitLines(resultat.getRecommendations())
                 ))
                 .toList();
         int totalNotes = (int) resultats.stream().filter(r -> r.typeCritere() == TypeCritere.NOTE).count();
@@ -858,7 +785,7 @@ public class EvaluationService {
                 .map(ResultatCritereResponse::critereLibelle)
                 .toList();
         String coverageMessage = "Score calcule sur " + totalNotes
-                + " critere(s) note(s) actif(s), avec note par defaut si aucune regle metadata ne correspond.";
+                + " critere(s) note(s) actif(s) a partir du contenu extrait des livrables.";
         if (notesNonConfigures > 0 || eliminatoiresNonConfigures > 0) {
             coverageMessage += " " + (notesNonConfigures + eliminatoiresNonConfigures)
                     + " critere(s) utilisent une configuration incomplete.";
@@ -886,7 +813,21 @@ public class EvaluationService {
                 eliminatoiresNonConfigures,
                 evaluationComplete,
                 coverageMessage,
-                warningCriteriaNames
+                warningCriteriaNames,
+                evaluation.getMlStatus(),
+                evaluation.getMlModelVersion(),
+                evaluation.getMlGlobalConfidence(),
+                evaluation.getMlScore(),
+                evaluation.getFinalValidatedScore(),
+                evaluation.getValidationStatus(),
+                evaluation.getValidatedBy(),
+                evaluation.getValidatedAt(),
+                evaluation.getOverrideReason(),
+                splitLines(evaluation.getMlWarnings()),
+                splitLines(evaluation.getStrengths()),
+                splitLines(evaluation.getWeaknesses()),
+                splitLines(evaluation.getRecommendations()),
+                evaluation.getErrorMessage()
         );
     }
 
@@ -896,22 +837,16 @@ public class EvaluationService {
             Boolean eligibleIndustrialisation,
             Boolean hasEliminatoryWarnings,
             List<String> eliminatoryWarnings,
-            String commentaire
-    ) {
-    }
-
-    private record RuleOutcome(
-            boolean satisfied,
-            List<Livrable> matchedLivrables,
-            String evidenceSummary
-    ) {
-    }
-
-    private record NoteRuleOutcome(
-            Integer noteValue,
-            String matchedRule,
-            String metadataUsed,
-            String explanation
+            String commentaire,
+            String mlStatus,
+            String mlModelVersion,
+            Double mlGlobalConfidence,
+            Double mlScore,
+            List<String> mlWarnings,
+            List<String> strengths,
+            List<String> weaknesses,
+            List<String> recommendations,
+            String errorMessage
     ) {
     }
 }

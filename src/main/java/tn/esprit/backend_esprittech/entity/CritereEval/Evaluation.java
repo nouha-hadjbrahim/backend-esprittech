@@ -29,6 +29,44 @@ public class Evaluation {
 
     private Double scoreFinal;
 
+    private Double mlScore;
+
+    private Double finalValidatedScore;
+
+    @Column(length = 40)
+    private String mlStatus;
+
+    @Column(length = 255)
+    private String mlModelVersion;
+
+    private Double mlGlobalConfidence;
+
+    @Column(length = 4000)
+    private String mlWarnings;
+
+    @Column(length = 4000)
+    private String strengths;
+
+    @Column(length = 4000)
+    private String weaknesses;
+
+    @Column(length = 4000)
+    private String recommendations;
+
+    @Column(length = 40)
+    private String validationStatus = "PENDING";
+
+    @Column(length = 255)
+    private String validatedBy;
+
+    private LocalDateTime validatedAt;
+
+    @Column(length = 2000)
+    private String overrideReason;
+
+    @Column(length = 4000)
+    private String errorMessage;
+
     @Column(nullable = false)
     private Boolean eligibleIndustrialisation;
 

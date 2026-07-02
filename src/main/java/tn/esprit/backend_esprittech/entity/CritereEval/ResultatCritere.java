@@ -57,6 +57,14 @@ public class ResultatCritere {
 
     private Double poids;
 
+    private Double mlScore;
+
+    private Double mlMaxScore;
+
+    private Double normalizedScore;
+
+    private Double confidence;
+
     private Integer noteValue;
 
     @Column(length = 255)
@@ -76,6 +84,15 @@ public class ResultatCritere {
 
     @Column(length = 1000)
     private String evidenceLivrableIds;
+
+    @Column(length = 4000)
+    private String strengths;
+
+    @Column(length = 4000)
+    private String weaknesses;
+
+    @Column(length = 4000)
+    private String recommendations;
 
     @Column(nullable = false)
     private Boolean ruleConfigured = false;
