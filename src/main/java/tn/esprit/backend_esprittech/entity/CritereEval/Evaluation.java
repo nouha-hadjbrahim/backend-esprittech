@@ -41,16 +41,20 @@ public class Evaluation {
 
     private Double mlGlobalConfidence;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(name = "ml_warnings", columnDefinition = "TEXT")
     private String mlWarnings;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String strengths;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String weaknesses;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String recommendations;
 
     @Column(length = 40)
@@ -61,10 +65,12 @@ public class Evaluation {
 
     private LocalDateTime validatedAt;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(name = "override_reason", columnDefinition = "TEXT")
     private String overrideReason;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
     @Column(nullable = false)
@@ -77,19 +83,22 @@ public class Evaluation {
 
     private Integer eliminatoryWarningsCount = 0;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(name = "eliminatory_warnings_details", columnDefinition = "TEXT")
     private String eliminatoryWarningsDetails;
 
     @Column(nullable = false)
     private LocalDateTime dateCalcul;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String commentaire;
 
     @Column(length = 255)
     private String calculatedBy;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(name = "recalculation_reason", columnDefinition = "TEXT")
     private String recalculationReason;
 
     @OneToMany(

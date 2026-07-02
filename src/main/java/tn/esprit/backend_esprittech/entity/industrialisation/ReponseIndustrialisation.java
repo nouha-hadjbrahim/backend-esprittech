@@ -31,7 +31,8 @@ public class ReponseIndustrialisation {
     @JoinColumn(name = "question_id", nullable = false)
     private QuestionIndustrialisation question;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(name = "valeur_texte", columnDefinition = "TEXT")
     private String valeurTexte;
 
     private Boolean valeurBoolean;

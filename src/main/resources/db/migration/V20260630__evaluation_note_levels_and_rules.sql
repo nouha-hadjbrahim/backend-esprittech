@@ -69,8 +69,8 @@ ALTER TABLE resultats_criteres
     ADD COLUMN IF NOT EXISTS note_value INTEGER,
     ADD COLUMN IF NOT EXISTS note_label VARCHAR(255),
     ADD COLUMN IF NOT EXISTS matched_rule VARCHAR(255),
-    ADD COLUMN IF NOT EXISTS metadata_used VARCHAR(2000),
-    ADD COLUMN IF NOT EXISTS explanation VARCHAR(2000);
+    ADD COLUMN IF NOT EXISTS metadata_used TEXT,
+    ADD COLUMN IF NOT EXISTS explanation TEXT;
 
 UPDATE resultats_criteres
 SET note_value = GREATEST(1, ROUND(COALESCE(note_obtenue, 3))::INTEGER)
@@ -85,7 +85,7 @@ WHERE rc.note_value = nl.level_value
 ALTER TABLE evaluations
     ADD COLUMN IF NOT EXISTS has_eliminatory_warnings BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS eliminatory_warnings_count INTEGER DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS eliminatory_warnings_details VARCHAR(4000);
+    ADD COLUMN IF NOT EXISTS eliminatory_warnings_details TEXT;
 
 UPDATE evaluations
 SET has_eliminatory_warnings = COALESCE(bloque_par_eliminatoire, FALSE),
@@ -104,4 +104,4 @@ WHERE has_eliminatory_warnings IS NULL;
 ALTER TABLE candidatures_industrialisation
     ADD COLUMN IF NOT EXISTS has_eliminatory_warnings BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS eliminatory_warnings_count INTEGER DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS eliminatory_warnings_details VARCHAR(4000);
+    ADD COLUMN IF NOT EXISTS eliminatory_warnings_details TEXT;
