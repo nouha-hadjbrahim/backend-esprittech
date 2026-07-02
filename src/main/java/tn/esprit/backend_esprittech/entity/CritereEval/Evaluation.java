@@ -29,6 +29,50 @@ public class Evaluation {
 
     private Double scoreFinal;
 
+    private Double mlScore;
+
+    private Double finalValidatedScore;
+
+    @Column(length = 40)
+    private String mlStatus;
+
+    @Column(length = 255)
+    private String mlModelVersion;
+
+    private Double mlGlobalConfidence;
+
+    @Lob
+    @Column(name = "ml_warnings", columnDefinition = "TEXT")
+    private String mlWarnings;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String strengths;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String weaknesses;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String recommendations;
+
+    @Column(length = 40)
+    private String validationStatus = "PENDING";
+
+    @Column(length = 255)
+    private String validatedBy;
+
+    private LocalDateTime validatedAt;
+
+    @Lob
+    @Column(name = "override_reason", columnDefinition = "TEXT")
+    private String overrideReason;
+
+    @Lob
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
     @Column(nullable = false)
     private Boolean eligibleIndustrialisation;
 
@@ -39,19 +83,22 @@ public class Evaluation {
 
     private Integer eliminatoryWarningsCount = 0;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(name = "eliminatory_warnings_details", columnDefinition = "TEXT")
     private String eliminatoryWarningsDetails;
 
     @Column(nullable = false)
     private LocalDateTime dateCalcul;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String commentaire;
 
     @Column(length = 255)
     private String calculatedBy;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(name = "recalculation_reason", columnDefinition = "TEXT")
     private String recalculationReason;
 
     @OneToMany(

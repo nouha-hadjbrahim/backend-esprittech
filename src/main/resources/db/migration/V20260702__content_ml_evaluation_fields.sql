@@ -1,0 +1,27 @@
+ALTER TABLE evaluations
+    ADD COLUMN IF NOT EXISTS ml_score DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS final_validated_score DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS ml_status VARCHAR(40),
+    ADD COLUMN IF NOT EXISTS ml_model_version VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS ml_global_confidence DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS ml_warnings TEXT,
+    ADD COLUMN IF NOT EXISTS strengths TEXT,
+    ADD COLUMN IF NOT EXISTS weaknesses TEXT,
+    ADD COLUMN IF NOT EXISTS recommendations TEXT,
+    ADD COLUMN IF NOT EXISTS validation_status VARCHAR(40),
+    ADD COLUMN IF NOT EXISTS validated_by VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS override_reason TEXT,
+    ADD COLUMN IF NOT EXISTS error_message TEXT;
+
+ALTER TABLE resultats_criteres
+    ADD COLUMN IF NOT EXISTS ml_score DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS ml_max_score DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS normalized_score DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS strengths TEXT,
+    ADD COLUMN IF NOT EXISTS weaknesses TEXT,
+    ADD COLUMN IF NOT EXISTS recommendations TEXT;
+
+UPDATE evaluations
+SET validation_status = COALESCE(validation_status, 'PENDING');

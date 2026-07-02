@@ -1,13 +1,17 @@
 package tn.esprit.backend_esprittech.controller.CritereEval;
 
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationOverrideRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationValidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
@@ -38,6 +42,39 @@ public class EvaluationController {
     @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CI')")
     public EvaluationResponse getLatestEvaluation(@PathVariable Long id) {
         return evaluationService.getLatestEvaluationByProjet(id);
+    }
+
+    @GetMapping("/{id}/evaluations")
+    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CI')")
+    public List<EvaluationResponse> getEvaluationHistory(@PathVariable Long id) {
+        return evaluationService.getEvaluationHistoryByProjet(id);
+    }
+
+    @PostMapping("/{id}/evaluation/valider")
+    @PreAuthorize("hasAnyRole('ADMIN','CI')")
+    public EvaluationResponse validerEvaluation(
+            @PathVariable Long id,
+            @RequestBody(required = false) EvaluationValidationRequest request
+    ) {
+        return evaluationService.validateLatestEvaluation(id, request);
+    }
+
+    @PostMapping("/{id}/evaluation/rejeter")
+    @PreAuthorize("hasAnyRole('ADMIN','CI')")
+    public EvaluationResponse rejeterEvaluation(
+            @PathVariable Long id,
+            @RequestBody(required = false) EvaluationValidationRequest request
+    ) {
+        return evaluationService.rejectLatestEvaluation(id, request);
+    }
+
+    @PostMapping("/{id}/evaluation/override")
+    @PreAuthorize("hasRole('ADMIN')")
+    public EvaluationResponse overrideEvaluation(
+            @PathVariable Long id,
+            @Valid @RequestBody EvaluationOverrideRequest request
+    ) {
+        return evaluationService.overrideLatestEvaluation(id, request);
     }
 
     @GetMapping("/evaluables")
