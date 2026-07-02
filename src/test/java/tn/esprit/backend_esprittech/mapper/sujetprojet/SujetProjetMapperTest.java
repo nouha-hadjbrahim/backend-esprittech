@@ -101,11 +101,12 @@ class SujetProjetMapperTest {
                 .dateCreation(now)
                 .build();
 
-        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", "REEE");
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", "REEE", 2);
 
         assertEquals(List.of("Soft skills", "Java"), response.prerequis());
         assertEquals(List.of("Domaine"), response.domaines());
         assertEquals("Dr. Sami", response.encadrantNom());
+        assertEquals(2, response.nombreMembresActifs());
     }
 
     @Test
@@ -126,7 +127,7 @@ class SujetProjetMapperTest {
                 .encadrantId(1001L)
                 .build();
 
-        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", null);
+        SujetProjetResponse response = mapper.toResponse(entity, "Dr. Sami", "sami@esprit.tn", null, 0);
 
         assertTrue(response.prerequis().isEmpty());
         assertTrue(response.domaines().isEmpty());

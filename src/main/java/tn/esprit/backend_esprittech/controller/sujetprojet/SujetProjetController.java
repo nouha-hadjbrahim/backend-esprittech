@@ -96,6 +96,15 @@ public class SujetProjetController {
         return ResponseEntity.ok(sujetProjetService.getSujetsAValider(categorie, statut));
     }
 
+    @GetMapping("/equipe")
+    @PreAuthorize("hasRole('CHEF_EQUIPE')")
+    @Operation(summary = "Sujets de l'équipe", description = "Liste tous les sujets déposés par les enseignants de l'équipe du chef connecté.")
+    public ResponseEntity<List<SujetProjetResponse>> getSujetsEquipe(
+            @RequestParam(required = false) CategorieSujet categorie,
+            @RequestParam(required = false) StatutSujet statut) {
+        return ResponseEntity.ok(sujetProjetService.getSujetsEquipe(categorie, statut));
+    }
+
     @PostMapping("/{id}/valider")
     @PreAuthorize("hasRole('CHEF_EQUIPE')")
     @Operation(summary = "Valider un sujet", description = "Accepte la demande et publie le sujet dans le catalogue.")

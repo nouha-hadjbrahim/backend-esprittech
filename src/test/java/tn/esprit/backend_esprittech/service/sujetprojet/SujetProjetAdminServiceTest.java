@@ -21,6 +21,7 @@ import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 
@@ -40,6 +41,7 @@ class SujetProjetAdminServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private SujetReferenceService referenceService;
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
+    @Mock private AffectationRepository affectationRepository;
 
     @InjectMocks private SujetProjetService service;
 
@@ -71,7 +73,7 @@ class SujetProjetAdminServiceTest {
                 List.of("Soft skills"), List.of("Info"), List.of("Java"), 2,
                 StatutSujet.SOUMIS_EN_VALIDATION, null, false, false,
                 10L, "Sami Ben Ali", "sami@esprit.tn", null,
-                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null);
+                entity.getDateCreation(), entity.getDateCreation(), null, null, null, null, false, 0, 0);
 
         request = new SujetProjetRequest(
                 "Sujet modifié", CategorieSujet.PFE, "Desc", "Obj",
@@ -82,7 +84,8 @@ class SujetProjetAdminServiceTest {
         when(userService.getCurrentUser()).thenReturn(admin);
         when(userRepository.findById(10L)).thenReturn(Optional.of(
                 User.builder().id(10L).nom("Ben Ali").prenom("Sami").email("sami@esprit.tn").build()));
-        when(sujetProjetMapper.toResponse(any(SujetProjet.class), anyString(), anyString(), isNull()))
+        when(affectationRepository.countBySujetIdAndStatut(anyLong(), any())).thenReturn(0L);
+        when(sujetProjetMapper.toResponse(any(SujetProjet.class), anyString(), anyString(), isNull(), anyInt()))
                 .thenReturn(response);
     }
 
@@ -148,7 +151,7 @@ class SujetProjetAdminServiceTest {
         SujetProjetResponse result = service.validerSujetAsAdmin(1L);
 
         assertNotNull(result);
-        assertEquals(StatutSujet.CANDIDATURE_OUVERTE, entity.getStatut());
+        assertEquals(StatutSujet.VALIDE, entity.getStatut());
         assertTrue(entity.getCatalogue());
         assertNull(entity.getMotifInvalidation());
         assertNotNull(entity.getDateValidation());

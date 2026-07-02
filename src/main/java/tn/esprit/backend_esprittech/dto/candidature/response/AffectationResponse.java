@@ -10,6 +10,7 @@ public record AffectationResponse(
         Long etudiantId,
         String etudiantNom,
         String etudiantPrenom,
+        String etudiantEmail,
         StatutAffectation statut,
         Instant dateDebut,
         Instant dateRetrait,

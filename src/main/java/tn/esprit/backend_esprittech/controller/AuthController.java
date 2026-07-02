@@ -95,6 +95,7 @@ public class AuthController {
     private void writeAuthCookies(HttpServletResponse response, AuthResponse result) {
         response.addHeader(HttpHeaders.SET_COOKIE, cookieFactory.accessToken(result.accessToken()).toString());
         response.addHeader(HttpHeaders.SET_COOKIE, cookieFactory.refreshToken(result.refreshToken()).toString());
+        response.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + result.accessToken());
     }
 
     /** Lit la valeur (non vide) d'un cookie par son nom, ou {@code null} s'il est absent. */

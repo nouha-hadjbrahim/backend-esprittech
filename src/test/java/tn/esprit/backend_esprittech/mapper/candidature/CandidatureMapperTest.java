@@ -21,6 +21,7 @@ class CandidatureMapperTest {
         etudiant.setId(7L);
         etudiant.setNom("Ben Ali");
         etudiant.setPrenom("Sami");
+        etudiant.setEmail("sami.benali@esprit.tn");
         Candidature candidature = Candidature.builder()
                 .id(100L)
                 .sujetId(42L)
@@ -39,6 +40,7 @@ class CandidatureMapperTest {
         assertEquals(7L, response.etudiantId());
         assertEquals("Ben Ali", response.etudiantNom());
         assertEquals("Sami", response.etudiantPrenom());
+        assertEquals("sami.benali@esprit.tn", response.etudiantEmail());
         assertEquals(StatutCandidature.REFUSEE, response.statut());
         assertEquals("Places completes", response.motifRefus());
         assertEquals("Motivation", response.messageEtudiant());

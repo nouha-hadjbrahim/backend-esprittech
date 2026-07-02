@@ -30,8 +30,8 @@ public class AuthCookieFactory {
     /** Cookie portant le refresh token (restreint à l'endpoint de refresh). */
     public static final String REFRESH_TOKEN_COOKIE = "refresh_token";
 
-    private static final String ACCESS_PATH = "/api";
-    private static final String REFRESH_PATH = "/api/auth/refresh";
+    private static final String ACCESS_PATH = "/";
+    private static final String REFRESH_PATH = "/";
 
     private final boolean secure;
     private final String sameSite;
