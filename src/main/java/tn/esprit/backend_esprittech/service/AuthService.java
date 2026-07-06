@@ -6,12 +6,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.config.JwtTokenProvider;
 import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
 import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
@@ -42,6 +45,7 @@ public class AuthService {
     }
 
     @Transactional
+    @Historise(action = ActionType.REGISTER, entityType = EntityType.USER, entityIdExpression = "#result.user().id()", newValuesExpression = "{'email': #request.email()}", summaryExpression = "'Inscription ' + #request.email()")
     public AuthResponse register(RegisterRequest request) {
         // 1. L'email/identifiant doit correspondre à une entrée du référentiel (source de vérité)
         ReferentielUtilisateur reference =
@@ -75,6 +79,7 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
+    @Historise(action = ActionType.LOGIN, entityType = EntityType.USER, entityIdExpression = "#result.user().id()", newValuesExpression = "{'email': #request.email()}", summaryExpression = "'Connexion ' + #request.email()")
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password()));

@@ -2,11 +2,14 @@ package tn.esprit.backend_esprittech.service.equipe;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.equipe.AffiliationEnseignantResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
@@ -17,7 +20,9 @@ import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class AffiliationEnseignantService {
@@ -38,6 +43,7 @@ public class AffiliationEnseignantService {
     }
 
     @Transactional
+    @Historise(action = ActionType.DEMANDER_AFFILIATION, entityType = EntityType.AFFILIATION_ENSEIGNANT, entityIdExpression = "#result.id()", summaryExpression = "'Demande d''affiliation à l''équipe ' + #result.equipeNom()", metadataExpression = "{'equipeId': #equipeId, 'enseignantId': #enseignant.id}")
     public AffiliationEnseignantResponse demander(Long equipeId, User enseignant) {
         if (enseignant.getRole() != Role.ROLE_ENSEIGNANT) {
             throw new BusinessException("Seuls les enseignants peuvent demander une affiliation");
@@ -65,7 +71,19 @@ public class AffiliationEnseignantService {
         return toResponse(affiliationRepository.save(affiliation));
     }
 
+    public Map<String, Object> getOldValues(Long affiliationId) {
+        AffiliationEnseignant a = affiliationRepository.findById(affiliationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Demande d'affiliation introuvable (id=" + affiliationId + ")"));
+        Map<String, Object> map = new HashMap<>();
+        map.put("statut", a.getStatut().name());
+        map.put("enseignantId", a.getEnseignant().getId());
+        map.put("equipeId", a.getEquipe().getId());
+        map.put("motifDecision", a.getMotifDecision());
+        return map;
+    }
+
     @Transactional
+    @Historise(action = ActionType.TRAITER_AFFILIATION, entityType = EntityType.AFFILIATION_ENSEIGNANT, entityIdExpression = "#affiliationId", oldValuesExpression = "@affiliationEnseignantService.getOldValues(#affiliationId)", summaryExpression = "'Traitement de la demande d''affiliation (id=' + #affiliationId + ', statut=' + #result.statut() + ')'", metadataExpression = "{'equipeId': #equipeId, 'statut': #statut.name(), 'motif': #motifDecision, 'deciderId': #decider.id}")
     public AffiliationEnseignantResponse traiter(Long affiliationId, Long equipeId, User decider,
                                                   StatutAffiliation statut, String motifDecision) {
         if (decider.getRole() != Role.ROLE_ADMIN && decider.getRole() != Role.ROLE_CHEF_EQUIPE) {

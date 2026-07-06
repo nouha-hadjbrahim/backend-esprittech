@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tn.esprit.backend_esprittech.dto.response.HistoriqueResponse;
 import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 
 import java.time.LocalDateTime;
@@ -35,7 +36,7 @@ public class HistoriqueController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_CI', 'ROLE_CHEF_EQUIPE')")
     @Operation(summary = "Recherche paginée avec filtres")
     public ResponseEntity<PagedResponse<HistoriqueResponse>> search(
-            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) EntityType entityType,
             @RequestParam(required = false) Long entityId,
             @RequestParam(required = false) ActionType action,
             @RequestParam(required = false) Long actorId,
@@ -50,7 +51,7 @@ public class HistoriqueController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_CI', 'ROLE_CHEF_EQUIPE')")
     @Operation(summary = "Historique d'une entité")
     public ResponseEntity<PagedResponse<HistoriqueResponse>> findByEntity(
-            @PathVariable String entityType,
+            @PathVariable EntityType entityType,
             @PathVariable Long entityId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(historiqueService.findByEntity(entityType, entityId, pageable));

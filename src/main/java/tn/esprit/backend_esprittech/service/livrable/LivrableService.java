@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableLinkRequest;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableUpdateRequest;
@@ -14,6 +15,8 @@ import tn.esprit.backend_esprittech.entity.livrable.Livrable;
 import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
@@ -24,8 +27,10 @@ import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.io.InputStream;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -57,6 +62,7 @@ public class LivrableService {
     private final UserService userService;
     private final MinioStorageService storageService;
 
+    @Historise(action = ActionType.UPLOAD, entityType = EntityType.LIVRABLE, entityIdExpression = "#result.id()", summaryExpression = "'Upload livrable ' + #result.nom()")
     public LivrableResponse upload(Long projetId,
                                    TypeLivrable typeLivrable,
                                    String nom,
@@ -86,6 +92,7 @@ public class LivrableService {
         return toResponse(livrableRepository.save(livrable));
     }
 
+    @Historise(action = ActionType.LINK, entityType = EntityType.LIVRABLE, entityIdExpression = "#result.id()", summaryExpression = "'Ajout lien livrable ' + #result.nom()")
     public LivrableResponse addLink(Long projetId, LivrableLinkRequest request) {
         User current = userService.getCurrentUser();
         SujetProjet projet = getProjet(projetId);
@@ -131,6 +138,16 @@ public class LivrableService {
         return toResponse(livrable);
     }
 
+    public Map<String, Object> getLivrableOldValues(Long id) {
+        Livrable l = getLivrable(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", l.getNom());
+        map.put("typeLivrable", l.getTypeLivrable());
+        map.put("actif", l.getActif());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getLivrableOldValues(#id)", summaryExpression = "'Modification livrable ' + #result.nom()")
     public LivrableResponse update(Long id, LivrableUpdateRequest request) {
         Livrable livrable = getLivrable(id);
         ensureCanManage(userService.getCurrentUser(), livrable.getSujetProjet());
@@ -149,6 +166,7 @@ public class LivrableService {
         return toResponse(livrableRepository.save(livrable));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getLivrableOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Suppression livrable (id=' + #id + ')'")
     public void delete(Long id) {
         Livrable livrable = getLivrable(id);
         ensureCanManage(userService.getCurrentUser(), livrable.getSujetProjet());

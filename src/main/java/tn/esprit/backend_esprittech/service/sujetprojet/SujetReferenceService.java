@@ -7,18 +7,23 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.ReferenceItemRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetDomaine;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetPrerequis;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetDomaineRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -53,6 +58,7 @@ public class SujetReferenceService {
         return domaineRepository.findAllByOrderByNomAsc().stream().map(SujetDomaine::getNom).toList();
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.SUJET_DOMAINE, entityIdExpression = "#result.id()", summaryExpression = "'Création du domaine ' + #result.nom()")
     public ReferenceItemResponse createDomaine(ReferenceItemRequest request) {
         String nom = normalizeNom(request.nom());
         if (domaineRepository.existsByNomIgnoreCase(nom)) {
@@ -61,6 +67,14 @@ public class SujetReferenceService {
         return toResponse(domaineRepository.save(SujetDomaine.builder().nom(nom).build()));
     }
 
+    public Map<String, Object> getDomaineOldValues(Long id) {
+        SujetDomaine d = findDomaine(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", d.getNom());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_DOMAINE, entityIdExpression = "#id", oldValuesExpression = "@sujetReferenceService.getDomaineOldValues(#id)", summaryExpression = "'Modification du domaine ' + #result.nom()")
     public ReferenceItemResponse updateDomaine(Long id, ReferenceItemRequest request) {
         SujetDomaine domaine = findDomaine(id);
         String nom = normalizeNom(request.nom());
@@ -73,6 +87,7 @@ public class SujetReferenceService {
         return toResponse(domaineRepository.save(domaine));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_DOMAINE, entityIdExpression = "#id", oldValuesExpression = "@sujetReferenceService.getDomaineOldValues(#id)", summaryExpression = "'Suppression du domaine (id=' + #id + ')'")
     public void deleteDomaine(Long id) {
         domaineRepository.delete(findDomaine(id));
     }
@@ -101,6 +116,7 @@ public class SujetReferenceService {
         return prerequisRepository.findAllByOrderByNomAsc().stream().map(SujetPrerequis::getNom).toList();
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.SUJET_PREREQUIS, entityIdExpression = "#result.id()", summaryExpression = "'Création du prérequis ' + #result.nom()")
     public ReferenceItemResponse createPrerequis(ReferenceItemRequest request) {
         String nom = normalizeNom(request.nom());
         if (prerequisRepository.existsByNomIgnoreCase(nom)) {
@@ -109,6 +125,14 @@ public class SujetReferenceService {
         return toResponse(prerequisRepository.save(SujetPrerequis.builder().nom(nom).build()));
     }
 
+    public Map<String, Object> getPrerequisOldValues(Long id) {
+        SujetPrerequis p = findPrerequis(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", p.getNom());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PREREQUIS, entityIdExpression = "#id", oldValuesExpression = "@sujetReferenceService.getPrerequisOldValues(#id)", summaryExpression = "'Modification du prérequis ' + #result.nom()")
     public ReferenceItemResponse updatePrerequis(Long id, ReferenceItemRequest request) {
         SujetPrerequis prerequis = findPrerequis(id);
         String nom = normalizeNom(request.nom());
@@ -121,6 +145,7 @@ public class SujetReferenceService {
         return toResponse(prerequisRepository.save(prerequis));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PREREQUIS, entityIdExpression = "#id", oldValuesExpression = "@sujetReferenceService.getPrerequisOldValues(#id)", summaryExpression = "'Suppression du prérequis (id=' + #id + ')'")
     public void deletePrerequis(Long id) {
         prerequisRepository.delete(findPrerequis(id));
     }
@@ -149,6 +174,7 @@ public class SujetReferenceService {
         return technologieRepository.findAllByOrderByNomAsc().stream().map(SujetTechnologie::getNom).toList();
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.SUJET_TECHNOLOGIE, entityIdExpression = "#result.id()", summaryExpression = "'Création de la technologie ' + #result.nom()")
     public ReferenceItemResponse createTechnologie(ReferenceItemRequest request) {
         String nom = normalizeNom(request.nom());
         if (technologieRepository.existsByNomIgnoreCase(nom)) {
@@ -157,6 +183,14 @@ public class SujetReferenceService {
         return toResponse(technologieRepository.save(SujetTechnologie.builder().nom(nom).build()));
     }
 
+    public Map<String, Object> getTechnologieOldValues(Long id) {
+        SujetTechnologie t = findTechnologie(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", t.getNom());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_TECHNOLOGIE, entityIdExpression = "#id", oldValuesExpression = "@sujetReferenceService.getTechnologieOldValues(#id)", summaryExpression = "'Modification de la technologie ' + #result.nom()")
     public ReferenceItemResponse updateTechnologie(Long id, ReferenceItemRequest request) {
         SujetTechnologie technologie = findTechnologie(id);
         String nom = normalizeNom(request.nom());
@@ -169,6 +203,7 @@ public class SujetReferenceService {
         return toResponse(technologieRepository.save(technologie));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_TECHNOLOGIE, entityIdExpression = "#id", oldValuesExpression = "@sujetReferenceService.getTechnologieOldValues(#id)", summaryExpression = "'Suppression de la technologie (id=' + #id + ')'")
     public void deleteTechnologie(Long id) {
         technologieRepository.delete(findTechnologie(id));
     }

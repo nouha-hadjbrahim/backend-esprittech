@@ -1,0 +1,229 @@
+package tn.esprit.backend_esprittech.historique;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import tn.esprit.backend_esprittech.dto.CritereEval.CritereEliminatoireRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
+import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
+import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
+import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.repository.historique.HistoriqueRepository;
+import tn.esprit.backend_esprittech.service.CritereEval.CritereEliminatoireService;
+import tn.esprit.backend_esprittech.service.CritereEval.CritereNoteService;
+import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@SpringBootTest
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:historisation_it;DB_CLOSE_DELAY=-1",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+        "server.port=0",
+        "app.jwt.secret=integration-test-secret-key-at-least-32-bytes-long-for-hmac",
+        "app.jwt.expiration-ms=900000",
+        "app.jwt.refresh-expiration-ms=604800000",
+        "app.admin.email=admin@test.tn",
+        "app.admin.password=TestAdmin123",
+        "app.auth.cookie.secure=false",
+        "app.auth.cookie.same-site=Strict",
+        "app.cors.allowed-origins=http://localhost:4200",
+        "minio.endpoint=http://127.0.0.1:1",
+        "minio.access-key=test-access-key",
+        "minio.secret-key=test-secret-key",
+        "minio.bucket=test-bucket",
+        "minio.secure=false"
+})
+class HistorisationIntegrationTest {
+
+    @Autowired private CritereNoteService critereNoteService;
+    @Autowired private CritereEliminatoireService critereEliminatoireService;
+    @Autowired private HistoriqueRepository historiqueRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ObjectMapper objectMapper;
+    @MockitoBean private MinioStorageService minioStorageService;
+
+    private User admin;
+
+    @BeforeEach
+    void setUp() {
+        admin = userRepository.findByEmail("admin@test.tn").orElseGet(() ->
+                userRepository.save(User.builder()
+                        .nom("Admin").prenom("Test").email("admin@test.tn")
+                        .identifiant("ADMIN-1").password(passwordEncoder.encode("Password123"))
+                        .role(Role.ROLE_ADMIN).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
+                        .departement("IT").enabled(true).build()));
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(admin, null, admin.getAuthorities()));
+
+        historiqueRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private JsonNode parseJson(String json) {
+        if (json == null) return null;
+        try {
+            // H2 JSON column may return the value as a quoted string; unwrap it
+            String cleaned = json.trim();
+            if (cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
+                cleaned = cleaned.substring(1, cleaned.length() - 1)
+                    .replace("\\\"", "\"").replace("\\n", "\n");
+            }
+            return objectMapper.readTree(cleaned);
+        } catch (Exception e) {
+            fail("Failed to parse JSON: " + json, e);
+            return null;
+        }
+    }
+
+    @Test
+    void createCritereEliminatoire_shouldCreateHistoriqueEntry() {
+        var response = critereEliminatoireService.create(
+                new CritereEliminatoireRequest("Critere-A", "Description test",
+                        "Informatique", 1, ReponseEliminatoire.OK, true));
+
+        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
+                EntityType.CRITERE_ELIMINATOIRE, response.id(), Pageable.unpaged());
+
+        assertEquals(1, page.getTotalElements());
+        var hist = page.getContent().get(0);
+        assertEquals(ActionType.CREATE, hist.getAction());
+        assertEquals(admin.getId(), hist.getActor().getId());
+        assertEquals(Role.ROLE_ADMIN, hist.getActorRole());
+        assertTrue(hist.getSummary().contains("Critere-A"));
+        assertNotNull(hist.getNewValues());
+        assertNull(hist.getOldValues());
+
+        JsonNode newVals = parseJson(hist.getNewValues());
+        assertEquals("Critere-A", newVals.get("libelle").asText());
+    }
+
+    @Test
+    void updateCritereEliminatoire_shouldCaptureOldValues() {
+        var created = critereEliminatoireService.create(
+                new CritereEliminatoireRequest("Original", "Desc",
+                        "Informatique", 1, ReponseEliminatoire.OK, true));
+
+        critereEliminatoireService.update(created.id(),
+                new CritereEliminatoireRequest("Modifie", "Desc modifiee",
+                        "Reseaux", 2, ReponseEliminatoire.NOT_OK, true));
+
+        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
+                EntityType.CRITERE_ELIMINATOIRE, created.id(), Pageable.unpaged());
+
+        assertEquals(2, page.getTotalElements());
+
+        var updateEntry = page.getContent().get(0);
+        assertEquals(ActionType.UPDATE, updateEntry.getAction());
+
+        JsonNode oldVals = parseJson(updateEntry.getOldValues());
+        assertNotNull(oldVals);
+        assertEquals("Original", oldVals.get("libelle").asText());
+        assertEquals(1, oldVals.get("ordre").asInt());
+    }
+
+    @Test
+    void deactivateCritereEliminatoire_shouldUseNewValuesExpression() {
+        var created = critereEliminatoireService.create(
+                new CritereEliminatoireRequest("Activable", "Desc",
+                        "Info", 1, ReponseEliminatoire.OK, true));
+
+        critereEliminatoireService.deactivate(created.id());
+
+        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
+                EntityType.CRITERE_ELIMINATOIRE, created.id(), Pageable.unpaged());
+
+        var deactivateEntry = page.getContent().get(0);
+        assertEquals(ActionType.DEACTIVATE, deactivateEntry.getAction());
+
+        JsonNode newVals = parseJson(deactivateEntry.getNewValues());
+        assertNotNull(newVals);
+        assertFalse(newVals.get("actif").asBoolean());
+    }
+
+    @Test
+    void createCritereNote_shouldAutoSerializeNewValues() {
+        var response = critereNoteService.create(
+                new CritereNoteRequest("Note critere", "Description",
+                        "Informatique", 1, 5.0, 1.0, 3.0, true));
+
+        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
+                EntityType.CRITERE_NOTE, response.id(), Pageable.unpaged());
+
+        assertEquals(1, page.getTotalElements());
+
+        JsonNode newVals = parseJson(page.getContent().get(0).getNewValues());
+        assertNotNull(newVals);
+        assertEquals("Note critere", newVals.get("libelle").asText());
+        assertEquals("Informatique", newVals.get("domaine").asText());
+        assertEquals(5.0, newVals.get("bareme").asDouble());
+    }
+
+    @Test
+    void reorderCritereEliminatoire_shouldCreateHistorique() {
+        var c1 = critereEliminatoireService.create(
+                new CritereEliminatoireRequest("Premier", "Desc",
+                        "Info", 1, ReponseEliminatoire.OK, true));
+        var c2 = critereEliminatoireService.create(
+                new CritereEliminatoireRequest("Second", "Desc",
+                        "Info", 2, ReponseEliminatoire.NOT_OK, true));
+
+        critereEliminatoireService.reorder(List.of(
+                new OrdreCritereRequest(c1.id(), 2),
+                new OrdreCritereRequest(c2.id(), 1)));
+
+        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
+                EntityType.CRITERE_ELIMINATOIRE, c1.id(), Pageable.unpaged());
+
+        var reorderEntry = page.getContent().get(0);
+        assertEquals(ActionType.REORDER, reorderEntry.getAction());
+        assertTrue(reorderEntry.getSummary().contains("2"));
+        assertNotNull(reorderEntry.getOldValues());
+    }
+
+    @Test
+    void deleteCritereNote_shouldCaptureOldValues() {
+        var created = critereNoteService.create(
+                new CritereNoteRequest("ASupprimer", "Desc",
+                        "Reseaux", 1, 5.0, 1.0, 3.0, true));
+
+        critereNoteService.delete(created.id());
+
+        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
+                EntityType.CRITERE_NOTE, created.id(), Pageable.unpaged());
+
+        var deleteEntry = page.getContent().get(0);
+        assertEquals(ActionType.DELETE, deleteEntry.getAction());
+
+        JsonNode oldVals = parseJson(deleteEntry.getOldValues());
+        assertNotNull(oldVals);
+        assertEquals("ASupprimer", oldVals.get("libelle").asText());
+    }
+}

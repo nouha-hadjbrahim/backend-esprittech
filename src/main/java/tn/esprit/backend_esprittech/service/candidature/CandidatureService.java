@@ -5,6 +5,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.candidature.request.CandidatureRequest;
 import tn.esprit.backend_esprittech.dto.candidature.request.DecisionCandidatureRequest;
 import tn.esprit.backend_esprittech.dto.candidature.request.RetraitEtudiantRequest;
@@ -15,6 +16,8 @@ import tn.esprit.backend_esprittech.entity.candidature.Affectation;
 import tn.esprit.backend_esprittech.entity.candidature.Candidature;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutAffectation;
 import tn.esprit.backend_esprittech.enums.StatutCandidature;
@@ -28,6 +31,7 @@ import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,8 +53,8 @@ public class CandidatureService {
     private final UserService userService;
     private final SujetProjetService sujetProjetService;
 
-    // US-14 : Ouvrir candidatures
     @Transactional
+    @Historise(action = ActionType.OUVRIR_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'CANDIDATURE_OUVERTE'}", summaryExpression = "'Ouverture candidatures sujet (id=' + #sujetId + ')'")
     public void ouvrirCandidatures(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
         checkSujetAccess(sujet);
@@ -63,8 +67,8 @@ public class CandidatureService {
         sujetProjetRepository.save(sujet);
     }
 
-    // US-16 : Déposer candidature
     @Transactional
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE, entityIdExpression = "#result.id()", summaryExpression = "'Dépôt candidature sujet (id=' + #request.sujetId() + ')'")
     public CandidatureResponse deposerCandidature(CandidatureRequest request) {
         User etudiant = userService.getCurrentUser();
         SujetProjet sujet = getSujetOrThrow(request.sujetId());
@@ -84,8 +88,15 @@ public class CandidatureService {
         return candidatureMapper.toResponse(candidatureRepository.save(candidature));
     }
 
-    // US-17 & US-18 : Décider candidature
+    public Map<String, Object> getCandidatureOldValues(Long id) {
+        Candidature c = getCandidatureOrThrow(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("statut", c.getStatut());
+        return map;
+    }
+
     @Transactional
+    @Historise(action = ActionType.UPDATE, actionExpression = "#request.accepter() ? 'ACCEPT' : 'REFUSE'", entityType = EntityType.CANDIDATURE, entityIdExpression = "#candidatureId", oldValuesExpression = "@candidatureService.getCandidatureOldValues(#candidatureId)", metadataExpression = "#request.accepter() ? null : {'motifRefus': #request.motifRefus()}", summaryExpression = "#request.accepter() ? 'Acceptation candidature (id=' + #candidatureId + ')' : 'Refus candidature (id=' + #candidatureId + ')'")
     public CandidatureResponse deciderCandidature(Long candidatureId, DecisionCandidatureRequest request) {
         Candidature candidature = getCandidatureOrThrow(candidatureId);
         checkSujetAccess(getSujetOrThrow(candidature.getSujetId()));
@@ -105,7 +116,6 @@ public class CandidatureService {
                     .build();
             affectationRepository.save(affectation);
 
-            // Archiver autres candidatures en attente
             List<Candidature> autresEnAttente = candidatureRepository
                     .findByEtudiantIdAndStatut(candidature.getEtudiant().getId(), StatutCandidature.DEPOSEE)
                     .stream()
@@ -128,8 +138,8 @@ public class CandidatureService {
         return candidatureMapper.toResponse(candidatureRepository.save(candidature));
     }
 
-    // US-19 + US-20 : Fermer candidatures
     @Transactional
+    @Historise(action = ActionType.FERMER_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'REALISATION_EN_COURS'}", summaryExpression = "'Fermeture candidatures sujet (id=' + #sujetId + ')'")
     public void fermerCandidatures(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
         checkSujetAccess(sujet);
@@ -149,8 +159,8 @@ public class CandidatureService {
         sujetProjetRepository.save(sujet);
     }
 
-    // US-22 : Retrait d'étudiant
     @Transactional
+    @Historise(action = ActionType.RETRAIT, entityType = EntityType.CANDIDATURE, entityIdExpression = "#affectationId", metadataExpression = "{'motifRetrait': #request.motifRetrait()}", summaryExpression = "'Retrait étudiant affectation (id=' + #affectationId + ')'")
     public AffectationResponse retirerEtudiant(Long affectationId, RetraitEtudiantRequest request) {
         Affectation affectation = getAffectationOrThrow(affectationId);
         checkSujetAccess(getSujetOrThrow(affectation.getSujetId()));
@@ -200,8 +210,8 @@ public class CandidatureService {
         return mapWithSujetContext(candidatures);
     }
 
-    /** US-16 : retrait par l'étudiant tant que la candidature n'a pas été traitée. */
     @Transactional
+    @Historise(action = ActionType.RETRAIT_ETUDIANT, entityType = EntityType.CANDIDATURE, entityIdExpression = "#candidatureId", summaryExpression = "'Retrait candidature par étudiant (id=' + #candidatureId + ')'")
     public void retirerMaCandidature(Long candidatureId) {
         User etudiant = userService.getCurrentUser();
         Candidature candidature = getCandidatureOrThrow(candidatureId);

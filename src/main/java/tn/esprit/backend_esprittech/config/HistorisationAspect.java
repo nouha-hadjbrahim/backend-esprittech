@@ -7,6 +7,8 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.context.expression.BeanFactoryResolver;
 import org.springframework.context.expression.MethodBasedEvaluationContext;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
@@ -34,22 +36,35 @@ public class HistorisationAspect {
     private final SpelExpressionParser spelParser;
     private final ObjectMapper objectMapper;
     private final ParameterNameDiscoverer parameterNameDiscoverer;
+    private final BeanFactory beanFactory;
 
     public HistorisationAspect(HistoriqueService historiqueService,
-                                SpelExpressionParser spelParser,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                BeanFactory beanFactory) {
         this.historiqueService = historiqueService;
-        this.spelParser = spelParser;
+        this.spelParser = new SpelExpressionParser();
         this.objectMapper = objectMapper;
+        this.beanFactory = beanFactory;
         this.parameterNameDiscoverer = new DefaultParameterNameDiscoverer();
     }
 
     @Around("@annotation(historise)")
     public Object aroundHistorise(ProceedingJoinPoint joinPoint, Historise historise) throws Throwable {
+        Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
+        Map<String, Object> oldValues = null;
+
+        if (!historise.oldValuesExpression().isEmpty()) {
+            try {
+                StandardEvaluationContext beforeContext = buildContext(joinPoint, method, null);
+                oldValues = evaluate(historise.oldValuesExpression(), beforeContext, Map.class);
+            } catch (Exception e) {
+                log.warn("Échec évaluation oldValues", e);
+            }
+        }
+
         Object result = joinPoint.proceed();
 
         try {
-            Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
             StandardEvaluationContext context = buildContext(joinPoint, method, result);
 
             ActionType action = resolveAction(historise, context);
@@ -60,13 +75,20 @@ public class HistorisationAspect {
             if (actor == null) return result;
 
             Map<String, Object> newValues = null;
-            if (result != null && (action == ActionType.CREATE || action == ActionType.UPDATE)) {
+            if (!historise.newValuesExpression().isEmpty()) {
+                newValues = evaluate(historise.newValuesExpression(), context, Map.class);
+            } else if (result != null && (action == ActionType.CREATE || action == ActionType.UPDATE)) {
                 newValues = objectMapper.convertValue(result, objectMapper.getTypeFactory()
                         .constructMapType(Map.class, String.class, Object.class));
             }
 
+            Map<String, Object> metadata = null;
+            if (!historise.metadataExpression().isEmpty()) {
+                metadata = evaluate(historise.metadataExpression(), context, Map.class);
+            }
+
             historiqueService.log(action, historise.entityType(), entityId, summary,
-                    null, newValues, null, actor, actor.getRole().name());
+                    oldValues, newValues, metadata, actor, actor.getRole());
         } catch (Exception e) {
             log.warn("Échec historisation {} {}", historise.action(), historise.entityType(), e);
         }
@@ -77,6 +99,7 @@ public class HistorisationAspect {
     private StandardEvaluationContext buildContext(ProceedingJoinPoint joinPoint, Method method, Object result) {
         MethodBasedEvaluationContext context = new MethodBasedEvaluationContext(
                 result, method, joinPoint.getArgs(), parameterNameDiscoverer);
+        context.setBeanResolver(new BeanFactoryResolver(beanFactory));
         context.setVariable("result", result);
         return context;
     }

@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import tn.esprit.backend_esprittech.entity.historique.Historique;
 import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 
 import java.time.LocalDateTime;
 
@@ -24,7 +25,7 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
               AND (:dateTo IS NULL OR h.createdAt <= :dateTo)
             ORDER BY h.createdAt DESC
             """)
-    Page<Historique> search(@Param("entityType") String entityType,
+    Page<Historique> search(@Param("entityType") EntityType entityType,
                              @Param("entityId") Long entityId,
                              @Param("action") ActionType action,
                              @Param("actorId") Long actorId,
@@ -32,7 +33,7 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
                              @Param("dateTo") LocalDateTime dateTo,
                              Pageable pageable);
 
-    Page<Historique> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(String entityType, Long entityId, Pageable pageable);
+    Page<Historique> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(EntityType entityType, Long entityId, Pageable pageable);
 
     Page<Historique> findByActorIdOrderByCreatedAtDesc(Long actorId, Pageable pageable);
 }

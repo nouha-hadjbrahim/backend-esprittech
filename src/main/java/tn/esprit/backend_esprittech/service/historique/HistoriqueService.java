@@ -11,6 +11,8 @@ import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.historique.Historique;
 import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.repository.historique.HistoriqueRepository;
 
 import java.time.LocalDateTime;
@@ -28,9 +30,9 @@ public class HistoriqueService {
     }
 
     @Transactional
-    public void log(ActionType action, String entityType, Long entityId, String summary,
+    public void log(ActionType action, EntityType entityType, Long entityId, String summary,
                     Map<String, Object> oldValues, Map<String, Object> newValues,
-                    Map<String, Object> metadata, User actor, String actorRole) {
+                    Map<String, Object> metadata, User actor, Role actorRole) {
         Historique historique = Historique.builder()
                 .actor(actor)
                 .actorRole(actorRole)
@@ -45,7 +47,7 @@ public class HistoriqueService {
         repository.save(historique);
     }
 
-    public PagedResponse<HistoriqueResponse> search(String entityType, Long entityId,
+    public PagedResponse<HistoriqueResponse> search(EntityType entityType, Long entityId,
                                                       ActionType action, Long actorId,
                                                       LocalDateTime dateFrom, LocalDateTime dateTo,
                                                       Pageable pageable) {
@@ -53,7 +55,7 @@ public class HistoriqueService {
         return PagedResponse.from(page, HistoriqueResponse::from);
     }
 
-    public PagedResponse<HistoriqueResponse> findByEntity(String entityType, Long entityId, Pageable pageable) {
+    public PagedResponse<HistoriqueResponse> findByEntity(EntityType entityType, Long entityId, Pageable pageable) {
         Page<Historique> page = repository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId, pageable);
         return PagedResponse.from(page, HistoriqueResponse::from);
     }

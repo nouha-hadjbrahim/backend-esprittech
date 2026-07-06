@@ -2,6 +2,8 @@ package tn.esprit.backend_esprittech.dto.response;
 
 import tn.esprit.backend_esprittech.entity.historique.Historique;
 import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.Role;
 
 import java.time.LocalDateTime;
 
@@ -10,9 +12,9 @@ public record HistoriqueResponse(
         Long actorId,
         String actorNom,
         String actorPrenom,
-        String actorRole,
+        Role actorRole,
         ActionType action,
-        String entityType,
+        EntityType entityType,
         Long entityId,
         String summary,
         String oldValues,

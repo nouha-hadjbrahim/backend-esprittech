@@ -2,6 +2,7 @@ package tn.esprit.backend_esprittech.service.projetcatalogue;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.CreateProjetRequest;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.RefuserProjetRequest;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetCardResponse;
@@ -14,6 +15,8 @@ import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetDomaine;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetPrerequis;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
@@ -31,8 +34,10 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepos
 import tn.esprit.backend_esprittech.service.UserService;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -76,6 +81,7 @@ public class ProjetCatalogueService {
     // Dépôt d'un projet (enseignant affilié)
     // -------------------------------------------------------------------------
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#result.id()", summaryExpression = "'Création projet catalogue ' + #result.titre()")
     public ProjetCatalogueResponse creerProjet(CreateProjetRequest request) {
         User encadrant = currentEnseignantManaged();
 
@@ -132,6 +138,14 @@ public class ProjetCatalogueService {
                 .stream().map(mapper::toCard).toList();
     }
 
+    public Map<String, Object> getProjetCatalogueOldValues(Long id) {
+        ProjetCatalogue p = getProjetOrThrow(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("statut", p.getStatut());
+        return map;
+    }
+
+    @Historise(action = ActionType.ACCEPT, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getProjetCatalogueOldValues(#id)", summaryExpression = "'Validation projet catalogue (id=' + #id + ')'")
     public ProjetCatalogueResponse valider(Long id) {
         User chef = currentChef();
         ProjetCatalogue projet = getProjetOrThrow(id);
@@ -145,6 +159,7 @@ public class ProjetCatalogueService {
         return mapper.toResponse(projetRepository.save(projet));
     }
 
+    @Historise(action = ActionType.REFUSE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getProjetCatalogueOldValues(#id)", metadataExpression = "{'motifRefus': #request.motifRefus()}", summaryExpression = "'Refus projet catalogue (id=' + #id + ')'")
     public ProjetCatalogueResponse refuser(Long id, RefuserProjetRequest request) {
         User chef = currentChef();
         ProjetCatalogue projet = getProjetOrThrow(id);

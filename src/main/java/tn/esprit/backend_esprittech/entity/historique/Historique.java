@@ -20,6 +20,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.Role;
 
 import java.time.LocalDateTime;
 
@@ -46,15 +48,17 @@ public class Historique {
     @JoinColumn(name = "actor_id", nullable = false)
     private User actor;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "actor_role", nullable = false, length = 30)
-    private String actorRole;
+    private Role actorRole;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
     private ActionType action;
 
-    @Column(name = "entity_type", nullable = false, length = 60)
-    private String entityType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entity_type", nullable = false, length = 40)
+    private EntityType entityType;
 
     @Column(name = "entity_id")
     private Long entityId;

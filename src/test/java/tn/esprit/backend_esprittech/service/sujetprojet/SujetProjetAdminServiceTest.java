@@ -138,8 +138,7 @@ class SujetProjetAdminServiceTest {
         assertEquals(1, result.getTotalElements());
         verify(sujetProjetRepository).searchDisponiblesForAdmin(
                 argThat(statuts -> statuts.contains(StatutSujet.VALIDE)
-                        && statuts.contains(StatutSujet.CANDIDATURE_OUVERTE)
-                        && statuts.contains(StatutSujet.CANDIDATURE_FERMEE)),
+                        && statuts.contains(StatutSujet.CANDIDATURE_OUVERTE)),
                 isNull(), isNull(), eq(pageable));
     }
 

@@ -8,11 +8,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
@@ -20,7 +23,9 @@ import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 @Service
@@ -43,6 +48,7 @@ public class UserService {
 
     /** Création directe d'un compte par l'admin (sans validation contre le référentiel). */
     @Transactional
+    @Historise(action = ActionType.CREATE, entityType = EntityType.USER, entityIdExpression = "#result.id()", summaryExpression = "'Création utilisateur ' + #result.getEmail()")
     public User create(CreateUserRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
@@ -90,8 +96,19 @@ public class UserService {
         return userRepository.searchEligibleMembers(q, roles, pageable);
     }
 
+    public Map<String, Object> getUserOldValues(Long id) {
+        User u = findById(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", u.getNom());
+        map.put("prenom", u.getPrenom());
+        map.put("email", u.getEmail());
+        map.put("role", u.getRole());
+        return map;
+    }
+
     /** Met à jour l'identité, le rôle et l'état d'activation d'un utilisateur. */
     @Transactional
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getUserOldValues(#id)", summaryExpression = "'Modification utilisateur ' + #result.getEmail()")
     public User update(Long id, UpdateUserRequest request) {
         User user = findById(id);
 
@@ -111,6 +128,7 @@ public class UserService {
 
     /** Supprime un utilisateur ; un admin ne peut pas supprimer son propre compte. */
     @Transactional
+    @Historise(action = ActionType.DELETE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getUserOldValues(#id)", summaryExpression = "'Suppression utilisateur (id=' + #id + ')'")
     public void delete(Long id) {
         User user = findById(id);
         User current = getCurrentUser();

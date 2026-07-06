@@ -7,14 +7,19 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.equipe.EquipeDomaineRequest;
 import tn.esprit.backend_esprittech.dto.equipe.EquipeDomaineResponse;
 import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeDomaineRepository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -48,6 +53,7 @@ public class EquipeDomaineService {
         return repository.count();
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.EQUIPE_DOMAINE, entityIdExpression = "#result.id()", summaryExpression = "'Création du domaine ' + #result.nom()")
     public EquipeDomaineResponse create(EquipeDomaineRequest request) {
         String nom = normalizeNom(request.nom());
         if (repository.existsByNomIgnoreCase(nom)) {
@@ -57,6 +63,14 @@ public class EquipeDomaineService {
         return toResponse(repository.save(entity));
     }
 
+    public Map<String, Object> getOldValues(Long id) {
+        EquipeDomaine e = findById(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", e.getNom());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.EQUIPE_DOMAINE, entityIdExpression = "#id", oldValuesExpression = "@equipeDomaineService.getOldValues(#id)", summaryExpression = "'Modification du domaine ' + #result.nom()")
     public EquipeDomaineResponse update(Long id, EquipeDomaineRequest request) {
         EquipeDomaine entity = findById(id);
         String nom = normalizeNom(request.nom());
@@ -69,6 +83,7 @@ public class EquipeDomaineService {
         return toResponse(repository.save(entity));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.EQUIPE_DOMAINE, entityIdExpression = "#id", oldValuesExpression = "@equipeDomaineService.getOldValues(#id)", summaryExpression = "'Suppression du domaine (id=' + #id + ')'")
     public void delete(Long id) {
         EquipeDomaine entity = findById(id);
         repository.delete(entity);

@@ -3,7 +3,7 @@ CREATE TABLE historique (
     actor_id BIGINT NOT NULL,
     actor_role VARCHAR(30) NOT NULL,
     action VARCHAR(40) NOT NULL,
-    entity_type VARCHAR(60) NOT NULL,
+    entity_type VARCHAR(40) NOT NULL,
     entity_id BIGINT,
     summary TEXT NOT NULL,
     old_values JSON,
