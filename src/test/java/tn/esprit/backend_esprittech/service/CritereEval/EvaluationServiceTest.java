@@ -29,6 +29,7 @@ import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
@@ -51,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -161,7 +163,8 @@ class EvaluationServiceTest {
 
         assertEquals(80.0, response.scoreFinal());
         assertEquals("COMPLETED", response.mlStatus());
-        assertEquals("deliverable-content-evaluator-v1", response.mlModelVersion());
+        assertEquals("2.0.0", response.mlModelVersion());
+        assertEquals("multimodal-semantic-v2", response.pipelineVersion());
         assertEquals(0.8, response.mlGlobalConfidence());
         assertEquals(ModeEvaluation.CONTENT_ANALYSIS, response.resultats().get(0).modeEvaluation());
         assertNull(response.resultats().get(1).metadataUsed());
@@ -199,6 +202,118 @@ class EvaluationServiceTest {
     }
 
     @Test
+    void calculateAutomaticEvaluation_insufficientEvidence_shouldPersistNullMlScoreAndZeroContribution() {
+        Livrable livrable = livrable(TypeLivrable.RAPPORT);
+        MlDeliverableContent content = new MlDeliverableContent(
+                livrable.getId(), "RAPPORT", "Rapport", "text/plain", "READY", null,
+                "Contenu sans preuve pertinente."
+        );
+        MlCriterionResult insufficient = new MlCriterionResult(
+                20L,
+                "NOTE",
+                "INSUFFICIENT_EVIDENCE",
+                null,
+                5.0,
+                null,
+                0.2,
+                0.0,
+                1.0,
+                0.0,
+                null,
+                null,
+                null,
+                "Aucune preuve pertinente.",
+                "Aucune preuve pertinente.",
+                List.of("SEMANTIC_RETRIEVAL"),
+                List.<MlEvidenceResponse>of(),
+                List.of(),
+                List.of("INSUFFICIENT_EVIDENCE"),
+                List.of("ADD_TRACEABLE_EVIDENCE"),
+                null,
+                List.of(),
+                List.of("INSUFFICIENT_EVIDENCE"),
+                List.of("ADD_TRACEABLE_EVIDENCE")
+        );
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(livrable));
+        when(contentExtractionService.extract(List.of(livrable))).thenReturn(List.of(content));
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "INSUFFICIENT_EVIDENCE", "2.0.0", "multimodal-semantic-v2",
+                0.2, List.of(), List.of("INSUFFICIENT_EVIDENCE"),
+                List.of("ADD_TRACEABLE_EVIDENCE"), List.of(), List.of(insufficient)
+        ));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateAutomaticEvaluation(1L, "insufficient");
+
+        assertEquals(0.0, response.scoreFinal());
+        assertNull(response.resultats().get(0).normalizedScore());
+        assertEquals("INSUFFICIENT_EVIDENCE", response.resultats().get(0).criterionStatus());
+        assertEquals(0, response.resultats().get(0).noteValue());
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_duplicateCriterionResult_shouldRejectResponse() {
+        Livrable livrable = livrable(TypeLivrable.RAPPORT);
+        MlCriterionResult duplicate = new MlCriterionResult(
+                20L, "NOTE", 4.0, 5.0, 0.8, 0.8, null,
+                "Qualite analysee", List.of(), List.of(), List.of(), List.of()
+        );
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(livrable));
+        when(contentExtractionService.extract(List.of(livrable))).thenReturn(List.of(new MlDeliverableContent(
+                livrable.getId(), "RAPPORT", "Rapport", "text/plain", "READY", null,
+                "Architecture API."
+        )));
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2",
+                0.8, List.of(), List.of(), List.of(), List.of(), List.of(duplicate, duplicate)
+        ));
+
+        assertThrows(BusinessException.class,
+                () -> evaluationService.calculateAutomaticEvaluation(1L, "duplicate"));
+        verify(evaluationRepository, never()).save(any(Evaluation.class));
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_invalidNormalizedScore_shouldRejectResponse() {
+        Livrable livrable = livrable(TypeLivrable.RAPPORT);
+        MlCriterionResult invalid = new MlCriterionResult(
+                20L, "NOTE", 6.0, 5.0, 1.2, 0.8, null,
+                "Score invalide", List.of(), List.of(), List.of(), List.of()
+        );
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(livrable));
+        when(contentExtractionService.extract(List.of(livrable))).thenReturn(List.of(new MlDeliverableContent(
+                livrable.getId(), "RAPPORT", "Rapport", "text/plain", "READY", null,
+                "Architecture API."
+        )));
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2",
+                0.8, List.of(), List.of(), List.of(), List.of(), List.of(invalid)
+        ));
+
+        assertThrows(BusinessException.class,
+                () -> evaluationService.calculateAutomaticEvaluation(1L, "invalid"));
+        verify(evaluationRepository, never()).save(any(Evaluation.class));
+    }
+
+    @Test
     void calculateAutomaticEvaluation_encadrantCanRecalculateOwnProjectOnly() {
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
@@ -207,7 +322,7 @@ class EvaluationServiceTest {
         when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of());
         when(contentExtractionService.extract(List.of())).thenReturn(List.of());
         when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
-                "COMPLETED", "deliverable-content-evaluator-v1", "deliverable-content-evaluator-v1",
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2",
                 0.0, List.of(), List.of(), List.of(), List.of(), List.of()
         ));
         when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -285,8 +400,8 @@ class EvaluationServiceTest {
         );
         return new MlEvaluationResponse(
                 "COMPLETED",
-                "deliverable-content-evaluator-v1",
-                "deliverable-content-evaluator-v1",
+                "2.0.0",
+                "multimodal-semantic-v2",
                 0.8,
                 List.of("Contenu exploitable"),
                 List.of(),
@@ -303,7 +418,9 @@ class EvaluationServiceTest {
         evaluation.setScoreFinal(82.0);
         evaluation.setMlScore(82.0);
         evaluation.setMlStatus("COMPLETED");
-        evaluation.setMlModelVersion("deliverable-content-evaluator-v1");
+        evaluation.setMlModelVersion("2.0.0");
+        evaluation.setPipelineVersion("multimodal-semantic-v2");
+        evaluation.setEngineType("multimodal-semantic-v2");
         evaluation.setMlGlobalConfidence(0.74);
         evaluation.setEligibleIndustrialisation(true);
         evaluation.setBloqueParEliminatoire(false);

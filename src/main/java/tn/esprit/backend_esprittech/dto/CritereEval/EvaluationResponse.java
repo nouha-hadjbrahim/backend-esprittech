@@ -40,7 +40,18 @@ public record EvaluationResponse(
         List<String> strengths,
         List<String> weaknesses,
         List<String> recommendations,
-        String errorMessage
+        String errorMessage,
+        String trigger,
+        String correlationId,
+        String engineType,
+        String modelName,
+        String pipelineVersion,
+        String criteriaVersion,
+        String projectSnapshotHash,
+        String deliverableSnapshotHash,
+        String inputSnapshotHash,
+        String processingStatus,
+        String eligibilityStatus
 ) {
     public EvaluationResponse(
             Long id,
@@ -75,7 +86,8 @@ public record EvaluationResponse(
                 criteresEliminatoiresNonConfigures, evaluationComplete,
                 scoreCalculationCoverageMessage, blockingCriteriaNames,
                 null, null, null, scoreFinal, null, "PENDING", null, null, null,
-                List.of(), List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of(), List.of(), null,
+                null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public EvaluationResponse(
@@ -95,6 +107,7 @@ public record EvaluationResponse(
                 commentaire, calculatedBy, recalculationReason, resultats,
                 null, null, null, null, null, null, null, null, List.of(),
                 null, null, null, scoreFinal, null, "PENDING", null, null, null,
-                List.of(), List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of(), List.of(), null,
+                null, null, null, null, null, null, null, null, null, null, null);
     }
 }

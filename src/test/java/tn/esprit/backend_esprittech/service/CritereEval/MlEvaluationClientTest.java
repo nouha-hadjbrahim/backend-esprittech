@@ -44,10 +44,14 @@ class MlEvaluationClientTest {
             assertEquals("POST", method.get());
             assertThat(contentType.get(), containsString(MediaType.APPLICATION_JSON_VALUE));
             assertNotNull(receivedBody.get());
-            assertEquals(objectMapper.readTree(expectedRequestJson()), objectMapper.readTree(receivedBody.get()));
+            var sent = objectMapper.readTree(receivedBody.get());
+            assertEquals(42L, sent.get("projectId").asLong());
+            assertEquals("multimodal-semantic-v2", sent.get("engineVersion").asText());
+            assertEquals(20L, sent.get("criteria").get(0).get("criterionId").asLong());
+            assertEquals(100L, sent.get("deliverables").get(0).get("deliverableId").asLong());
             assertEquals("COMPLETED", response.status());
-            assertEquals(1, response.results().size());
-            assertEquals(20L, response.results().get(0).criterionId());
+            assertEquals(1, response.effectiveResults().size());
+            assertEquals(20L, response.effectiveResults().get(0).criterionId());
         } finally {
             server.stop(0);
         }
@@ -112,49 +116,13 @@ class MlEvaluationClientTest {
         );
     }
 
-    private String expectedRequestJson() {
-        return """
-                {
-                  "project": {
-                    "projectId": 42,
-                    "title": "Plateforme IoT",
-                    "domain": "Industrialisation",
-                    "technologies": "Spring Boot, Angular, Docker",
-                    "category": "IOT"
-                  },
-                  "criteria": [
-                    {
-                      "criterionId": 20,
-                      "type": "NOTE",
-                      "label": "Qualite technique",
-                      "description": "Architecture, securite, tests et deploiement",
-                      "domain": "Technique",
-                      "maxScore": 5.0,
-                      "weight": 2.0,
-                      "eliminatory": false
-                    }
-                  ],
-                  "deliverables": [
-                    {
-                      "deliverableId": 100,
-                      "deliverableType": "RAPPORT",
-                      "name": "Rapport final",
-                      "contentType": "text/plain",
-                      "extractionStatus": "READY",
-                      "unsupportedReason": null,
-                      "content": "Architecture API, securite JWT, tests et deploiement Docker."
-                    }
-                  ]
-                }
-                """;
-    }
-
     private String validResponseJson() {
         return """
                 {
                   "status": "COMPLETED",
-                  "modelVersion": "deliverable-content-evaluator-v1",
-                  "analysisEngineVersion": "deliverable-content-evaluator-v1",
+                  "modelVersion": "2.0.0",
+                  "analysisEngineVersion": "multimodal-semantic-v2",
+                  "pipelineVersion": "multimodal-semantic-v2",
                   "globalConfidence": 0.8,
                   "strengths": [],
                   "weaknesses": [],

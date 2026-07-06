@@ -16,6 +16,7 @@ import tn.esprit.backend_esprittech.dto.CritereEval.MlDeliverableContent;
 import tn.esprit.backend_esprittech.dto.CritereEval.MlEvaluationRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.MlEvaluationResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.MlEvidenceResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.MlExternalSourceRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.MlProjectContext;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatEliminatoireRequest;
@@ -47,11 +48,17 @@ import tn.esprit.backend_esprittech.service.UserService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -73,6 +80,12 @@ public class EvaluationService {
     @Value("${evaluation.ml.recalculation-cooldown-seconds:0}")
     private long recalculationCooldownSeconds;
 
+    @Value("${evaluation.engine:multimodal-semantic-v2}")
+    private String evaluationEngine = "multimodal-semantic-v2";
+
+    @Value("${evaluation.criteria-version:2026-07}")
+    private String criteriaVersion = "2026-07";
+
     public EvaluationResponse calculerEvaluation(Long projetId, EvaluationRequest request) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
         EvaluationData data = buildManualEvaluation(request);
@@ -84,7 +97,11 @@ public class EvaluationService {
         User currentUser = userService.getCurrentUser();
         ensureCanCalculate(currentUser, projet);
         ensureNoDuplicateEvaluation(projetId);
-        EvaluationData data = buildAutomaticEvaluationFromMl(projet);
+        EvaluationTrigger trigger = currentUser.getRole() == Role.ROLE_ADMIN
+                ? EvaluationTrigger.ADMIN_RECALCULATION
+                : EvaluationTrigger.MANUAL_RECALCULATION;
+        String correlationId = UUID.randomUUID().toString();
+        EvaluationData data = buildAutomaticEvaluationFromMl(projet, trigger, correlationId);
         String effectiveReason = currentUser.getRole() == Role.ROLE_ENSEIGNANT
                 ? "Nouveaux livrables deposes"
                 : recalculationReason;
@@ -93,8 +110,40 @@ public class EvaluationService {
 
     public EvaluationResponse calculateEvaluationForSystem(Long projetId) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
-        EvaluationData data = buildAutomaticEvaluationFromMl(projet);
+        EvaluationData data = buildAutomaticEvaluationFromMl(
+                projet,
+                EvaluationTrigger.AUTOMATIC_TERMINATION,
+                UUID.randomUUID().toString()
+        );
         return persistEvaluation(projet, data, "SYSTEM", "Calcul automatique apres terminaison du projet");
+    }
+
+    public EvaluationRunResult evaluateProject(Long projectId,
+                                               EvaluationTrigger trigger,
+                                               Long requestedBy,
+                                               String correlationId) {
+        SujetProjet projet = getProjetAndValidateTerminated(projectId);
+        User currentUser = userService.getCurrentUser();
+        ensureCanCalculate(currentUser, projet);
+        ensureNoDuplicateEvaluation(projectId);
+        String effectiveCorrelationId = StringUtils.hasText(correlationId)
+                ? correlationId
+                : UUID.randomUUID().toString();
+        EvaluationData data = buildAutomaticEvaluationFromMl(projet, trigger, effectiveCorrelationId);
+        EvaluationResponse response = persistEvaluation(
+                projet,
+                data,
+                resolveActorName(currentUser),
+                trigger.name()
+        );
+        return new EvaluationRunResult(
+                projectId,
+                trigger,
+                effectiveCorrelationId,
+                data.inputSnapshotHash(),
+                data.pipelineVersion(),
+                response
+        );
     }
 
     @Transactional(readOnly = true)
@@ -243,18 +292,36 @@ public class EvaluationService {
         return buildEvaluationData(resultats, warnings, sommeScoresCriteres, sommePoids);
     }
 
-    private EvaluationData buildAutomaticEvaluationFromMl(SujetProjet projet) {
+    private EvaluationData buildAutomaticEvaluationFromMl(SujetProjet projet,
+                                                          EvaluationTrigger trigger,
+                                                          String correlationId) {
         List<CritereEliminatoire> criteresEliminatoires = critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc();
         List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
         Set<Integer> activeNoteValues = activeNoteValuesFor(criteresNotes);
         int maxActiveNoteValue = maxActiveNoteValue(activeNoteValues);
         List<Livrable> livrables = livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
         List<MlDeliverableContent> extractedContent = contentExtractionService.extract(livrables);
-        MlEvaluationResponse mlResponse = mlEvaluationClient.evaluate(
-                buildMlRequest(projet, criteresEliminatoires, criteresNotes, extractedContent, maxActiveNoteValue)
+        List<MlExternalSourceRequest> externalSources = buildExternalSources(livrables);
+        String projectSnapshotHash = projectSnapshotHash(projet, criteresEliminatoires, criteresNotes);
+        String deliverableSnapshotHash = deliverableSnapshotHash(extractedContent, externalSources);
+        String inputSnapshotHash = sha256(projectSnapshotHash + ":" + deliverableSnapshotHash + ":" + criteriaVersion + ":" + evaluationEngine);
+        MlEvaluationRequest mlRequest = buildMlRequest(
+                projet,
+                criteresEliminatoires,
+                criteresNotes,
+                extractedContent,
+                externalSources,
+                maxActiveNoteValue,
+                correlationId,
+                projectSnapshotHash,
+                deliverableSnapshotHash,
+                inputSnapshotHash
         );
-        validateMlResponse(mlResponse, criteresEliminatoires, criteresNotes);
-        Map<Long, MlCriterionResult> mlResults = mlResponse.results()
+        MlEvaluationResponse mlResponse = mlEvaluationClient.evaluate(
+                mlRequest
+        );
+        validateMlResponse(mlResponse, criteresEliminatoires, criteresNotes, mlRequest, extractedContent, externalSources);
+        Map<Long, MlCriterionResult> mlResults = mlResponse.effectiveResults()
                 .stream()
                 .collect(Collectors.toMap(MlCriterionResult::criterionId, Function.identity()));
 
@@ -266,9 +333,11 @@ public class EvaluationService {
         for (CritereEliminatoire critere : criteresEliminatoires) {
             ResultatCritere resultat = baseResult(critere, TypeCritere.ELIMINATOIRE);
             MlCriterionResult mlResult = mlResults.get(critere.getId());
-            boolean satisfied = Boolean.TRUE.equals(mlResult.satisfied());
-            ReponseEliminatoire resultatAuto = satisfied ? ReponseEliminatoire.OK : ReponseEliminatoire.NOT_OK;
-            resultat.setRuleConfigured(true);
+            String state = eliminatoryState(mlResult);
+            ReponseEliminatoire resultatAuto = "OK".equals(state)
+                    ? ReponseEliminatoire.OK
+                    : ("NOT_OK".equals(state) ? ReponseEliminatoire.NOT_OK : null);
+            resultat.setRuleConfigured(resultatAuto != null);
             resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             resultat.setReponseEliminatoire(resultatAuto);
             applyMlResult(resultat, mlResult, evidenceSummary(mlResult), evidenceLivrableIds(mlResult));
@@ -282,15 +351,15 @@ public class EvaluationService {
 
         for (CritereNote critere : criteresNotes) {
             MlCriterionResult mlResult = mlResults.get(critere.getId());
-            double normalized = normalizedScore(mlResult);
+            Double normalized = usableNormalizedScore(mlResult);
             int noteValue = noteValueFromNormalized(normalized, maxActiveNoteValue);
             double poids = positiveWeight(critere.getPoids());
-            double score = normalized * poids;
+            double score = normalized == null ? 0.0 : normalized * poids;
             sommeScoresCriteres += score;
             sommePoids += poids;
 
             ResultatCritere resultat = baseResult(critere, TypeCritere.NOTE);
-            resultat.setRuleConfigured(true);
+            resultat.setRuleConfigured(normalized != null);
             resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             applyNoteResult(resultat, noteValue, poids, score, maxActiveNoteValue,
                     "ML_CONTENT_ANALYSIS", null, mlResult.justification());
@@ -304,7 +373,12 @@ public class EvaluationService {
                 warnings,
                 sommeScoresCriteres,
                 sommePoids,
-                mlResponse
+                mlResponse,
+                trigger,
+                correlationId,
+                projectSnapshotHash,
+                deliverableSnapshotHash,
+                inputSnapshotHash
         );
     }
 
@@ -320,20 +394,58 @@ public class EvaluationService {
                                                double sommeScoresCriteres,
                                                double sommePoids,
                                                MlEvaluationResponse mlResponse) {
+        return buildEvaluationData(
+                resultats,
+                eliminatoryWarnings,
+                sommeScoresCriteres,
+                sommePoids,
+                mlResponse,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private EvaluationData buildEvaluationData(List<ResultatCritere> resultats,
+                                               List<String> eliminatoryWarnings,
+                                               double sommeScoresCriteres,
+                                               double sommePoids,
+                                               MlEvaluationResponse mlResponse,
+                                               EvaluationTrigger trigger,
+                                               String correlationId,
+                                               String projectSnapshotHash,
+                                               String deliverableSnapshotHash,
+                                               String inputSnapshotHash) {
         double scoreFinal = sommePoids > 0 ? round((sommeScoresCriteres / sommePoids) * 100) : 0.0;
         boolean hasWarnings = !eliminatoryWarnings.isEmpty();
+        String eligibilityStatus = eligibilityStatus(resultats, mlResponse, hasWarnings);
         String commentaire = hasWarnings
                 ? "Projet evalue avec alertes eliminatoires non bloquantes."
-                : "Projet evalue avec succes.";
+                : ("REVIEW_REQUIRED".equals(eligibilityStatus)
+                ? "Projet evalue avec elements indetermines a revoir."
+                : "Projet evalue avec succes.");
         return new EvaluationData(
                 resultats,
                 scoreFinal,
-                true,
+                !hasWarnings,
                 hasWarnings,
                 eliminatoryWarnings,
                 commentaire,
-                mlResponse == null ? "MANUAL" : safeValue(mlResponse.status()),
+                mlResponse == null ? "MANUAL" : safeValue(mlResponse.effectiveStatus()),
+                trigger == null ? null : trigger.name(),
+                correlationId,
+                mlResponse == null ? null : mlResponse.engineType(),
+                mlResponse == null ? null : mlResponse.modelName(),
                 mlResponse == null ? null : mlResponse.modelVersion(),
+                mlResponse == null ? null : safeValue(mlResponse.effectivePipelineVersion()),
+                mlResponse == null || !StringUtils.hasText(mlResponse.criteriaVersion()) ? criteriaVersion : mlResponse.criteriaVersion(),
+                projectSnapshotHash,
+                deliverableSnapshotHash,
+                inputSnapshotHash,
+                mlResponse == null ? "MANUAL" : mlResponse.effectiveStatus(),
+                eligibilityStatus,
                 mlResponse == null ? null : mlResponse.globalConfidence(),
                 mlResponse == null ? scoreFinal : scoreFinal,
                 mlResponse == null ? List.of() : safeList(mlResponse.warnings()),
@@ -353,7 +465,18 @@ public class EvaluationService {
         evaluation.setScoreFinal(data.scoreFinal());
         evaluation.setMlScore(data.mlScore());
         evaluation.setMlStatus(data.mlStatus());
+        evaluation.setTrigger(data.trigger());
+        evaluation.setCorrelationId(data.correlationId());
+        evaluation.setEngineType(data.engineType());
+        evaluation.setModelName(data.modelName());
         evaluation.setMlModelVersion(data.mlModelVersion());
+        evaluation.setPipelineVersion(data.pipelineVersion());
+        evaluation.setCriteriaVersion(data.criteriaVersion());
+        evaluation.setProjectSnapshotHash(data.projectSnapshotHash());
+        evaluation.setDeliverableSnapshotHash(data.deliverableSnapshotHash());
+        evaluation.setInputSnapshotHash(data.inputSnapshotHash());
+        evaluation.setProcessingStatus(data.processingStatus());
+        evaluation.setEligibilityStatus(data.eligibilityStatus());
         evaluation.setMlGlobalConfidence(data.mlGlobalConfidence());
         evaluation.setMlWarnings(joinLines(data.mlWarnings()));
         evaluation.setStrengths(joinLines(data.strengths()));
@@ -375,7 +498,7 @@ public class EvaluationService {
         Evaluation savedEvaluation = evaluationRepository.save(evaluation);
 
         projet.setScoreFinalEvaluation(data.scoreFinal());
-        projet.setEligibleIndustrialisation(true);
+        projet.setEligibleIndustrialisation(Boolean.TRUE.equals(data.eligibleIndustrialisation()));
         projet.setBloqueParEliminatoire(data.hasEliminatoryWarnings());
         projet.setHasEliminatoryWarnings(data.hasEliminatoryWarnings());
         projet.setEliminatoryWarningsCount(data.eliminatoryWarnings().size());
@@ -408,29 +531,49 @@ public class EvaluationService {
                                                List<CritereEliminatoire> criteresEliminatoires,
                                                List<CritereNote> criteresNotes,
                                                List<MlDeliverableContent> extractedContent,
-                                               int maxActiveNoteValue) {
+                                               List<MlExternalSourceRequest> externalSources,
+                                               int maxActiveNoteValue,
+                                               String correlationId,
+                                               String projectSnapshotHash,
+                                               String deliverableSnapshotHash,
+                                               String inputSnapshotHash) {
         List<MlCriterionRequest> criteria = new ArrayList<>();
         criteresEliminatoires.forEach(critere -> criteria.add(new MlCriterionRequest(
                 critere.getId(),
                 TypeCritere.ELIMINATOIRE.name(),
                 critere.getLibelle(),
+                critere.getLibelle(),
                 critere.getDescription(),
                 critere.getDomaine(),
                 1.0,
+                1.0,
                 0.0,
-                true
+                true,
+                criteriaVersion,
+                requiredEvidenceTypes(critere)
         )));
         criteresNotes.forEach(critere -> criteria.add(new MlCriterionRequest(
                 critere.getId(),
                 TypeCritere.NOTE.name(),
                 critere.getLibelle(),
+                critere.getLibelle(),
                 critere.getDescription(),
                 critere.getDomaine(),
-                (double) maxActiveNoteValue,
+                positiveMaximumScore(critere.getBareme(), maxActiveNoteValue),
+                positiveMaximumScore(critere.getBareme(), maxActiveNoteValue),
                 positiveWeight(critere.getPoids()),
-                false
+                false,
+                criteriaVersion,
+                requiredEvidenceTypes(critere)
         )));
         return new MlEvaluationRequest(
+                projet.getId(),
+                correlationId,
+                criteriaVersion,
+                evaluationEngine,
+                inputSnapshotHash,
+                projectSnapshotHash,
+                deliverableSnapshotHash,
                 new MlProjectContext(
                         projet.getId(),
                         safeValue(projet.getTitre()),
@@ -439,25 +582,170 @@ public class EvaluationService {
                         projet.getCategorie() == null ? null : projet.getCategorie().name()
                 ),
                 criteria,
-                extractedContent
+                extractedContent,
+                externalSources
         );
+    }
+
+    private List<MlExternalSourceRequest> buildExternalSources(List<Livrable> livrables) {
+        return livrables.stream()
+                .filter(livrable -> livrable.getTypeLivrable() == tn.esprit.backend_esprittech.entity.livrable.TypeLivrable.LIEN_GIT)
+                .filter(livrable -> StringUtils.hasText(livrable.getLienExterne()))
+                .map(livrable -> new MlExternalSourceRequest(
+                        "GIT",
+                        livrable.getLienExterne().trim(),
+                        null,
+                        List.of(),
+                        null
+                ))
+                .toList();
+    }
+
+    private List<String> requiredEvidenceTypes(CritereEvaluation critere) {
+        String source = safeValue(critere.getLibelle()) + " "
+                + safeValue(critere.getDescription()) + " "
+                + safeValue(critere.getDomaine()) + " "
+                + safeValue(critere.getExpectedLivrableTypes());
+        String normalized = source.toLowerCase();
+        List<String> required = new ArrayList<>();
+        if (normalized.contains("git") || normalized.contains("code source") || normalized.contains("repository")) {
+            required.add("GIT");
+        }
+        if (normalized.contains("sonar") || normalized.contains("secur") || normalized.contains("security")) {
+            required.add("SONAR");
+        }
+        if (normalized.contains("coverage") || normalized.contains("couverture")) {
+            required.add("COVERAGE");
+        }
+        if (normalized.contains("image") || normalized.contains("diagram") || normalized.contains("screenshot")) {
+            required.add("IMAGE");
+        }
+        if (required.isEmpty()) {
+            required.add("DOCUMENT");
+        }
+        return required.stream().distinct().toList();
+    }
+
+    private String projectSnapshotHash(SujetProjet projet,
+                                       List<CritereEliminatoire> criteresEliminatoires,
+                                       List<CritereNote> criteresNotes) {
+        List<CritereEvaluation> allCriteria = new ArrayList<>();
+        allCriteria.addAll(criteresEliminatoires);
+        allCriteria.addAll(criteresNotes);
+        String criteria = allCriteria.stream()
+                .sorted(Comparator.comparing(CritereEvaluation::getId))
+                .map(critere -> critere.getId() + "|" + safeValue(critere.getLibelle()) + "|"
+                        + safeValue(critere.getDescription()) + "|" + safeValue(critere.getDomaine())
+                        + "|" + safeValue(critere.getExpectedLivrableTypes()))
+                .collect(Collectors.joining(";"));
+        return sha256(projet.getId() + "|" + safeValue(projet.getTitre()) + "|"
+                + safeValue(projet.getDomaine()) + "|" + safeValue(projet.getTechnologies())
+                + "|" + (projet.getCategorie() == null ? "" : projet.getCategorie().name())
+                + "|" + criteriaVersion + "|" + criteria);
+    }
+
+    private String deliverableSnapshotHash(List<MlDeliverableContent> deliverables,
+                                           List<MlExternalSourceRequest> externalSources) {
+        String deliverablePart = deliverables.stream()
+                .sorted(Comparator.comparing(MlDeliverableContent::deliverableId, Comparator.nullsLast(Long::compareTo)))
+                .map(deliverable -> deliverable.deliverableId() + "|" + safeValue(deliverable.filename())
+                        + "|" + safeValue(deliverable.sourceType()) + "|" + safeValue(deliverable.contentHash())
+                        + "|" + safeValue(deliverable.extractionStatus()))
+                .collect(Collectors.joining(";"));
+        String externalPart = externalSources.stream()
+                .sorted(Comparator.comparing(MlExternalSourceRequest::reference))
+                .map(source -> safeValue(source.sourceType()) + "|" + safeValue(source.reference()))
+                .collect(Collectors.joining(";"));
+        return sha256(deliverablePart + "|" + externalPart);
+    }
+
+    private double positiveMaximumScore(Double bareme, int maxActiveNoteValue) {
+        if (bareme != null && bareme > 0.0) {
+            return bareme;
+        }
+        return maxActiveNoteValue > 0 ? maxActiveNoteValue : 1.0;
     }
 
     private void validateMlResponse(MlEvaluationResponse response,
                                     List<CritereEliminatoire> criteresEliminatoires,
-                                    List<CritereNote> criteresNotes) {
-        Set<Long> expectedIds = new java.util.HashSet<>();
+                                    List<CritereNote> criteresNotes,
+                                    MlEvaluationRequest request,
+                                    List<MlDeliverableContent> deliverables,
+                                    List<MlExternalSourceRequest> externalSources) {
+        if (response == null || response.effectiveResults() == null) {
+            throw new BusinessException("Le moteur ML a retourne une reponse vide.");
+        }
+        if (!StringUtils.hasText(response.effectiveStatus())) {
+            throw new BusinessException("La reponse ML ne contient pas de statut.");
+        }
+        if (StringUtils.hasText(request.correlationId())
+                && StringUtils.hasText(response.correlationId())
+                && !request.correlationId().equals(response.correlationId())) {
+            throw new BusinessException("La correlation de la reponse ML est invalide.");
+        }
+        if (StringUtils.hasText(request.inputSnapshotHash())
+                && StringUtils.hasText(response.inputSnapshotHash())
+                && !request.inputSnapshotHash().equals(response.inputSnapshotHash())) {
+            throw new BusinessException("La reponse ML ne correspond pas au snapshot demande.");
+        }
+        if ("multimodal-semantic-v2".equals(request.engineVersion())
+                && !"multimodal-semantic-v2".equals(response.effectivePipelineVersion())) {
+            throw new BusinessException("La version de pipeline ML est invalide.");
+        }
+
+        Set<Long> expectedIds = new HashSet<>();
         criteresEliminatoires.forEach(critere -> expectedIds.add(critere.getId()));
         criteresNotes.forEach(critere -> expectedIds.add(critere.getId()));
-        Set<Long> returnedIds = response.results().stream()
-                .map(MlCriterionResult::criterionId)
-                .collect(Collectors.toSet());
-        if (!returnedIds.containsAll(expectedIds)) {
+        Set<Long> returnedIds = new HashSet<>();
+        for (MlCriterionResult result : response.effectiveResults()) {
+            if (result.criterionId() == null) {
+                throw new BusinessException("La reponse ML contient un critere sans identifiant.");
+            }
+            if (!returnedIds.add(result.criterionId())) {
+                throw new BusinessException("La reponse ML contient un critere en double: " + result.criterionId());
+            }
+            if (!expectedIds.contains(result.criterionId())) {
+                throw new BusinessException("La reponse ML contient un critere inconnu: " + result.criterionId());
+            }
+        }
+        if (!returnedIds.equals(expectedIds)) {
             throw new BusinessException("La reponse ML ne couvre pas tous les criteres actifs.");
         }
-        response.results().forEach(result -> {
-            if (result.normalizedScore() == null && (result.score() == null || result.maxScore() == null)) {
-                throw new BusinessException("La reponse ML contient un score invalide pour le critere " + result.criterionId());
+
+        Set<Long> deliverableIds = deliverables.stream()
+                .map(MlDeliverableContent::deliverableId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        response.effectiveResults().forEach(result -> {
+            boolean scoreMissingAllowed = Set.of(
+                            "INSUFFICIENT_EVIDENCE",
+                            "INDETERMINATE",
+                            "MODEL_UNAVAILABLE",
+                            "FAILED_RETRYABLE"
+                    )
+                    .contains(safeUpper(result.status()));
+            if (result.normalizedScore() == null && !scoreMissingAllowed) {
+                throw new BusinessException("La reponse ML contient un score manquant pour le critere " + result.criterionId());
+            }
+            validateRange(result.normalizedScore(), "score normalise ML", result.criterionId(), true);
+            validateRange(result.confidence(), "confiance ML", result.criterionId(), false);
+            validateRange(result.evidenceQuality(), "qualite preuve ML", result.criterionId(), true);
+            validateRange(result.extractionQuality(), "qualite extraction ML", result.criterionId(), true);
+            validateRange(result.sourceCoverage(), "couverture source ML", result.criterionId(), true);
+            if (result.score() != null && !finite(result.score())) {
+                throw new BusinessException("La reponse ML contient un score non fini pour le critere " + result.criterionId());
+            }
+            if (result.maxScore() != null && (!finite(result.maxScore()) || result.maxScore() < 0.0)) {
+                throw new BusinessException("La reponse ML contient un bareme invalide pour le critere " + result.criterionId());
+            }
+            for (MlEvidenceResponse evidence : safeList(result.evidence())) {
+                if (evidence.deliverableId() != null && !deliverableIds.contains(evidence.deliverableId())) {
+                    throw new BusinessException("La reponse ML reference un livrable inconnu: " + evidence.deliverableId());
+                }
+                validateRange(evidence.relevance(), "pertinence preuve ML", result.criterionId(), false);
+                if (!StringUtils.hasText(evidence.excerpt())) {
+                    throw new BusinessException("La reponse ML contient une preuve vide pour le critere " + result.criterionId());
+                }
             }
             if (result.confidence() == null || result.confidence() < 0.0 || result.confidence() > 1.0) {
                 throw new BusinessException("La confiance ML est invalide pour le critere " + result.criterionId());
@@ -469,10 +757,17 @@ public class EvaluationService {
                                MlCriterionResult mlResult,
                                String evidenceSummary,
                                String evidenceLivrableIds) {
-        resultat.setMlScore(nullToZero(mlResult.score()));
-        resultat.setMlMaxScore(nullToZero(mlResult.maxScore()));
-        resultat.setNormalizedScore(normalizedScore(mlResult));
-        resultat.setConfidence(nullToZero(mlResult.confidence()));
+        resultat.setMlScore(mlResult.score());
+        resultat.setMlMaxScore(mlResult.maxScore());
+        resultat.setNormalizedScore(mlResult.normalizedScore());
+        resultat.setConfidence(mlResult.confidence());
+        resultat.setCriterionStatus(mlResult.status());
+        resultat.setEvidenceQuality(mlResult.evidenceQuality());
+        resultat.setExtractionQuality(mlResult.extractionQuality());
+        resultat.setSourceCoverage(mlResult.sourceCoverage());
+        resultat.setEliminatoryState(mlResult.eliminatoryState());
+        resultat.setAnalysisMethods(joinLines(safeList(mlResult.analysisMethods())));
+        resultat.setEvidenceJson(evidenceDetails(mlResult));
         resultat.setExplanation(mlResult.justification());
         resultat.setEvidenceSummary(evidenceSummary);
         resultat.setEvidenceLivrableIds(evidenceLivrableIds);
@@ -482,19 +777,22 @@ public class EvaluationService {
         resultat.setMetadataUsed(null);
     }
 
-    private double normalizedScore(MlCriterionResult mlResult) {
+    private Double usableNormalizedScore(MlCriterionResult mlResult) {
         if (mlResult.normalizedScore() != null) {
             return clamp01(mlResult.normalizedScore());
         }
+        if (Set.of("INSUFFICIENT_EVIDENCE", "INDETERMINATE").contains(safeUpper(mlResult.status()))) {
+            return null;
+        }
         double maxScore = nullToZero(mlResult.maxScore());
         if (maxScore <= 0.0) {
-            return 0.0;
+            return null;
         }
         return clamp01(nullToZero(mlResult.score()) / maxScore);
     }
 
-    private int noteValueFromNormalized(double normalized, int maxActiveNoteValue) {
-        if (normalized <= 0.0 || maxActiveNoteValue <= 0) {
+    private int noteValueFromNormalized(Double normalized, int maxActiveNoteValue) {
+        if (normalized == null || normalized <= 0.0 || maxActiveNoteValue <= 0) {
             return 0;
         }
         return Math.max(1, Math.min(maxActiveNoteValue, (int) Math.round(normalized * maxActiveNoteValue)));
@@ -540,6 +838,104 @@ public class EvaluationService {
 
     private String safeValue(String value) {
         return value == null ? "" : value;
+    }
+
+    private String safeUpper(String value) {
+        return value == null ? "" : value.trim().toUpperCase();
+    }
+
+    private boolean finite(Double value) {
+        return value != null && !Double.isNaN(value) && !Double.isInfinite(value);
+    }
+
+    private void validateRange(Double value,
+                               String label,
+                               Long criterionId,
+                               boolean nullable) {
+        if (value == null) {
+            if (!nullable) {
+                throw new BusinessException("La reponse ML contient une valeur manquante pour " + label + " critere " + criterionId);
+            }
+            return;
+        }
+        if (!finite(value) || value < 0.0 || value > 1.0) {
+            throw new BusinessException("La reponse ML contient une valeur invalide pour " + label + " critere " + criterionId);
+        }
+    }
+
+    private String eliminatoryState(MlCriterionResult mlResult) {
+        String state = safeUpper(mlResult.eliminatoryState());
+        if (Set.of("OK", "NOT_OK", "INDETERMINATE", "NOT_APPLICABLE").contains(state)) {
+            return state;
+        }
+        if (Boolean.TRUE.equals(mlResult.satisfied())) {
+            return "OK";
+        }
+        if (Boolean.FALSE.equals(mlResult.satisfied())) {
+            return "NOT_OK";
+        }
+        String status = safeUpper(mlResult.status());
+        if (Set.of("OK", "NOT_OK", "INDETERMINATE").contains(status)) {
+            return status;
+        }
+        return "INDETERMINATE";
+    }
+
+    private String eligibilityStatus(List<ResultatCritere> resultats,
+                                     MlEvaluationResponse mlResponse,
+                                     boolean hasConfirmedFailure) {
+        if (mlResponse != null && Set.of("FAILED_RETRYABLE", "FAILED_PERMANENT", "NOT_EVALUABLE_NO_DELIVERABLE")
+                .contains(safeUpper(mlResponse.effectiveStatus()))) {
+            return "NOT_EVALUABLE";
+        }
+        if (hasConfirmedFailure) {
+            return "NON_ELIGIBLE_EN_L_ETAT";
+        }
+        boolean indeterminate = resultats.stream()
+                .filter(resultat -> resultat.getTypeCritere() == TypeCritere.ELIMINATOIRE)
+                .anyMatch(resultat -> resultat.getReponseEliminatoire() == null
+                        || "INDETERMINATE".equals(safeUpper(resultat.getEliminatoryState())));
+        return indeterminate ? "REVIEW_REQUIRED" : "ELIGIBLE";
+    }
+
+    private String evidenceDetails(MlCriterionResult mlResult) {
+        List<MlEvidenceResponse> evidence = safeList(mlResult.evidence());
+        if (evidence.isEmpty()) {
+            return null;
+        }
+        return evidence.stream()
+                .limit(8)
+                .map(item -> "{"
+                        + "\"deliverableId\":" + (item.deliverableId() == null ? "null" : item.deliverableId())
+                        + ",\"sourceType\":\"" + jsonEscape(item.sourceType()) + "\""
+                        + ",\"source\":\"" + jsonEscape(item.source()) + "\""
+                        + ",\"page\":" + (item.page() == null ? "null" : item.page())
+                        + ",\"path\":\"" + jsonEscape(item.path()) + "\""
+                        + ",\"contentHash\":\"" + jsonEscape(item.contentHash()) + "\""
+                        + ",\"relevance\":" + (item.relevance() == null ? "null" : item.relevance())
+                        + ",\"excerpt\":\"" + jsonEscape(item.excerpt()) + "\""
+                        + "}")
+                .collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private String jsonEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", " ")
+                .replace("\r", " ");
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception ex) {
+            throw new BusinessException("Impossible de calculer le hash du snapshot.");
+        }
     }
 
     private Set<Integer> activeNoteValuesFor(List<CritereNote> criteresNotes) {
@@ -758,6 +1154,13 @@ public class EvaluationService {
                         resultat.getMlMaxScore(),
                         resultat.getNormalizedScore(),
                         resultat.getConfidence(),
+                        resultat.getCriterionStatus(),
+                        resultat.getEvidenceQuality(),
+                        resultat.getExtractionQuality(),
+                        resultat.getSourceCoverage(),
+                        resultat.getEliminatoryState(),
+                        splitLines(resultat.getAnalysisMethods()),
+                        resultat.getEvidenceJson(),
                         splitLines(resultat.getStrengths()),
                         splitLines(resultat.getWeaknesses()),
                         splitLines(resultat.getRecommendations())
@@ -827,7 +1230,18 @@ public class EvaluationService {
                 splitLines(evaluation.getStrengths()),
                 splitLines(evaluation.getWeaknesses()),
                 splitLines(evaluation.getRecommendations()),
-                evaluation.getErrorMessage()
+                evaluation.getErrorMessage(),
+                evaluation.getTrigger(),
+                evaluation.getCorrelationId(),
+                evaluation.getEngineType(),
+                evaluation.getModelName(),
+                evaluation.getPipelineVersion(),
+                evaluation.getCriteriaVersion(),
+                evaluation.getProjectSnapshotHash(),
+                evaluation.getDeliverableSnapshotHash(),
+                evaluation.getInputSnapshotHash(),
+                evaluation.getProcessingStatus(),
+                evaluation.getEligibilityStatus()
         );
     }
 
@@ -839,7 +1253,18 @@ public class EvaluationService {
             List<String> eliminatoryWarnings,
             String commentaire,
             String mlStatus,
+            String trigger,
+            String correlationId,
+            String engineType,
+            String modelName,
             String mlModelVersion,
+            String pipelineVersion,
+            String criteriaVersion,
+            String projectSnapshotHash,
+            String deliverableSnapshotHash,
+            String inputSnapshotHash,
+            String processingStatus,
+            String eligibilityStatus,
             Double mlGlobalConfidence,
             Double mlScore,
             List<String> mlWarnings,

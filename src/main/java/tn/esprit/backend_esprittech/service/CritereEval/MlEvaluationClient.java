@@ -60,7 +60,7 @@ public class MlEvaluationClient {
                 payload.length(),
                 payload.isBlank() ? "<blank>" : payload.substring(0, 1));
         MlEvaluationResponse response = fromJson(send(payload));
-        if (response == null || response.results() == null) {
+        if (response == null || response.effectiveResults() == null) {
             throw new BusinessException("Le moteur ML a retourne une reponse vide.");
         }
         return response;
