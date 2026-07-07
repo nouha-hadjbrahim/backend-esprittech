@@ -190,15 +190,39 @@ class EvaluationServiceTest {
                 livrable.getId(), "RAPPORT", "Rapport", "application/pdf", "UNSUPPORTED",
                 "No readable text", null
         )));
-        when(mlEvaluationClient.evaluate(any())).thenReturn(mlResponse(0.0, false));
+        MlCriterionResult noteResult = new MlCriterionResult(
+                20L,
+                "NOTE",
+                null,
+                5.0,
+                null,
+                0.8,
+                null,
+                "Qualite analysee",
+                List.of(),
+                List.of(),
+                List.of("INSUFFICIENT_EVIDENCE"),
+                List.of("ADD_TRACEABLE_EVIDENCE")
+        );
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "COMPLETED",
+                "2.0.0",
+                "multimodal-semantic-v2",
+                0.8,
+                List.of("Contenu exploitable"),
+                List.of(),
+                List.of("Completer les tests"),
+                List.of(),
+                List.of(noteResult)
+        ));
         when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "empty");
 
-        assertEquals(0.0, response.scoreFinal());
-        assertEquals(0, response.resultats().get(0).noteValue());
-        assertEquals("Non evaluable", response.resultats().get(0).noteLabel());
-        assertEquals(0.0, projet.getScoreFinalEvaluation());
+        assertNull(response.scoreFinal());
+        assertNull(response.resultats().get(0).noteValue());
+        assertEquals("Non calculé", response.resultats().get(0).noteLabel());
+        assertNull(projet.getScoreFinalEvaluation());
     }
 
     @Test
@@ -211,25 +235,13 @@ class EvaluationServiceTest {
         MlCriterionResult insufficient = new MlCriterionResult(
                 20L,
                 "NOTE",
-                "INSUFFICIENT_EVIDENCE",
                 null,
                 5.0,
                 null,
                 0.2,
-                0.0,
-                1.0,
-                0.0,
-                null,
-                null,
                 null,
                 "Aucune preuve pertinente.",
-                "Aucune preuve pertinente.",
-                List.of("SEMANTIC_RETRIEVAL"),
-                List.<MlEvidenceResponse>of(),
                 List.of(),
-                List.of("INSUFFICIENT_EVIDENCE"),
-                List.of("ADD_TRACEABLE_EVIDENCE"),
-                null,
                 List.of(),
                 List.of("INSUFFICIENT_EVIDENCE"),
                 List.of("ADD_TRACEABLE_EVIDENCE")
@@ -251,10 +263,13 @@ class EvaluationServiceTest {
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "insufficient");
 
-        assertEquals(0.0, response.scoreFinal());
+        assertNull(response.scoreFinal());
         assertNull(response.resultats().get(0).normalizedScore());
         assertEquals("INSUFFICIENT_EVIDENCE", response.resultats().get(0).criterionStatus());
-        assertEquals(0, response.resultats().get(0).noteValue());
+        assertNull(response.resultats().get(0).noteValue());
+        assertNull(response.resultats().get(0).noteObtenue());
+        assertNull(response.resultats().get(0).scorePondere());
+        assertEquals("Non calculé", response.resultats().get(0).noteLabel());
     }
 
     @Test
@@ -311,6 +326,66 @@ class EvaluationServiceTest {
         assertThrows(BusinessException.class,
                 () -> evaluationService.calculateAutomaticEvaluation(1L, "invalid"));
         verify(evaluationRepository, never()).save(any(Evaluation.class));
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_semanticSupportsUnknownProjectRelevance_shouldRejectResponse() {
+        Livrable livrable = livrable(TypeLivrable.RAPPORT);
+        MlEvidenceResponse evidence = mlEvidence("SUPPORTS", "UNKNOWN", "SEMANTIC");
+        MlCriterionResult invalid = new MlCriterionResult(
+                20L, "NOTE", 4.0, 5.0, 0.8, 0.8, null,
+                "EVIDENCE_CONDITIONED_SCORE", List.of(evidence), List.of(), List.of(), List.of()
+        );
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(livrable));
+        when(contentExtractionService.extract(List.of(livrable))).thenReturn(List.of(new MlDeliverableContent(
+                livrable.getId(), "RAPPORT", "Rapport", "text/plain", "READY", null,
+                "Architecture API."
+        )));
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2",
+                0.8, List.of(), List.of(), List.of(), List.of(), List.of(invalid)
+        ));
+
+        assertThrows(BusinessException.class,
+                () -> evaluationService.calculateAutomaticEvaluation(1L, "invalid evidence"));
+        verify(evaluationRepository, never()).save(any(Evaluation.class));
+    }
+
+    @Test
+    void calculateAutomaticEvaluation_deterministicSupportsUnknownProjectRelevance_shouldBeAccepted() {
+        Livrable livrable = livrable(TypeLivrable.RAPPORT);
+        MlEvidenceResponse evidence = mlEvidence("SUPPORTS", "UNKNOWN", "DETERMINISTIC");
+        MlCriterionResult valid = new MlCriterionResult(
+                20L, "NOTE", 4.0, 5.0, 0.8, 0.8, null,
+                "DETERMINISTIC_SOURCE_SIGNAL_CONFIRMED", List.of(evidence), List.of(), List.of(), List.of()
+        );
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(livrable));
+        when(contentExtractionService.extract(List.of(livrable))).thenReturn(List.of(new MlDeliverableContent(
+                livrable.getId(), "RAPPORT", "Rapport", "text/plain", "READY", null,
+                "Execution report."
+        )));
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2",
+                0.8, List.of(), List.of(), List.of(), List.of(), List.of(valid)
+        ));
+        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = evaluationService.calculateAutomaticEvaluation(1L, "deterministic evidence");
+
+        assertEquals(80.0, response.scoreFinal());
+        assertEquals("COMPLETED", response.mlStatus());
     }
 
     @Test
@@ -388,7 +463,9 @@ class EvaluationServiceTest {
     }
 
     private MlEvaluationResponse mlResponse(double noteNormalized, boolean eliminatorySatisfied) {
-        MlEvidenceResponse evidence = new MlEvidenceResponse(100L, "Architecture API et tests", 0.8, List.of("architecture", "test"));
+        MlEvidenceResponse evidence = eliminatorySatisfied
+                ? new MlEvidenceResponse(100L, "Architecture API et tests", 0.8, List.of("architecture", "test"))
+                : new MlEvidenceResponse(100L, "Preuve negative confirmee", 0.8, "CONTRADICTS", 0.8);
         MlCriterionResult eliminatoryResult = new MlCriterionResult(
                 10L, "ELIMINATOIRE", eliminatorySatisfied ? 1.0 : 0.0, 1.0,
                 eliminatorySatisfied ? 0.8 : 0.0, 0.8, eliminatorySatisfied,
@@ -408,6 +485,39 @@ class EvaluationServiceTest {
                 List.of("Completer les tests"),
                 List.of(),
                 List.of(eliminatoryResult, noteResult)
+        );
+    }
+
+    private MlEvidenceResponse mlEvidence(String stance, String projectRelevanceType, String evidenceNature) {
+        return new MlEvidenceResponse(
+                "ev-test",
+                100L,
+                "TXT",
+                "rapport.txt",
+                null,
+                null,
+                null,
+                null,
+                "hash",
+                "TEXT_CONTENT",
+                "Preuve projet tracee.",
+                0.8,
+                0.8,
+                0.8,
+                0.4,
+                0.2,
+                stance,
+                projectRelevanceType,
+                0.8,
+                0.8,
+                0.0,
+                0.8,
+                0.9,
+                "PROJECT_DELIVERABLE",
+                0.9,
+                List.of("TEST_FIXTURE"),
+                evidenceNature,
+                List.of()
         );
     }
 

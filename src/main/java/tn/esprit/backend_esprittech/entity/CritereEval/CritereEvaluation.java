@@ -52,6 +52,47 @@ public abstract class CritereEvaluation {
     @Column(length = 1000)
     private String ruleDescription;
 
+    @Column(length = 100)
+    private String criterionFamily;
+
+    @Column(length = 40)
+    private String configurationVersion;
+
+    @Column(length = 120)
+    private String applicability;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String requiredEvidenceTypes;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String optionalEvidenceTypes;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String positiveEvidenceExpectations;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String negativeEvidenceExpectations;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String permittedEvidenceNatures;
+
+    private Integer minimumSupportingEvidenceCount;
+
+    @Column(length = 120)
+    private String scoringPolicy;
+
+    @Column(length = 120)
+    private String eliminatoryDecisionRule;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String sourceAuthorityRules;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime dateCreation;
 

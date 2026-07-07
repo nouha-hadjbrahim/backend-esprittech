@@ -14,7 +14,17 @@ public record MlCriterionRequest(
         Double weight,
         Boolean eliminatory,
         String version,
-        List<String> requiredEvidenceTypes
+        List<String> requiredEvidenceTypes,
+        String criterionFamily,
+        String applicability,
+        String configurationVersion,
+        List<String> positiveEvidenceExpectations,
+        List<String> negativeEvidenceExpectations,
+        List<String> permittedEvidenceNatures,
+        Integer minimumSupportingEvidenceCount,
+        String scoringPolicy,
+        String eliminatoryDecisionRule,
+        Boolean strictConfiguration
 ) {
     public MlCriterionRequest(
             Long criterionId,
@@ -38,7 +48,17 @@ public record MlCriterionRequest(
                 weight,
                 eliminatory,
                 "2026-07",
-                List.of()
+                List.of(),
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                false
         );
     }
 }

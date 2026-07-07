@@ -9,6 +9,7 @@ import tn.esprit.backend_esprittech.dto.CritereEval.CritereEliminatoireRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereEliminatoireResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereEliminatoire;
+import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
@@ -21,12 +22,14 @@ import java.util.List;
 public class CritereEliminatoireService {
 
     private final CritereEliminatoireRepository repository;
+    private final CriterionConfigurationPolicy configurationPolicy;
 
     public CritereEliminatoireResponse create(CritereEliminatoireRequest request) {
         validateRequest(request);
 
         CritereEliminatoire critere = new CritereEliminatoire();
         applyRequest(critere, request);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.ELIMINATOIRE);
 
         return toResponse(repository.save(critere));
     }
@@ -36,6 +39,7 @@ public class CritereEliminatoireService {
 
         CritereEliminatoire critere = getEntity(id);
         applyRequest(critere, request);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.ELIMINATOIRE);
 
         return toResponse(repository.save(critere));
     }
@@ -49,6 +53,7 @@ public class CritereEliminatoireService {
     public void activate(Long id) {
         CritereEliminatoire critere = getEntity(id);
         critere.setActif(true);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.ELIMINATOIRE);
         repository.save(critere);
     }
 
@@ -98,11 +103,34 @@ public class CritereEliminatoireService {
         critere.setExpectedKeyword(request.expectedKeyword());
         critere.setNoteMaxAuto(request.noteMaxAuto());
         critere.setRuleDescription(request.ruleDescription());
+        applyConfigurationFields(critere, request);
 
         if (request.actif() != null) {
             critere.setActif(request.actif());
         }
         critere.setRuleEnabled(Boolean.TRUE.equals(request.ruleEnabled()));
+    }
+
+    private void applyConfigurationFields(CritereEliminatoire critere, CritereEliminatoireRequest request) {
+        critere.setCriterionFamily(trimToNull(request.criterionFamily()));
+        critere.setConfigurationVersion(trimToNull(request.configurationVersion()));
+        critere.setApplicability(trimToNull(request.applicability()));
+        critere.setRequiredEvidenceTypes(trimToNull(request.requiredEvidenceTypes()));
+        critere.setOptionalEvidenceTypes(trimToNull(request.optionalEvidenceTypes()));
+        critere.setPositiveEvidenceExpectations(trimToNull(request.positiveEvidenceExpectations()));
+        critere.setNegativeEvidenceExpectations(trimToNull(request.negativeEvidenceExpectations()));
+        critere.setPermittedEvidenceNatures(trimToNull(request.permittedEvidenceNatures()));
+        critere.setMinimumSupportingEvidenceCount(request.minimumSupportingEvidenceCount());
+        critere.setScoringPolicy(trimToNull(request.scoringPolicy()));
+        critere.setEliminatoryDecisionRule(trimToNull(request.eliminatoryDecisionRule()));
+        critere.setSourceAuthorityRules(trimToNull(request.sourceAuthorityRules()));
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private void validateRequest(CritereEliminatoireRequest request) {
@@ -116,6 +144,8 @@ public class CritereEliminatoireService {
     }
 
     private CritereEliminatoireResponse toResponse(CritereEliminatoire critere) {
+        CriterionConfigurationPolicy.ConfigurationReport report =
+                configurationPolicy.inspect(critere, TypeCritere.ELIMINATOIRE);
         return new CritereEliminatoireResponse(
                 critere.getId(),
                 critere.getLibelle(),
@@ -132,7 +162,23 @@ public class CritereEliminatoireService {
                 critere.getExpectedKeyword(),
                 critere.getNoteMaxAuto(),
                 critere.getRuleEnabled(),
-                critere.getRuleDescription()
+                critere.getRuleDescription(),
+                critere.getCriterionFamily(),
+                critere.getConfigurationVersion(),
+                critere.getApplicability(),
+                critere.getRequiredEvidenceTypes(),
+                critere.getOptionalEvidenceTypes(),
+                critere.getPositiveEvidenceExpectations(),
+                critere.getNegativeEvidenceExpectations(),
+                critere.getPermittedEvidenceNatures(),
+                critere.getMinimumSupportingEvidenceCount(),
+                critere.getScoringPolicy(),
+                critere.getEliminatoryDecisionRule(),
+                critere.getSourceAuthorityRules(),
+                report.configurationComplete(),
+                report.blockingMissingFields(),
+                report.nonBlockingMissingFields(),
+                report.configurationReasonCodes()
         );
     }
 }
