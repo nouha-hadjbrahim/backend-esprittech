@@ -272,6 +272,31 @@ class EvaluationServiceTest {
         assertThrows(AccessDeniedException.class, () -> evaluationService.getLatestEvaluationByProjet(1L));
     }
 
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsEvaluationFields() {
+        Evaluation evaluation = savedEvaluation();
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L))
+                .thenReturn(Optional.of(evaluation));
+
+        var result = evaluationService.getOldValues(1L);
+
+        assertEquals(evaluation.getValidationStatus(), result.get("validationStatus"));
+        assertEquals(evaluation.getScoreFinal(), result.get("scoreFinal"));
+        assertEquals(evaluation.getFinalValidatedScore(), result.get("finalValidatedScore"));
+    }
+
+    @Test
+    void getOldValues_noEvaluation_returnsEmptyMap() {
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L))
+                .thenReturn(Optional.empty());
+
+        var result = evaluationService.getOldValues(1L);
+
+        assertTrue(result.isEmpty());
+    }
+
     private MlEvaluationResponse mlResponse(double noteNormalized, boolean eliminatorySatisfied) {
         MlEvidenceResponse evidence = new MlEvidenceResponse(100L, "Architecture API et tests", 0.8, List.of("architecture", "test"));
         MlCriterionResult eliminatoryResult = new MlCriterionResult(

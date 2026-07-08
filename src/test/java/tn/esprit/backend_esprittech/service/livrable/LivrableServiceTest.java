@@ -449,6 +449,20 @@ class LivrableServiceTest {
         assertTrue(livrableService.hasActiveLivrables(42L));
     }
 
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsLivrableFields() {
+        Livrable l = existingLivrable();
+        when(livrableRepository.findById(100L)).thenReturn(Optional.of(l));
+
+        var result = livrableService.getOldValues(100L);
+
+        assertEquals(l.getNom(), result.get("nom"));
+        assertEquals(l.getTypeLivrable(), result.get("typeLivrable"));
+        assertEquals(l.getActif(), result.get("actif"));
+    }
+
     private Livrable existingLivrable() {
         Livrable livrable = new Livrable();
         livrable.setId(100L);

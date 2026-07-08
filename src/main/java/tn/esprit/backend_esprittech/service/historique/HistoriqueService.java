@@ -21,6 +21,18 @@ import java.util.Map;
 @Service
 public class HistoriqueService {
 
+    public record LogRequest(
+            ActionType action,
+            EntityType entityType,
+            Long entityId,
+            String summary,
+            Map<String, Object> oldValues,
+            Map<String, Object> newValues,
+            Map<String, Object> metadata,
+            User actor,
+            Role actorRole
+    ) {}
+
     private final HistoriqueRepository repository;
     private final ObjectMapper objectMapper;
 
@@ -30,19 +42,17 @@ public class HistoriqueService {
     }
 
     @Transactional
-    public void log(ActionType action, EntityType entityType, Long entityId, String summary,
-                    Map<String, Object> oldValues, Map<String, Object> newValues,
-                    Map<String, Object> metadata, User actor, Role actorRole) {
+    public void log(LogRequest request) {
         Historique historique = Historique.builder()
-                .actor(actor)
-                .actorRole(actorRole)
-                .action(action)
-                .entityType(entityType)
-                .entityId(entityId)
-                .summary(summary)
-                .oldValues(toJson(oldValues))
-                .newValues(toJson(newValues))
-                .metadata(toJson(metadata))
+                .actor(request.actor())
+                .actorRole(request.actorRole())
+                .action(request.action())
+                .entityType(request.entityType())
+                .entityId(request.entityId())
+                .summary(request.summary())
+                .oldValues(toJson(request.oldValues()))
+                .newValues(toJson(request.newValues()))
+                .metadata(toJson(request.metadata()))
                 .build();
         repository.save(historique);
     }

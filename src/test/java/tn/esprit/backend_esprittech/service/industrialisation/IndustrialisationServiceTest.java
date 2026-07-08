@@ -934,4 +934,15 @@ class IndustrialisationServiceTest {
                 List.of("Licence incompatible")
         );
     }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsCandidatureFields() {
+        when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
+
+        var result = industrialisationService.getOldValues(11L);
+
+        assertEquals(candidature.getStatut().name(), result.get("statut"));
+    }
 }

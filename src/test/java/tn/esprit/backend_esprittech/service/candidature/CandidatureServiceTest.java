@@ -438,6 +438,17 @@ class CandidatureServiceTest {
                 () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
     }
 
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsCandidatureFields() {
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+
+        var result = candidatureService.getOldValues(100L);
+
+        assertEquals(candidatureDeposee.getStatut(), result.get("statut"));
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────

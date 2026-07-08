@@ -138,7 +138,7 @@ public class LivrableService {
         return toResponse(livrable);
     }
 
-    public Map<String, Object> getLivrableOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         Livrable l = getLivrable(id);
         Map<String, Object> map = new HashMap<>();
         map.put("nom", l.getNom());
@@ -147,7 +147,7 @@ public class LivrableService {
         return map;
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getLivrableOldValues(#id)", summaryExpression = "'Modification livrable ' + #result.nom()")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getOldValues(#id)", summaryExpression = "'Modification livrable ' + #result.nom()")
     public LivrableResponse update(Long id, LivrableUpdateRequest request) {
         Livrable livrable = getLivrable(id);
         ensureCanManage(userService.getCurrentUser(), livrable.getSujetProjet());
@@ -166,7 +166,7 @@ public class LivrableService {
         return toResponse(livrableRepository.save(livrable));
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getLivrableOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Suppression livrable (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Suppression livrable (id=' + #id + ')'")
     public void delete(Long id) {
         Livrable livrable = getLivrable(id);
         ensureCanManage(userService.getCurrentUser(), livrable.getSujetProjet());

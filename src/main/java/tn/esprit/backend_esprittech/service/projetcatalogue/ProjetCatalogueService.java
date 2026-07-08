@@ -138,14 +138,14 @@ public class ProjetCatalogueService {
                 .stream().map(mapper::toCard).toList();
     }
 
-    public Map<String, Object> getProjetCatalogueOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         ProjetCatalogue p = getProjetOrThrow(id);
         Map<String, Object> map = new HashMap<>();
         map.put("statut", p.getStatut());
         return map;
     }
 
-    @Historise(action = ActionType.ACCEPT, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getProjetCatalogueOldValues(#id)", summaryExpression = "'Validation projet catalogue (id=' + #id + ')'")
+    @Historise(action = ActionType.ACCEPT, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation projet catalogue (id=' + #id + ')'")
     public ProjetCatalogueResponse valider(Long id) {
         User chef = currentChef();
         ProjetCatalogue projet = getProjetOrThrow(id);
@@ -159,7 +159,7 @@ public class ProjetCatalogueService {
         return mapper.toResponse(projetRepository.save(projet));
     }
 
-    @Historise(action = ActionType.REFUSE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getProjetCatalogueOldValues(#id)", metadataExpression = "{'motifRefus': #request.motifRefus()}", summaryExpression = "'Refus projet catalogue (id=' + #id + ')'")
+    @Historise(action = ActionType.REFUSE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", metadataExpression = "{'motifRefus': #request.motifRefus()}", summaryExpression = "'Refus projet catalogue (id=' + #id + ')'")
     public ProjetCatalogueResponse refuser(Long id, RefuserProjetRequest request) {
         User chef = currentChef();
         ProjetCatalogue projet = getProjetOrThrow(id);

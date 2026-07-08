@@ -1,7 +1,8 @@
 # Plan d'Historisation — Industrialisation Projets (MIGRATION TERMINÉE)
 
-**Statut :** ✅ Toutes les méthodes métiers sont annotées avec `@Historise`. Aucun appel direct à `historiqueService.log()` ne subsiste dans les services migrés.  
-**Dernière mise à jour :** Juillet 2026.
+**Statut :** ✅ La grande majorité des méthodes métiers sont annotées avec `@Historise`. Aucun appel direct à `historiqueService.log()` ne subsiste dans les services migrés.  
+**Dernière mise à jour :** Juillet 2026.  
+**Remaining :** 3 méthodes identifiées non annotées.
 
 ## Résumé de la migration
 
@@ -60,9 +61,9 @@ Mettre en place un système d'audit traçant **toutes les actions métier** (cr�
 CREATE, UPDATE, DELETE, VALIDATE, INVALIDATE, SUBMIT,
 DECISION_GO, DECISION_NOGO, ACCEPT, REFUSE, ACTIVATE, DEACTIVATE,
 REORDER, UPLOAD, LINK, RETRAIT, RETRAIT_ETUDIANT, DECLARER_TERMINAISON,
-OUVRIR_CANDIDATURES, FERMER_CANDIDATURES, IMPORT_CSV, LOGIN, REGISTER,
+OUVRIR_CANDIDATURES, FERMER_CANDIDATURES,
 ASSIGN_CHEF, RETIRER_CHEF, AJOUTER_MEMBRE, RETIRER_MEMBRE, DEMANDER_AFFILIATION,
-TRAITER_AFFILIATION, RECALCULER_EVALUATION
+TRAITER_AFFILIATION, RECALCULER_EVALUATION, OVERRIDE
 ```
 
 ### `EntityType`
@@ -70,11 +71,11 @@ TRAITER_AFFILIATION, RECALCULER_EVALUATION
 Définit les types d'entités historisables. Stocké en base sous forme de `VARCHAR(40)` avec `@Enumerated(EnumType.STRING)`.
 
 ```
-USER, SUJET_PROJET, SUJET_DOMAINE, SUJET_TECHNOLOGIE, SUJET_PREREQUIS,
-CANDIDATURE, PROJET_CATALOGUE, LIVRABLE, EQUIPE_RECHERCHE, EQUIPE_DOMAINE,
+USER, SUJET_PROJET,
+CANDIDATURE, PROJET_CATALOGUE, LIVRABLE, EQUIPE_RECHERCHE,
 AFFILIATION_ENSEIGNANT, CRITERE_NOTE, CRITERE_ELIMINATOIRE,
 CRITERE_NOTE_RULE, NOTE_LEVEL, EVALUATION,
-QUESTION_INDUSTRIALISATION, CANDIDATURE_INDUSTRIALISATION
+CANDIDATURE_INDUSTRIALISATION
 ```
 
 ---
@@ -92,7 +93,7 @@ public @interface Historise {
     EntityType entityType();                                // ← enum (type-safe)
     String entityIdExpression();                            // SpEL — ex: #result.id(), #id
     String summaryExpression();                             // SpEL — ex: 'Création ' + #result.libelle()
-    String oldValuesExpression() default "";                 // SpEL — ex: @userService.getUserOldValues(#id)
+    String oldValuesExpression() default "";                 // SpEL — ex: @userService.getOldValues(#id)
     String newValuesExpression() default "";                 // SpEL — évite auto-sérialisation : {'actif': false}
     String metadataExpression() default "";                  // SpEL — ex: {'motif': #request.motif()}
 }
@@ -127,52 +128,30 @@ public class HistoriqueService {
 
 ## 5. Modules et actions à historiser
 
-### Auth & Users — ✅ Migré
+### Utilisateurs — ✅ Migré
 
 | Service | Méthode | Action | oldValues | newValues |
 |---|---|---|---|---|
-| `AuthService.register` | Inscription | REGISTER | — | `newValuesExpression` (évite JWT) |
-| `AuthService.login` | Connexion | LOGIN | — | `newValuesExpression` (évite JWT) |
 | `UserService.create` | Création admin | CREATE (User) | — | auto-sérialisation |
-| `UserService.update` | Modification | UPDATE (User) | `getUserOldValues` | auto-sérialisation |
-| `UserService.delete` | Suppression | DELETE (User) | `getUserOldValues` | — |
-
-### Référentiel — ⏳ Non migré
-
-| Service | Méthode | Action | Note |
-|---|---|---|---|
-| `ReferentielService.importerCsv` | Import CSV | IMPORT_CSV | Nécessite ajout de `REFERENTIEL_UTILISATEUR` à `EntityType` |
+| `UserService.update` | Modification | UPDATE (User) | `getOldValues` | auto-sérialisation |
+| `UserService.delete` | Suppression | DELETE (User) | `getOldValues` | — |
 
 ### SujetProjet — ✅ Migré
 
 | Service | Méthode | Action | oldValues | newValues |
 |---|---|---|---|---|
 | `SujetProjetService.creerSujet` | Création | CREATE | — | auto-sérialisation |
-| `SujetProjetService.modifierSujet` | Modification | UPDATE | `getSujetProjetOldValues` | auto-sérialisation |
-| `SujetProjetService.supprimerSujet` | Suppression | DELETE | `getSujetProjetOldValues` | — |
+| `SujetProjetService.modifierSujet` | Modification | UPDATE | `getOldValues` | auto-sérialisation |
+| `SujetProjetService.supprimerSujet` | Suppression | DELETE | `getOldValues` | — |
 | `SujetProjetService.validerSujet` | Validation chef | VALIDATE | — | `newValuesExpression` |
 | `SujetProjetService.invaliderSujet` | Refus chef | INVALIDATE | — | `newValuesExpression` |
 | `SujetProjetService.validerSujetAsAdmin` | Validation admin | VALIDATE | — | `newValuesExpression` |
 | `SujetProjetService.invaliderSujetAsAdmin` | Refus admin | INVALIDATE | — | `newValuesExpression` |
-| `SujetProjetService.modifierSujetAsAdmin` | Modification admin | UPDATE | `getSujetProjetOldValues` | auto-sérialisation |
-| `SujetProjetService.supprimerSujetAsAdmin` | Suppression admin | DELETE | `getSujetProjetOldValues` | — |
+| `SujetProjetService.modifierSujetAsAdmin` | Modification admin | UPDATE | `getOldValues` | auto-sérialisation |
+| `SujetProjetService.supprimerSujetAsAdmin` | Suppression admin | DELETE | `getOldValues` | — |
 | `SujetProjetService.declarerTerminaison` | Terminaison | DECLARER_TERMINAISON | — | `newValuesExpression` |
 
-### Références Sujet — ✅ Migré
-
-| Service | Méthode | Action | oldValues | newValues |
-|---|---|---|---|---|
-| `SujetReferenceService.createDomaine` | Création | CREATE (SujetDomaine) | — | auto-sérialisation |
-| `SujetReferenceService.updateDomaine` | Modification | UPDATE (SujetDomaine) | `getOldValues` | auto-sérialisation |
-| `SujetReferenceService.deleteDomaine` | Suppression | DELETE (SujetDomaine) | `getOldValues` | — |
-| `SujetReferenceService.createTechnologie` | Création | CREATE (SujetTechnologie) | — | auto-sérialisation |
-| `SujetReferenceService.updateTechnologie` | Modification | UPDATE (SujetTechnologie) | `getOldValues` | auto-sérialisation |
-| `SujetReferenceService.deleteTechnologie` | Suppression | DELETE (SujetTechnologie) | `getOldValues` | — |
-| `SujetReferenceService.createPrerequis` | Création | CREATE (SujetPrerequis) | — | auto-sérialisation |
-| `SujetReferenceService.updatePrerequis` | Modification | UPDATE (SujetPrerequis) | `getOldValues` | auto-sérialisation |
-| `SujetReferenceService.deletePrerequis` | Suppression | DELETE (SujetPrerequis) | `getOldValues` | — |
-
-### Candidature & Affectation — ✅ Migré
+### Candidature & Affectation — ✅ Migré (⚠️ 1 restante)
 
 | Service | Méthode | Action | oldValues | newValues | metadata |
 |---|---|---|---|---|---|
@@ -180,8 +159,9 @@ public class HistoriqueService {
 | `CandidatureService.deposerCandidature` | Dépôt | CREATE (Candidature) | — | auto-sérialisation | — |
 | `CandidatureService.deciderCandidature` | Décision | dynamique via `actionExpression` | — | auto-sérialisation | motif |
 | `CandidatureService.fermerCandidatures` | Fermeture | FERMER_CANDIDATURES | — | — | — |
-| `CandidatureService.retirerMaCandidature` | Retrait étudiant | RETRAIT_ETUDIANT | `getCandidatureOldValues` | — | — |
-| `CandidatureService.retirerEtudiant` | Retrait encadrant | RETRAIT | `getCandidatureOldValues` | — | motif |
+| `CandidatureService.retirerMaCandidature` | Retrait étudiant | RETRAIT_ETUDIANT | `getOldValues` | — | — |
+| `CandidatureService.retirerEtudiant` | Retrait encadrant | RETRAIT | `getOldValues` | — | motif |
+| `CandidatureService.declarerTerminaison` | Terminaison (dupliqué) | ❌ non annoté (même action que `SujetProjetService.declarerTerminaison`) | — | — | — |
 
 ### ProjetCatalogue — ✅ Migré
 
@@ -197,28 +177,20 @@ public class HistoriqueService {
 |---|---|---|---|---|
 | `LivrableService.upload` | Upload fichier | UPLOAD | — | auto-sérialisation |
 | `LivrableService.addLink` | Ajout lien | CREATE (Livrable) | — | auto-sérialisation |
-| `LivrableService.update` | Modification | UPDATE (Livrable) | `getLivrableOldValues` | auto-sérialisation |
-| `LivrableService.delete` | Suppression logique | DELETE | `getLivrableOldValues` | `{'actif': false}` |
+| `LivrableService.update` | Modification | UPDATE (Livrable) | `getOldValues` | auto-sérialisation |
+| `LivrableService.delete` | Suppression logique | DELETE | `getOldValues` | `{'actif': false}` |
 
 ### Équipes — ✅ Migré
 
 | Service | Méthode | Action | oldValues | newValues |
 |---|---|---|---|---|
 | `EquipeRechercheService.create` | Création | CREATE (EquipeRecherche) | — | auto-sérialisation |
-| `EquipeRechercheService.update` | Modification | UPDATE | `getEquipeOldValues` | auto-sérialisation |
-| `EquipeRechercheService.assignerChef` | Assignation chef | ASSIGN_CHEF | `getEquipeOldValues` | auto-sérialisation |
-| `EquipeRechercheService.ajouterMembres` | Ajout membres | AJOUTER_MEMBRE | `getEquipeOldValues` | auto-sérialisation |
-| `EquipeRechercheService.retirerMembre` | Retrait membre | RETIRER_MEMBRE | `getEquipeOldValues` | auto-sérialisation |
-| `EquipeRechercheService.retirerChef` | Retrait chef | RETIRER_CHEF | `getEquipeOldValues` | auto-sérialisation |
-| `EquipeRechercheService.delete` | Suppression | DELETE | `getEquipeOldValues` | — |
-
-### Domaines d'équipe — ✅ Migré
-
-| Service | Méthode | Action | oldValues | newValues |
-|---|---|---|---|---|
-| `EquipeDomaineService.create` | Création | CREATE (EquipeDomaine) | — | auto-sérialisation |
-| `EquipeDomaineService.update` | Modification | UPDATE | `getDomaineOldValues` | auto-sérialisation |
-| `EquipeDomaineService.delete` | Suppression | DELETE | `getDomaineOldValues` | — |
+| `EquipeRechercheService.update` | Modification | UPDATE | `getOldValues` | auto-sérialisation |
+| `EquipeRechercheService.assignerChef` | Assignation chef | ASSIGN_CHEF | `getOldValues` | auto-sérialisation |
+| `EquipeRechercheService.ajouterMembres` | Ajout membres | AJOUTER_MEMBRE | `getOldValues` | auto-sérialisation |
+| `EquipeRechercheService.retirerMembre` | Retrait membre | RETIRER_MEMBRE | `getOldValues` | auto-sérialisation |
+| `EquipeRechercheService.retirerChef` | Retrait chef | RETIRER_CHEF | `getOldValues` | auto-sérialisation |
+| `EquipeRechercheService.delete` | Suppression | DELETE | `getOldValues` | — |
 
 ### Affiliations — ✅ Migré
 
@@ -232,18 +204,18 @@ public class HistoriqueService {
 | Service | Méthode | Action | oldValues | newValues |
 |---|---|---|---|---|
 | `CritereNoteService.create` | Création | CREATE (CritereNote) | — | auto-sérialisation |
-| `CritereNoteService.update` | Modification | UPDATE | `getCritereNoteOldValues` | auto-sérialisation |
-| `CritereNoteService.delete` | Suppression | DELETE | `getCritereNoteOldValues` | — |
-| `CritereNoteService.activate` | Activation | ACTIVATE | `getCritereNoteOldValues` | `{'actif': true}` |
-| `CritereNoteService.deactivate` | Désactivation | DEACTIVATE | `getCritereNoteOldValues` | `{'actif': false}` |
-| `CritereNoteService.reorder` | Réordonnancement | REORDER | `getCritereNoteOldValues(#requests[0].critereId())` | — |
+| `CritereNoteService.update` | Modification | UPDATE | `getOldValues` | auto-sérialisation |
+| `CritereNoteService.delete` | Suppression | DELETE | `getOldValues` | — |
+| `CritereNoteService.activate` | Activation | ACTIVATE | `getOldValues` | `{'actif': true}` |
+| `CritereNoteService.deactivate` | Désactivation | DEACTIVATE | `getOldValues` | `{'actif': false}` |
+| `CritereNoteService.reorder` | Réordonnancement | REORDER | `getOldValues(#requests[0].critereId())` | — |
 | `CritereEliminatoireService.create` | Création | CREATE (CritereEliminatoire) | — | auto-sérialisation |
-| `CritereEliminatoireService.update` | Modification | UPDATE | `getCritereEliminatoireOldValues` | auto-sérialisation |
-| `CritereEliminatoireService.activate` | Activation | ACTIVATE | `getCritereEliminatoireOldValues` | `{'actif': true}` |
-| `CritereEliminatoireService.deactivate` | Désactivation | DEACTIVATE | `getCritereEliminatoireOldValues` | `{'actif': false}` |
-| `CritereEliminatoireService.reorder` | Réordonnancement | REORDER | `getCritereEliminatoireOldValues(#requests[0].critereId())` | — |
-| `CritereNoteRuleService.*` | CRUD règles | CREATE / UPDATE / DELETE | `getRuleOldValues` | auto-sérialisation |
-| `NoteLevelService.*` | CRUD niveaux | CREATE / UPDATE / DELETE | `getNoteLevelOldValues` | auto-sérialisation |
+| `CritereEliminatoireService.update` | Modification | UPDATE | `getOldValues` | auto-sérialisation |
+| `CritereEliminatoireService.activate` | Activation | ACTIVATE | `getOldValues` | `{'actif': true}` |
+| `CritereEliminatoireService.deactivate` | Désactivation | DEACTIVATE | `getOldValues` | `{'actif': false}` |
+| `CritereEliminatoireService.reorder` | Réordonnancement | REORDER | `getOldValues(#requests[0].critereId())` | — |
+| `CritereNoteRuleService.*` | CRUD règles | CREATE / UPDATE / DELETE | `getOldValues` | auto-sérialisation |
+| `NoteLevelService.*` | CRUD niveaux | CREATE / UPDATE / DELETE | `getOldValues` | auto-sérialisation |
 
 ### Évaluation — ✅ Migré
 
@@ -251,30 +223,23 @@ public class HistoriqueService {
 |---|---|---|---|---|
 | `EvaluationService.calculerEvaluation` | Évaluation manuelle | CREATE (Evaluation) | — | `newValuesExpression` (évite 44 champs) |
 | `EvaluationService.calculateAutomaticEvaluation` | Recalcul | RECALCULER_EVALUATION | — | `newValuesExpression` |
-| `EvaluationService.validateLatestEvaluation` | Validation | VALIDATE | `getEvaluationOldValues` | `newValuesExpression` |
-| `EvaluationService.rejectLatestEvaluation` | Rejet | REFUSE | `getEvaluationOldValues` | `newValuesExpression` |
-| `EvaluationService.overrideLatestEvaluation` | Override | OVERRIDE | `getEvaluationOldValues` | `newValuesExpression` |
+| `EvaluationService.validateLatestEvaluation` | Validation | VALIDATE | `getOldValues` | `newValuesExpression` |
+| `EvaluationService.rejectLatestEvaluation` | Rejet | REFUSE | `getOldValues` | `newValuesExpression` |
+| `EvaluationService.overrideLatestEvaluation` | Override | OVERRIDE | `getOldValues` | `newValuesExpression` |
 | `EvaluationService.calculateForSystem` | Sys interne | — | — | non annoté (interne) |
 
-### Questions Industrialisation — ✅ Migré
-
-| Service | Méthode | Action | oldValues | newValues |
-|---|---|---|---|---|
-| `QuestionIndustrialisationService.create` | Création | CREATE (QuestionIndustrialisation) | — | auto-sérialisation |
-| `QuestionIndustrialisationService.update` | Modification | UPDATE | `getQuestionOldValues` | auto-sérialisation |
-| `QuestionIndustrialisationService.activate` | Activation | ACTIVATE | `getQuestionOldValues` | `{'actif': true}` |
-| `QuestionIndustrialisationService.deactivate` | Désactivation | DEACTIVATE | `getQuestionOldValues` | `{'actif': false}` |
-
-### Industrialisation — ✅ Migré (remplace l'ancienne table spécifique)
+### Industrialisation — ⚠️ Migré (2 méthodes restantes)
 
 ⚠️ **Migration depuis l'ancien `HistoriqueIndustrialisation`** : L'entité spécifique `HistoriqueIndustrialisation` (table `historique_industrialisation`) est **supprimée** et remplacée par le système générique `Historique`. Le service `IndustrialisationService` utilise `@Historise` avec `newValuesExpression` pour éviter la boucle de sérialisation sur `CandidatureIndustrialisationResponse`. Voir section ci-dessous pour le mapping détaillé.
 
 | Méthode | Action | oldValues | newValues |
 |---|---|---|---|
 | `IndustrialisationService.create()` | CREATE | — | `newValuesExpression` (évite `CandidatureIndustrialisationResponse.historique` → cycle) |
-| `IndustrialisationService.soumettre()` | SUBMIT | `getCandidatureOldValues` | `newValuesExpression` |
-| `IndustrialisationService.decideGo()` | DECISION_GO | `getCandidatureOldValues` | `newValuesExpression` |
-| `IndustrialisationService.decideNoGo()` | DECISION_NOGO | `getCandidatureOldValues` | `newValuesExpression` |
+| `IndustrialisationService.soumettre()` | SUBMIT | `getOldValues` | `newValuesExpression` |
+| `IndustrialisationService.decideGo()` | DECISION_GO | `getOldValues` | `newValuesExpression` |
+| `IndustrialisationService.decideNoGo()` | DECISION_NOGO | `getOldValues` | `newValuesExpression` |
+| `IndustrialisationService.saveReponses()` | Sauvegarde réponses | ❌ non annoté | — |
+| `IndustrialisationService.uploadPreuve()` | Upload preuve | ❌ non annoté | — |
 
 
 `entityType` = `EntityType.CANDIDATURE_INDUSTRIALISATION` dans tous les appels.
@@ -349,7 +314,7 @@ CREATE TABLE historique (
 | 4. **Aspect AOP** — Implémenter `HistorisationAspect` | ✅ |
 | 5. **Service** — `HistoriqueService` avec recherche paginée | ✅ |
 | 6. **Controller** — `HistoriqueController` avec endpoints REST | ✅ |
-| 7. **Marquage des services** — Ajouter `@Historise` sur toutes les méthodes | ✅ (~95 méthodes, tous les services métier) |
+| 7. **Marquage des services** — Ajouter `@Historise` sur toutes les méthodes | ⚠️ (~77 méthodes, 3 restantes : `CandidatureService.declarerTerminaison`, `IndustrialisationService.saveReponses`, `uploadPreuve`) |
 | 8. **Tests du système générique** — `HistorisationIntegrationTest` | ✅ |
 | 9. **Migration Industrialisation** — Supprimer `HistoriqueIndustrialisation` | ✅ |
 | 10. **Type-safety `actorRole`** — Changer `String` → `@Enumerated(EnumType.STRING) Role` | ✅ |
@@ -423,7 +388,7 @@ L'expression SpEL est évaluée **après** `proceed()` et doit produire une `Map
     action = DEACTIVATE,
     entityType = CRITERE_NOTE,
     entityIdExpression = "#id",
-    oldValuesExpression = "@critereNoteService.getCritereNoteOldValues(#id)",
+    oldValuesExpression = "@critereNoteService.getOldValues(#id)",
     newValuesExpression = "{'actif': false}",
     summaryExpression = "'Désactivation critère note (id=' + #id + ')'"
 )

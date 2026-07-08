@@ -55,8 +55,8 @@ class HistoriqueServiceTest {
         when(objectMapper.writeValueAsString(newValues)).thenReturn("{\"nom\":\"New\"}");
         when(objectMapper.writeValueAsString(metadata)).thenReturn("{\"motif\":\"Test\"}");
 
-        historiqueService.log(ActionType.CREATE, EntityType.SUJET_PROJET, 42L,
-                "Creation du projet", oldValues, newValues, metadata, actor, Role.ROLE_ADMIN);
+        historiqueService.log(new HistoriqueService.LogRequest(ActionType.CREATE, EntityType.SUJET_PROJET, 42L,
+                "Creation du projet", oldValues, newValues, metadata, actor, Role.ROLE_ADMIN));
 
         verify(repository).save(historiqueCaptor.capture());
         Historique h = historiqueCaptor.getValue();
@@ -74,8 +74,8 @@ class HistoriqueServiceTest {
 
     @Test
     void log_withNullMaps_serializesToNull() {
-        historiqueService.log(ActionType.DELETE, EntityType.CANDIDATURE, 7L,
-                "Suppression", null, null, null, actor, Role.ROLE_ADMIN);
+        historiqueService.log(new HistoriqueService.LogRequest(ActionType.DELETE, EntityType.CANDIDATURE, 7L,
+                "Suppression", null, null, null, actor, Role.ROLE_ADMIN));
 
         verify(repository).save(historiqueCaptor.capture());
         Historique h = historiqueCaptor.getValue();
@@ -87,8 +87,8 @@ class HistoriqueServiceTest {
 
     @Test
     void log_withEmptyMaps_serializesToNull() {
-        historiqueService.log(ActionType.UPDATE, EntityType.LIVRABLE, 3L,
-                "Mise a jour", Map.of(), Map.of(), Map.of(), actor, Role.ROLE_ADMIN);
+        historiqueService.log(new HistoriqueService.LogRequest(ActionType.UPDATE, EntityType.LIVRABLE, 3L,
+                "Mise a jour", Map.of(), Map.of(), Map.of(), actor, Role.ROLE_ADMIN));
 
         verify(repository).save(historiqueCaptor.capture());
         Historique h = historiqueCaptor.getValue();
@@ -104,8 +104,8 @@ class HistoriqueServiceTest {
         when(objectMapper.writeValueAsString(oldValues))
                 .thenThrow(new JsonProcessingException("") {});
 
-        historiqueService.log(ActionType.CREATE, EntityType.SUJET_PROJET, 1L,
-                "Test", oldValues, null, null, actor, Role.ROLE_ADMIN);
+        historiqueService.log(new HistoriqueService.LogRequest(ActionType.CREATE, EntityType.SUJET_PROJET, 1L,
+                "Test", oldValues, null, null, actor, Role.ROLE_ADMIN));
 
         verify(repository).save(historiqueCaptor.capture());
         assertNull(historiqueCaptor.getValue().getOldValues());

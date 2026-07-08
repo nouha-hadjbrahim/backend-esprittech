@@ -43,7 +43,7 @@ public class CritereNoteService {
         return toResponse(repository.save(critere));
     }
 
-    public Map<String, Object> getCritereNoteOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         CritereNote c = getEntity(id);
         Map<String, Object> map = new HashMap<>();
         map.put("libelle", c.getLibelle());
@@ -55,7 +55,7 @@ public class CritereNoteService {
         return map;
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getCritereNoteOldValues(#id)", summaryExpression = "'Modification critère note ' + #result.libelle()")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", summaryExpression = "'Modification critère note ' + #result.libelle()")
     public CritereNoteResponse update(Long id, CritereNoteRequest request) {
         validateRequest(request);
         CritereNote critere = getEntity(id);
@@ -64,7 +64,7 @@ public class CritereNoteService {
         return toResponse(repository.save(critere));
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getCritereNoteOldValues(#id)", summaryExpression = "'Suppression critère note (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", summaryExpression = "'Suppression critère note (id=' + #id + ')'")
     public void delete(Long id) {
         CritereNote critere = getEntity(id);
         if (resultatCritereRepository.existsByCritereId(id)) {
@@ -74,21 +74,21 @@ public class CritereNoteService {
         repository.delete(critere);
     }
 
-    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getCritereNoteOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation critère note (id=' + #id + ')'")
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation critère note (id=' + #id + ')'")
     public void deactivate(Long id) {
         CritereNote critere = getEntity(id);
         critere.setActif(false);
         repository.save(critere);
     }
 
-    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getCritereNoteOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation critère note (id=' + #id + ')'")
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation critère note (id=' + #id + ')'")
     public void activate(Long id) {
         CritereNote critere = getEntity(id);
         critere.setActif(true);
         repository.save(critere);
     }
 
-    @Historise(action = ActionType.REORDER, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#requests[0].critereId()", oldValuesExpression = "@critereNoteService.getCritereNoteOldValues(#requests[0].critereId())", summaryExpression = "'Réordonnancement de ' + #requests.size() + ' critères note'")
+    @Historise(action = ActionType.REORDER, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#requests[0].critereId()", oldValuesExpression = "@critereNoteService.getOldValues(#requests[0].critereId())", summaryExpression = "'Réordonnancement de ' + #requests.size() + ' critères note'")
     public void reorder(List<OrdreCritereRequest> requests) {
         for (OrdreCritereRequest request : requests) {
             CritereNote critere = getEntity(request.critereId());

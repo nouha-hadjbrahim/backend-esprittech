@@ -96,7 +96,7 @@ public class UserService {
         return userRepository.searchEligibleMembers(q, roles, pageable);
     }
 
-    public Map<String, Object> getUserOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         User u = findById(id);
         Map<String, Object> map = new HashMap<>();
         map.put("nom", u.getNom());
@@ -108,7 +108,7 @@ public class UserService {
 
     /** Met à jour l'identité, le rôle et l'état d'activation d'un utilisateur. */
     @Transactional
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getUserOldValues(#id)", summaryExpression = "'Modification utilisateur ' + #result.getEmail()")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getOldValues(#id)", summaryExpression = "'Modification utilisateur ' + #result.getEmail()")
     public User update(Long id, UpdateUserRequest request) {
         User user = findById(id);
 
@@ -128,7 +128,7 @@ public class UserService {
 
     /** Supprime un utilisateur ; un admin ne peut pas supprimer son propre compte. */
     @Transactional
-    @Historise(action = ActionType.DELETE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getUserOldValues(#id)", summaryExpression = "'Suppression utilisateur (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getOldValues(#id)", summaryExpression = "'Suppression utilisateur (id=' + #id + ')'")
     public void delete(Long id) {
         User user = findById(id);
         User current = getCurrentUser();

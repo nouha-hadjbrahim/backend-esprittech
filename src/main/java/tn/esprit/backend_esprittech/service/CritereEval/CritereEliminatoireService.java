@@ -37,7 +37,7 @@ public class CritereEliminatoireService {
         return toResponse(repository.save(critere));
     }
 
-    public Map<String, Object> getCritereEliminatoireOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         CritereEliminatoire c = getEntity(id);
         Map<String, Object> map = new HashMap<>();
         map.put("libelle", c.getLibelle());
@@ -46,7 +46,7 @@ public class CritereEliminatoireService {
         return map;
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getCritereEliminatoireOldValues(#id)", summaryExpression = "'Modification critère éliminatoire ' + #result.libelle()")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getOldValues(#id)", summaryExpression = "'Modification critère éliminatoire ' + #result.libelle()")
     public CritereEliminatoireResponse update(Long id, CritereEliminatoireRequest request) {
         validateRequest(request);
 
@@ -56,21 +56,21 @@ public class CritereEliminatoireService {
         return toResponse(repository.save(critere));
     }
 
-    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getCritereEliminatoireOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation critère éliminatoire (id=' + #id + ')'")
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation critère éliminatoire (id=' + #id + ')'")
     public void deactivate(Long id) {
         CritereEliminatoire critere = getEntity(id);
         critere.setActif(false);
         repository.save(critere);
     }
 
-    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getCritereEliminatoireOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation critère éliminatoire (id=' + #id + ')'")
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation critère éliminatoire (id=' + #id + ')'")
     public void activate(Long id) {
         CritereEliminatoire critere = getEntity(id);
         critere.setActif(true);
         repository.save(critere);
     }
 
-    @Historise(action = ActionType.REORDER, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#requests[0].critereId()", oldValuesExpression = "@critereEliminatoireService.getCritereEliminatoireOldValues(#requests[0].critereId())", summaryExpression = "'Réordonnancement de ' + #requests.size() + ' critères éliminatoires'")
+    @Historise(action = ActionType.REORDER, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#requests[0].critereId()", oldValuesExpression = "@critereEliminatoireService.getOldValues(#requests[0].critereId())", summaryExpression = "'Réordonnancement de ' + #requests.size() + ' critères éliminatoires'")
     public void reorder(List<OrdreCritereRequest> requests) {
         for (OrdreCritereRequest request : requests) {
             CritereEliminatoire critere = getEntity(request.critereId());

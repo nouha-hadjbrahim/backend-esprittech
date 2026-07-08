@@ -4,19 +4,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.industrialisation.QuestionIndustrialisationRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.QuestionIndustrialisationResponse;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
-import tn.esprit.backend_esprittech.enums.ActionType;
-import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +20,6 @@ public class QuestionIndustrialisationService {
 
     private final QuestionIndustrialisationRepository repository;
 
-    @Historise(action = ActionType.CREATE, entityType = EntityType.QUESTION_INDUSTRIALISATION, entityIdExpression = "#result.id()", summaryExpression = "'Création question ' + #result.libelle()")
     public QuestionIndustrialisationResponse create(QuestionIndustrialisationRequest request) {
         validate(request);
         QuestionIndustrialisation question = new QuestionIndustrialisation();
@@ -33,16 +27,6 @@ public class QuestionIndustrialisationService {
         return toResponse(repository.save(question));
     }
 
-    public Map<String, Object> getQuestionOldValues(Long id) {
-        QuestionIndustrialisation q = getEntity(id);
-        Map<String, Object> map = new HashMap<>();
-        map.put("libelle", q.getLibelle());
-        map.put("actif", q.getActif());
-        map.put("ordre", q.getOrdre());
-        return map;
-    }
-
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.QUESTION_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@questionIndustrialisationService.getQuestionOldValues(#id)", summaryExpression = "'Modification question ' + #result.libelle()")
     public QuestionIndustrialisationResponse update(Long id, QuestionIndustrialisationRequest request) {
         validate(request);
         QuestionIndustrialisation question = getEntity(id);
@@ -50,14 +34,12 @@ public class QuestionIndustrialisationService {
         return toResponse(repository.save(question));
     }
 
-    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.QUESTION_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@questionIndustrialisationService.getQuestionOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation question (id=' + #id + ')'")
     public void activate(Long id) {
         QuestionIndustrialisation question = getEntity(id);
         question.setActif(true);
         repository.save(question);
     }
 
-    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.QUESTION_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@questionIndustrialisationService.getQuestionOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation question (id=' + #id + ')'")
     public void deactivate(Long id) {
         QuestionIndustrialisation question = getEntity(id);
         question.setActif(false);

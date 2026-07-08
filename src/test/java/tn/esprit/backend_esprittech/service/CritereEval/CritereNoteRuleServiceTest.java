@@ -65,4 +65,24 @@ class CritereNoteRuleServiceTest {
         assertEquals("Bon niveau", response.noteLabel());
         verify(noteLevelService).requireActiveValue(7, "La note de regle");
     }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsRuleFields() {
+        CritereNoteRule rule = new CritereNoteRule();
+        rule.setId(5L);
+        rule.setRuleName("Score 5");
+        rule.setActive(true);
+        rule.setNoteValue(5);
+        rule.setPriority(1);
+        when(ruleRepository.findById(5L)).thenReturn(Optional.of(rule));
+
+        var result = service.getOldValues(5L);
+
+        assertEquals("Score 5", result.get("ruleName"));
+        assertEquals(true, result.get("active"));
+        assertEquals(5, result.get("noteValue"));
+        assertEquals(1, result.get("priority"));
+    }
 }

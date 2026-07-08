@@ -188,7 +188,7 @@ public class IndustrialisationService {
         return soumettre(candidatureId, null);
     }
 
-    @Historise(action = ActionType.SUBMIT, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#candidatureId", oldValuesExpression = "@industrialisationService.getCandidatureOldValues(#candidatureId)", newValuesExpression = "{'statut': 'SOUMISE'}", summaryExpression = "'Soumission demande industrialisation (id=' + #candidatureId + ')'")
+    @Historise(action = ActionType.SUBMIT, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#candidatureId", oldValuesExpression = "@industrialisationService.getOldValues(#candidatureId)", newValuesExpression = "{'statut': 'SOUMISE'}", summaryExpression = "'Soumission demande industrialisation (id=' + #candidatureId + ')'")
     public CandidatureIndustrialisationResponse soumettre(Long candidatureId, SubmitIndustrialisationRequest request) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
@@ -263,14 +263,14 @@ public class IndustrialisationService {
         return toResponse(candidature, true);
     }
 
-    public Map<String, Object> getCandidatureOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         CandidatureIndustrialisation c = getCandidature(id);
         Map<String, Object> map = new HashMap<>();
         map.put("statut", c.getStatut().name());
         return map;
     }
 
-    @Historise(action = ActionType.DECISION_GO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getCandidatureOldValues(#id)", newValuesExpression = "{'statut': 'GO', 'orientation': #request.orientation().name()}", metadataExpression = "{'commentaire': #request.commentaire()}", summaryExpression = "'Décision GO - ' + #request.orientation().name()")
+    @Historise(action = ActionType.DECISION_GO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getOldValues(#id)", newValuesExpression = "{'statut': 'GO', 'orientation': #request.orientation().name()}", metadataExpression = "{'commentaire': #request.commentaire()}", summaryExpression = "'Décision GO - ' + #request.orientation().name()")
     public CandidatureIndustrialisationResponse decideGo(Long id, DecisionGoRequest request) {
         User current = userService.getCurrentUser();
         ensureCi(current);
@@ -297,7 +297,7 @@ public class IndustrialisationService {
         return toResponse(saved, true);
     }
 
-    @Historise(action = ActionType.DECISION_NOGO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getCandidatureOldValues(#id)", newValuesExpression = "{'statut': 'NO_GO'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Décision NO GO (id=' + #id + ')'")
+    @Historise(action = ActionType.DECISION_NOGO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getOldValues(#id)", newValuesExpression = "{'statut': 'NO_GO'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Décision NO GO (id=' + #id + ')'")
     public CandidatureIndustrialisationResponse decideNoGo(Long id, DecisionNoGoRequest request) {
         User current = userService.getCurrentUser();
         ensureCi(current);

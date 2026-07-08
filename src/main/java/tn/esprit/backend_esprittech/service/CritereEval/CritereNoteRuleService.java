@@ -50,7 +50,7 @@ public class CritereNoteRuleService {
         return toResponse(ruleRepository.save(rule));
     }
 
-    public Map<String, Object> getRuleOldValues(Long ruleId) {
+    public Map<String, Object> getOldValues(Long ruleId) {
         CritereNoteRule r = getRule(ruleId);
         Map<String, Object> map = new HashMap<>();
         map.put("ruleName", r.getRuleName());
@@ -60,7 +60,7 @@ public class CritereNoteRuleService {
         return map;
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getRuleOldValues(#ruleId)", summaryExpression = "'Modification règle ' + #result.ruleName()")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", summaryExpression = "'Modification règle ' + #result.ruleName()")
     public CritereNoteRuleResponse update(Long ruleId, CritereNoteRuleRequest request) {
         validate(request);
         CritereNoteRule rule = getRule(ruleId);
@@ -69,19 +69,19 @@ public class CritereNoteRuleService {
         return toResponse(ruleRepository.save(rule));
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getRuleOldValues(#ruleId)", summaryExpression = "'Suppression règle (id=' + #ruleId + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", summaryExpression = "'Suppression règle (id=' + #ruleId + ')'")
     public void delete(Long ruleId) {
         ruleRepository.delete(getRule(ruleId));
     }
 
-    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getRuleOldValues(#ruleId)", newValuesExpression = "{'active': true}", summaryExpression = "'Activation règle (id=' + #ruleId + ')'")
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", newValuesExpression = "{'active': true}", summaryExpression = "'Activation règle (id=' + #ruleId + ')'")
     public void activate(Long ruleId) {
         CritereNoteRule rule = getRule(ruleId);
         rule.setActive(true);
         ruleRepository.save(rule);
     }
 
-    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getRuleOldValues(#ruleId)", newValuesExpression = "{'active': false}", summaryExpression = "'Désactivation règle (id=' + #ruleId + ')'")
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", newValuesExpression = "{'active': false}", summaryExpression = "'Désactivation règle (id=' + #ruleId + ')'")
     public void deactivate(Long ruleId) {
         CritereNoteRule rule = getRule(ruleId);
         rule.setActive(false);

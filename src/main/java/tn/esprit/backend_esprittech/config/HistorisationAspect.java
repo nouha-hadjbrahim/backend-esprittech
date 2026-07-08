@@ -22,6 +22,7 @@ import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
+import tn.esprit.backend_esprittech.service.historique.HistoriqueService.LogRequest;
 
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -87,8 +88,8 @@ public class HistorisationAspect {
                 metadata = evaluate(historise.metadataExpression(), context, Map.class);
             }
 
-            historiqueService.log(action, historise.entityType(), entityId, summary,
-                    oldValues, newValues, metadata, actor, actor.getRole());
+            historiqueService.log(new LogRequest(action, historise.entityType(), entityId, summary,
+                    oldValues, newValues, metadata, actor, actor.getRole()));
         } catch (Exception e) {
             log.warn("Échec historisation {} {}", historise.action(), historise.entityType(), e);
         }

@@ -120,7 +120,7 @@ public class NoteLevelService {
         return toResponse(repository.save(level));
     }
 
-    public Map<String, Object> getNoteLevelOldValues(Long id) {
+    public Map<String, Object> getOldValues(Long id) {
         NoteLevel l = getEntity(id);
         Map<String, Object> map = new HashMap<>();
         map.put("value", l.getValue());
@@ -130,7 +130,7 @@ public class NoteLevelService {
         return map;
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getNoteLevelOldValues(#id)", summaryExpression = "'Modification niveau note (id=' + #id + ')'")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", summaryExpression = "'Modification niveau note (id=' + #id + ')'")
     public NoteLevelResponse update(Long id, NoteLevelRequest request) {
         validate(request, id);
         NoteLevel level = getEntity(id);
@@ -138,21 +138,21 @@ public class NoteLevelService {
         return toResponse(repository.save(level));
     }
 
-    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getNoteLevelOldValues(#id)", newValuesExpression = "{'active': true}", summaryExpression = "'Activation niveau note (id=' + #id + ')'")
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", newValuesExpression = "{'active': true}", summaryExpression = "'Activation niveau note (id=' + #id + ')'")
     public void activate(Long id) {
         NoteLevel level = getEntity(id);
         level.setActive(true);
         repository.save(level);
     }
 
-    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getNoteLevelOldValues(#id)", newValuesExpression = "{'active': false}", summaryExpression = "'Désactivation niveau note (id=' + #id + ')'")
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", newValuesExpression = "{'active': false}", summaryExpression = "'Désactivation niveau note (id=' + #id + ')'")
     public void deactivate(Long id) {
         NoteLevel level = getEntity(id);
         level.setActive(false);
         repository.save(level);
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getNoteLevelOldValues(#id)", summaryExpression = "'Suppression niveau note (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", summaryExpression = "'Suppression niveau note (id=' + #id + ')'")
     public void delete(Long id) {
         NoteLevel level = getEntity(id);
         ensureNotUsed(level);

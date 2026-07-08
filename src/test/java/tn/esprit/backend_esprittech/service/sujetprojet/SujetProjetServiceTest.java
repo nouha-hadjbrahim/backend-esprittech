@@ -400,4 +400,25 @@ class SujetProjetServiceTest {
         assertThrows(IllegalStateException.class, () -> service.declarerTerminaison(1L));
     }
 
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsSujetFields() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        var result = service.getOldValues(1L);
+
+        assertEquals(entity.getStatut(), result.get("statut"));
+        assertEquals(entity.getTitre(), result.get("titre"));
+        assertEquals(entity.getCatalogue(), result.get("catalogue"));
+    }
+
+    @Test
+    void getOldValues_sujetNotFound_returnsEmptyMap() {
+        when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        var result = service.getOldValues(99L);
+
+        assertTrue(result.isEmpty());
+    }
 }
