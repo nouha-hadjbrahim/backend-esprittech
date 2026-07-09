@@ -35,7 +35,8 @@ public class ResultatCritere {
     @Column(length = 255)
     private String critereDomaine;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(name = "critere_description", columnDefinition = "TEXT")
     private String critereDescription;
 
     @Enumerated(EnumType.STRING)
@@ -57,6 +58,34 @@ public class ResultatCritere {
 
     private Double poids;
 
+    private Double mlScore;
+
+    private Double mlMaxScore;
+
+    private Double normalizedScore;
+
+    private Double confidence;
+
+    @Column(length = 80)
+    private String criterionStatus;
+
+    private Double evidenceQuality;
+
+    private Double extractionQuality;
+
+    private Double sourceCoverage;
+
+    @Column(length = 80)
+    private String eliminatoryState;
+
+    @Lob
+    @Column(name = "analysis_methods", columnDefinition = "TEXT")
+    private String analysisMethods;
+
+    @Lob
+    @Column(name = "evidence_json", columnDefinition = "TEXT")
+    private String evidenceJson;
+
     private Integer noteValue;
 
     @Column(length = 255)
@@ -65,21 +94,37 @@ public class ResultatCritere {
     @Column(length = 255)
     private String matchedRule;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(name = "metadata_used", columnDefinition = "TEXT")
     private String metadataUsed;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String explanation;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(name = "evidence_summary", columnDefinition = "TEXT")
     private String evidenceSummary;
 
     @Column(length = 1000)
     private String evidenceLivrableIds;
 
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String strengths;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String weaknesses;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String recommendations;
+
     @Column(nullable = false)
     private Boolean ruleConfigured = false;
 
-    @Column(length = 2000)
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String commentaire;
 }

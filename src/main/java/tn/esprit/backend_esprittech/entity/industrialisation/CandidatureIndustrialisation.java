@@ -70,7 +70,8 @@ public class CandidatureIndustrialisation {
 
     private Integer eliminatoryWarningsCount = 0;
 
-    @Column(length = 4000)
+    @Lob
+    @Column(name = "eliminatory_warnings_details", columnDefinition = "TEXT")
     private String eliminatoryWarningsDetails;
 
     @Column(length = 2000)

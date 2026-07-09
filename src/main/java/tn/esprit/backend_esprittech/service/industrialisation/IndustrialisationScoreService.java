@@ -8,39 +8,24 @@ import tn.esprit.backend_esprittech.dto.industrialisation.BlocageEliminatoireDto
 import tn.esprit.backend_esprittech.dto.industrialisation.DecisionRecommandeeIndustrialisation;
 import tn.esprit.backend_esprittech.dto.industrialisation.IndustrialisationScoreResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.ScoreBreakdownDto;
-import tn.esprit.backend_esprittech.entity.CritereEval.CritereEliminatoire;
-import tn.esprit.backend_esprittech.entity.CritereEval.CritereEvaluation;
-import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
 import tn.esprit.backend_esprittech.entity.CritereEval.Evaluation;
-import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.ResultatCritere;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.CandidatureIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.ReponseIndustrialisation;
-import tn.esprit.backend_esprittech.entity.livrable.Livrable;
-import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
-import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
-import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
-import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.service.CritereEval.NoteLevelService;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -49,31 +34,14 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class IndustrialisationScoreService {
 
-    private static final double QUESTIONS_WEIGHT = 0.40;
-    private static final double LIVRABLES_WEIGHT = 0.30;
-    private static final double CRITERES_NOTES_WEIGHT = 0.30;
-
-    private static final Set<ModeEvaluation> LIVRABLE_RULE_MODES = EnumSet.of(
-            ModeEvaluation.LIVRABLE_TYPE_PRESENT,
-            ModeEvaluation.LIVRABLE_LINK_PRESENT,
-            ModeEvaluation.LIVRABLE_FILE_PRESENT,
-            ModeEvaluation.LIVRABLE_COUNT_MIN,
-            ModeEvaluation.GIT_LINK_PRESENT,
-            ModeEvaluation.DOCUMENTATION_PRESENT,
-            ModeEvaluation.KEYWORD_IN_LIVRABLE_NAME_OR_DESCRIPTION
-    );
-
-    private static final Set<String> ALLOWED_FILE_EXTENSIONS = Set.of(
-            "pdf", "doc", "docx", "png", "jpg", "jpeg", "txt"
-    );
+    private static final double QUESTIONS_WEIGHT = 0.0;
+    private static final double LIVRABLES_WEIGHT = 0.0;
+    private static final double CRITERES_NOTES_WEIGHT = 1.0;
 
     private final CandidatureIndustrialisationRepository candidatureRepository;
     private final QuestionIndustrialisationRepository questionRepository;
     private final ReponseIndustrialisationRepository reponseRepository;
-    private final LivrableRepository livrableRepository;
     private final EvaluationRepository evaluationRepository;
-    private final CritereNoteRepository critereNoteRepository;
-    private final CritereEliminatoireRepository critereEliminatoireRepository;
     private final NoteLevelService noteLevelService;
 
     public IndustrialisationScoreResponse calculate(Long candidatureId) {
@@ -85,14 +53,10 @@ public class IndustrialisationScoreService {
                 .findByCandidatureIndustrialisationId(candidatureId)
                 .stream()
                 .collect(Collectors.toMap(r -> r.getQuestion().getId(), Function.identity()));
-        List<Livrable> livrables = livrableRepository
-                .findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(candidature.getSujetProjet().getId());
         Optional<Evaluation> latestEvaluation = evaluationRepository
                 .findTopBySujetProjetIdOrderByDateCalculDesc(candidature.getSujetProjet().getId());
-        List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
-        List<CritereEliminatoire> criteresEliminatoires = critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc();
 
-        if (noCriteriaAvailable(questions, criteresNotes, criteresEliminatoires, latestEvaluation)) {
+        if (noCriteriaAvailable(questions, latestEvaluation, candidature.getSujetProjet().getScoreFinalEvaluation())) {
             return emptyCriteriaResponse(candidature);
         }
 
@@ -101,7 +65,7 @@ public class IndustrialisationScoreService {
         List<String> elementsManquants = new ArrayList<>();
 
         ComponentScore questionScore = calculateQuestionScore(questions, reponsesByQuestion, details, blocages, elementsManquants);
-        ComponentScore livrableScore = calculateLivrableScore(livrables, criteresNotes, criteresEliminatoires, details, elementsManquants);
+        ComponentScore livrableScore = calculateLivrableScore(details);
         ComponentScore critereScore = calculateCritereNoteScore(candidature, latestEvaluation, details, blocages, elementsManquants);
 
         double scoreFinal = calculateWeightedFinalScore(List.of(
@@ -132,12 +96,10 @@ public class IndustrialisationScoreService {
     }
 
     private boolean noCriteriaAvailable(List<QuestionIndustrialisation> questions,
-                                        List<CritereNote> criteresNotes,
-                                        List<CritereEliminatoire> criteresEliminatoires,
-                                        Optional<Evaluation> latestEvaluation) {
+                                        Optional<Evaluation> latestEvaluation,
+                                        Double projectScoreSnapshot) {
         return questions.isEmpty()
-                && criteresNotes.isEmpty()
-                && criteresEliminatoires.isEmpty()
+                && projectScoreSnapshot == null
                 && latestEvaluation.filter(this::hasApplicableEvaluationData).isEmpty();
     }
 
@@ -257,54 +219,18 @@ public class IndustrialisationScoreService {
                 : new ComponentScore(0.0, false);
     }
 
-    private ComponentScore calculateLivrableScore(List<Livrable> livrables,
-                                                  List<CritereNote> criteresNotes,
-                                                  List<CritereEliminatoire> criteresEliminatoires,
-                                                  List<ScoreBreakdownDto> details,
-                                                  List<String> elementsManquants) {
-        Set<TypeLivrable> expectedTypes = expectedLivrableTypesFromRules(criteresNotes, criteresEliminatoires);
-        if (expectedTypes.isEmpty()) {
-            double score = livrables.isEmpty() ? 0.0 : 70.0;
-            if (livrables.isEmpty()) {
-                elementsManquants.add("Aucun livrable actif n'est associe au projet.");
-            }
-            details.add(new ScoreBreakdownDto(
-                    "LIVRABLES",
-                    "GLOBAL",
-                    "Livrables projet",
-                    score,
-                    LIVRABLES_WEIGHT,
-                    livrables.isEmpty() ? "MANQUANT" : "CONFIGURATION_INCOMPLETE",
-                    livrables.isEmpty()
-                            ? "Aucun livrable actif trouve."
-                            : "Aucun referentiel de livrables obligatoires n'est configure; score plafonne a 70.",
-                    !livrables.isEmpty()
-            ));
-            return new ComponentScore(score, true);
-        }
-
-        double total = 0.0;
-        for (TypeLivrable expectedType : expectedTypes) {
-            Optional<Livrable> matching = livrables.stream()
-                    .filter(livrable -> matchesExpectedType(livrable, expectedType))
-                    .findFirst();
-            double score = matching.map(this::scoreLivrable).orElse(0.0);
-            if (matching.isEmpty()) {
-                elementsManquants.add("Livrable obligatoire manquant: " + expectedType.name());
-            }
-            details.add(new ScoreBreakdownDto(
-                    "LIVRABLES",
-                    expectedType.name(),
-                    "Livrable attendu " + expectedType.name(),
-                    round(score),
-                    1.0,
-                    matching.isPresent() ? "PRESENT" : "MANQUANT",
-                    matching.map(this::livrableEvidence).orElse("Aucun livrable actif de ce type."),
-                    false
-            ));
-            total += score;
-        }
-        return new ComponentScore(round(total / expectedTypes.size()), true);
+    private ComponentScore calculateLivrableScore(List<ScoreBreakdownDto> details) {
+        details.add(new ScoreBreakdownDto(
+                "LIVRABLES",
+                "ML_CONTENT",
+                "Livrables projet",
+                null,
+                LIVRABLES_WEIGHT,
+                "COUVERT_PAR_EVALUATION_ML",
+                "Les livrables sont notes par l'evaluation ML de contenu, pas par leur presence, type, nom, taille ou lien.",
+                false
+        ));
+        return new ComponentScore(0.0, false);
     }
 
     private ComponentScore calculateCritereNoteScore(CandidatureIndustrialisation candidature,
@@ -350,6 +276,19 @@ public class IndustrialisationScoreService {
         }
 
         Evaluation evaluation = latestEvaluation.get();
+        if (evaluation.getFinalValidatedScore() != null) {
+            details.add(new ScoreBreakdownDto(
+                    "CRITERES_NOTES",
+                    String.valueOf(evaluation.getId()),
+                    "Score final valide",
+                    round(evaluation.getFinalValidatedScore()),
+                    CRITERES_NOTES_WEIGHT,
+                    "SCORE_VALIDE",
+                    "Score final valide ou surcharge par un utilisateur autorise.",
+                    false
+            ));
+            return new ComponentScore(round(evaluation.getFinalValidatedScore()), true);
+        }
         double weightedScores = 0.0;
         double totalWeight = 0.0;
         for (ResultatCritere resultat : evaluation.getResultats()) {
@@ -369,8 +308,10 @@ public class IndustrialisationScoreService {
                 continue;
             }
             double weight = positiveWeight(resultat.getPoids());
-            double noteValue = resultat.getNoteValue() != null ? resultat.getNoteValue() : resultat.getNoteObtenue();
-            double normalized = clamp((noteValue / noteScale(resultat)) * 100.0);
+            double normalized = resultat.getNormalizedScore() != null
+                    ? clamp(resultat.getNormalizedScore() * 100.0)
+                    : clamp(((resultat.getNoteValue() != null ? resultat.getNoteValue() : resultat.getNoteObtenue())
+                    / noteScale(resultat)) * 100.0);
             weightedScores += normalized * weight;
             totalWeight += weight;
             details.add(new ScoreBreakdownDto(
@@ -403,98 +344,6 @@ public class IndustrialisationScoreService {
         return evaluation.getScoreFinal() == null
                 ? new ComponentScore(0.0, false)
                 : new ComponentScore(round(evaluation.getScoreFinal()), true);
-    }
-
-    private Set<TypeLivrable> expectedLivrableTypesFromRules(List<CritereNote> criteresNotes,
-                                                             List<CritereEliminatoire> criteresEliminatoires) {
-        Set<TypeLivrable> expected = new LinkedHashSet<>();
-        List<CritereEvaluation> criteres = new ArrayList<>();
-        criteres.addAll(criteresNotes);
-        criteres.addAll(criteresEliminatoires);
-        for (CritereEvaluation critere : criteres) {
-            if (!Boolean.TRUE.equals(critere.getRuleEnabled())
-                    || critere.getModeEvaluation() == null
-                    || !LIVRABLE_RULE_MODES.contains(critere.getModeEvaluation())) {
-                continue;
-            }
-            List<TypeLivrable> configured = parseLivrableTypes(critere.getExpectedLivrableTypes());
-            if (!configured.isEmpty()) {
-                expected.addAll(configured);
-                continue;
-            }
-            if (critere.getModeEvaluation() == ModeEvaluation.DOCUMENTATION_PRESENT) {
-                expected.add(TypeLivrable.DOCUMENTATION);
-            } else if (critere.getModeEvaluation() == ModeEvaluation.GIT_LINK_PRESENT) {
-                expected.add(TypeLivrable.LIEN_GIT);
-            }
-        }
-        return expected;
-    }
-
-    private List<TypeLivrable> parseLivrableTypes(String csv) {
-        if (!StringUtils.hasText(csv)) {
-            return List.of();
-        }
-        return Arrays.stream(csv.split("[,;\\s]+"))
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .map(value -> {
-                    try {
-                        return TypeLivrable.valueOf(value.toUpperCase(Locale.ROOT));
-                    } catch (IllegalArgumentException ex) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .toList();
-    }
-
-    private boolean matchesExpectedType(Livrable livrable, TypeLivrable expectedType) {
-        if (livrable.getTypeLivrable() == expectedType) {
-            return true;
-        }
-        if (expectedType == TypeLivrable.DOCUMENTATION && livrable.getTypeLivrable() == TypeLivrable.RAPPORT) {
-            return true;
-        }
-        return expectedType == TypeLivrable.LIEN_GIT
-                && (containsIgnoreCase(livrable.getLienExterne(), "git")
-                || livrable.getTypeLivrable() == TypeLivrable.CODE_SOURCE);
-    }
-
-    private double scoreLivrable(Livrable livrable) {
-        double score = 70.0;
-        if (livrable.getTypeLivrable() != null) {
-            score += 20.0;
-        }
-        if (hasValidLivrableAccess(livrable)) {
-            score += 10.0;
-        }
-        return Math.min(100.0, score);
-    }
-
-    private boolean hasValidLivrableAccess(Livrable livrable) {
-        if (StringUtils.hasText(livrable.getLienExterne())) {
-            return IndustrialisationQuestionEvaluator.isValidUrl(livrable.getLienExterne());
-        }
-        if (!StringUtils.hasText(livrable.getObjectName())) {
-            return false;
-        }
-        String fileName = livrable.getOriginalFileName();
-        int dot = fileName == null ? -1 : fileName.lastIndexOf('.');
-        if (dot < 0 || dot == fileName.length() - 1) {
-            return false;
-        }
-        return ALLOWED_FILE_EXTENSIONS.contains(fileName.substring(dot + 1).toLowerCase(Locale.ROOT));
-    }
-
-    private String livrableEvidence(Livrable livrable) {
-        if (StringUtils.hasText(livrable.getLienExterne())) {
-            return "Lien valide: " + livrable.getLienExterne();
-        }
-        if (StringUtils.hasText(livrable.getOriginalFileName())) {
-            return "Fichier valide: " + livrable.getOriginalFileName();
-        }
-        return "Livrable present: " + livrable.getNom();
     }
 
     private double calculateWeightedFinalScore(List<WeightedComponent> weightedComponents) {
@@ -551,11 +400,6 @@ public class IndustrialisationScoreService {
 
     private double nullToZero(Double value) {
         return value == null ? 0.0 : value;
-    }
-
-    private boolean containsIgnoreCase(String source, String expected) {
-        return StringUtils.hasText(source)
-                && source.toLowerCase(Locale.ROOT).contains(expected.toLowerCase(Locale.ROOT));
     }
 
     private double round(double value) {

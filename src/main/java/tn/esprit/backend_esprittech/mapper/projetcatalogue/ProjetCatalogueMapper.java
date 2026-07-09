@@ -38,7 +38,8 @@ public class ProjetCatalogueMapper {
                 projet.getDateFin(),
                 projet.getDateCreation(),
                 domaineNoms(projet),
-                technologieNoms(projet)
+                technologieNoms(projet),
+                coverDataUri(projet)
         );
     }
 
@@ -87,6 +88,7 @@ public class ProjetCatalogueMapper {
                 encadrant != null ? encadrant.getEmail() : null,
                 idOf(projet.getEquipeRecherche()),
                 nomEquipe(projet.getEquipeRecherche()),
+                nomComplet(chefDe(projet.getEquipeRecherche())),
                 idOf(projet.getChefValidateur()),
                 nomComplet(projet.getChefValidateur()),
                 projet.getMotifRefus(),
@@ -94,11 +96,28 @@ public class ProjetCatalogueMapper {
                 projet.getDateValidation(),
                 domaineNoms(projet),
                 technologieNoms(projet),
-                prerequisNoms(projet)
+                prerequisNoms(projet),
+                coverDataUri(projet)
         );
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private User chefDe(EquipeRecherche equipe) {
+        return equipe != null ? equipe.getChef() : null;
+    }
+
+    /** Construit une data URI base64 à partir de l'image stockée, ou null si absente. */
+    private String coverDataUri(ProjetCatalogue projet) {
+        byte[] image = projet.getCoverImage();
+        if (image == null || image.length == 0) {
+            return null;
+        }
+        String contentType = projet.getCoverImageContentType() != null
+                ? projet.getCoverImageContentType()
+                : "image/png";
+        return "data:" + contentType + ";base64," + java.util.Base64.getEncoder().encodeToString(image);
+    }
 
     private Long idOf(User user) {
         return user != null ? user.getId() : null;

@@ -1,5 +1,6 @@
 package tn.esprit.backend_esprittech.service.projetcatalogue;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.CreateProjetRequest;
@@ -31,6 +32,7 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepos
 import tn.esprit.backend_esprittech.service.UserService;
 
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -105,7 +107,18 @@ public class ProjetCatalogueService {
                 .prerequis(resolvePrerequis(request.prerequisIds()))
                 .build();
 
-        return mapper.toResponse(projetRepository.save(projet));
+        applyCover(projet, request.coverImageBase64(), request.coverImageContentType());
+
+        try {
+            return mapper.toResponse(projetRepository.save(projet));
+        } catch (DataAccessException ex) {
+            if (isPacketTooLarge(ex)) {
+                throw new BusinessException(
+                        "L'image de couverture est trop volumineuse pour être enregistrée (max " + MAX_COVER_LABEL + "). "
+                                + "Choisissez une image plus légère.");
+            }
+            throw ex;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -229,6 +242,63 @@ public class ProjetCatalogueService {
     private ProjetCatalogue getProjetOrThrow(Long id) {
         return projetRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable (id=" + id + ")"));
+    }
+
+    /** Types MIME autorisés pour l'image de couverture. */
+    private static final Set<String> ALLOWED_COVER_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
+
+    /**
+     * Taille maximale (octets décodés) de l'image de couverture.
+     * Limitée à ~900 Ko pour rester sous le {@code max_allowed_packet} MySQL par défaut
+     * (1 Mo), l'image étant stockée directement en base.
+     */
+    private static final int MAX_COVER_BYTES = 900 * 1024;
+
+    /** Libellé de la taille maximale, réutilisé dans les messages d'erreur. */
+    private static final String MAX_COVER_LABEL = "900 Ko";
+
+    /**
+     * Décode l'image de couverture (base64 ou data URI) et l'attache au projet après
+     * validation du type et de la taille. Sans image fournie, aucune modification.
+     */
+    private void applyCover(ProjetCatalogue projet, String base64, String contentType) {
+        if (base64 == null || base64.isBlank()) {
+            return;
+        }
+        int commaIndex = base64.indexOf(',');
+        String data = commaIndex >= 0 ? base64.substring(commaIndex + 1) : base64;
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(data.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("Image de couverture invalide.");
+        }
+        if (bytes.length == 0) {
+            return;
+        }
+        if (bytes.length > MAX_COVER_BYTES) {
+            throw new BusinessException("L'image de couverture est trop volumineuse (max " + MAX_COVER_LABEL + ").");
+        }
+        String type = contentType != null ? contentType.trim().toLowerCase(java.util.Locale.ROOT) : null;
+        if (type == null || !ALLOWED_COVER_TYPES.contains(type)) {
+            throw new BusinessException("Format d'image non autorisé. Formats acceptés : PNG, JPG.");
+        }
+        projet.setCoverImage(bytes);
+        projet.setCoverImageContentType("image/jpg".equals(type) ? "image/jpeg" : type);
+    }
+
+    /** Détecte l'erreur MySQL « packet too large » (max_allowed_packet dépassé) dans la chaîne d'exceptions. */
+    private boolean isPacketTooLarge(Throwable ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("max_allowed_packet") || lower.contains("packet for query is too large")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Utilisateur courant, doit être enseignant (principal de sécurité, non rechargé). */

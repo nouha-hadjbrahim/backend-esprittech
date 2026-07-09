@@ -50,15 +50,15 @@ class ProjetCatalogueControllerTest {
                 1L, TypeProjet.RDI, "Projet IA", "Desc",
                 StatutProjet.SOUMIS_EN_VALIDATION, 0, 1L, "Enseignant Test",
                 100L, "Equipe RDI", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
-                LocalDateTime.now(), List.of("IA"), List.of("Spring"));
+                LocalDateTime.now(), List.of("IA"), List.of("Spring"), null);
 
         detailsResponse = new ProjetDetailsResponse(
                 1L, TypeProjet.RDI, "Projet IA", "Desc", "Obj",
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
                 StatutProjet.VALIDE, 0, 1L, "Enseignant Test", "test@esprit.tn",
-                100L, "Equipe RDI", null, null, null,
+                100L, "Equipe RDI", "Chef Equipe", null, null, null,
                 LocalDateTime.now(), null,
-                List.of("IA"), List.of("Spring"), List.of());
+                List.of("IA"), List.of("Spring"), List.of(), null);
     }
 
     // ── Enseignant ────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ class ProjetCatalogueControllerTest {
             var request = new CreateProjetRequest(
                     TypeProjet.RDI, "Projet IA", "Description longue",
                     "Objectifs", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
-                    List.of(1L), List.of(1L), List.of());
+                    List.of(1L), List.of(1L), List.of(), null, null);
             when(projetService.creerProjet(request)).thenReturn(catalogueResponse);
 
             ResponseEntity<ProjetCatalogueResponse> result = controller.creerProjet(request);

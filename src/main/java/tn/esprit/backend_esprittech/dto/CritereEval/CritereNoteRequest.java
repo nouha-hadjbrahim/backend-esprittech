@@ -24,7 +24,19 @@ public record CritereNoteRequest(
         String expectedKeyword,
         Double noteMaxAuto,
         Boolean ruleEnabled,
-        String ruleDescription
+        String ruleDescription,
+        String criterionFamily,
+        String configurationVersion,
+        String applicability,
+        String requiredEvidenceTypes,
+        String optionalEvidenceTypes,
+        String positiveEvidenceExpectations,
+        String negativeEvidenceExpectations,
+        String permittedEvidenceNatures,
+        Integer minimumSupportingEvidenceCount,
+        String scoringPolicy,
+        String eliminatoryDecisionRule,
+        String sourceAuthorityRules
 ) {
     public CritereNoteRequest(
             String libelle,
@@ -36,6 +48,7 @@ public record CritereNoteRequest(
             Double seuil,
             Boolean actif
     ) {
-        this(libelle, description, domaine, ordre, bareme, poids, seuil, 3, actif, null, null, null, null, null, false, null);
+        this(libelle, description, domaine, ordre, bareme, poids, seuil, 3, actif, null, null, null, null, null, false, null,
+                null, null, null, null, null, null, null, null, null, null, null, null);
     }
 }
