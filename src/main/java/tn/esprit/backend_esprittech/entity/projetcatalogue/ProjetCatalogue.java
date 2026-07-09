@@ -80,6 +80,14 @@ public class ProjetCatalogue {
     @Builder.Default
     private Integer score = 0;
 
+    /** Image de couverture du projet, stockée directement en base (octets, pas de chemin). */
+    @Lob
+    @Column(name = "cover_image", columnDefinition = "LONGBLOB")
+    private byte[] coverImage;
+
+    @Column(name = "cover_image_content_type", length = 100)
+    private String coverImageContentType;
+
     /** Enseignant qui dépose le projet (forcé côté serveur = utilisateur courant). */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "encadrant_id", nullable = false, foreignKey = @ForeignKey(name = "fk_projet_encadrant"))
