@@ -106,6 +106,13 @@ public class UserService {
         return map;
     }
 
+    /** Enseignants et chefs d'équipe affiliés à une équipe (pour affectation de sujet par l'admin). */
+    public Page<User> listAffiliatedEncadrants(String search, Pageable pageable) {
+        List<Role> roles = List.of(Role.ROLE_ENSEIGNANT, Role.ROLE_CHEF_EQUIPE);
+        String q = search != null ? search.trim() : "";
+        return userRepository.searchAffiliatedEncadrants(q, roles, pageable);
+    }
+
     /** Met à jour l'identité, le rôle et l'état d'activation d'un utilisateur. */
     @Transactional
     @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getOldValues(#id)", summaryExpression = "'Modification utilisateur ' + #result.getEmail()")

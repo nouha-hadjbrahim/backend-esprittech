@@ -95,6 +95,24 @@ class SujetProjetServiceTest {
     }
 
     @Test
+    void creerSujet_chefEquipe_autoValidatesSubject() {
+        enseignant.setRole(Role.ROLE_CHEF_EQUIPE);
+        when(equipeRechercheRepository.findByChefId(10L)).thenReturn(Optional.of(
+                tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche.builder().id(1L).nom("AI Lab").build()
+        ));
+        when(sujetProjetMapper.toEntity(request, 10L)).thenReturn(entity);
+        when(sujetProjetRepository.save(entity)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
+
+        service.creerSujet(request);
+
+        assertEquals(StatutSujet.VALIDE, entity.getStatut());
+        assertTrue(entity.getCatalogue());
+        assertNotNull(entity.getDateValidation());
+        assertNotNull(entity.getDateSoumission());
+    }
+
+    @Test
     void getMesSujets_returnsSubjectsForCurrentTeacher() {
         when(sujetProjetRepository.findByEncadrantIdOrderByDateCreationDesc(10L)).thenReturn(List.of(entity));
         when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);

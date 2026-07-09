@@ -285,11 +285,11 @@ public class CandidatureService {
 
     private void checkSujetAccess(SujetProjet sujet) {
         User current = userService.getCurrentUser();
-        if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CHEF_EQUIPE) {
+        if (current.getRole() == Role.ROLE_ADMIN) {
             return;
         }
-        if (current.getRole() == Role.ROLE_ENSEIGNANT
-                && current.getId().equals(sujet.getEncadrantId())) {
+        if (current.getId().equals(sujet.getEncadrantId())
+                && (current.getRole() == Role.ROLE_ENSEIGNANT || current.getRole() == Role.ROLE_CHEF_EQUIPE)) {
             return;
         }
         throw new AccessDeniedException("Vous n'êtes pas autorisé à gérer ce sujet.");

@@ -18,6 +18,7 @@ import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.MessageResponse;
 import tn.esprit.backend_esprittech.dto.response.PagedResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.AdminCreateSujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
@@ -99,6 +100,24 @@ public class AdminController {
 
         // ----- Gestion des sujets -----
 
+        @GetMapping("/encadrants")
+        @Operation(summary = "Rechercher des encadrants affiliés", description = "Liste les enseignants et chefs d'équipe affiliés à une équipe, pour l'affectation d'un sujet.")
+        public ResponseEntity<PagedResponse<UserResponse>> listerEncadrants(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "6") int size,
+                        @RequestParam(required = false) String search) {
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "nom", "prenom"));
+                Page<User> users = userService.listAffiliatedEncadrants(search, pageable);
+                return ResponseEntity.ok(new PagedResponse<>(
+                                users.map(userService::toEnrichedResponse).getContent(),
+                                users.getNumber(),
+                                users.getSize(),
+                                users.getTotalElements(),
+                                users.getTotalPages(),
+                                users.isFirst(),
+                                users.isLast()));
+        }
+
         @GetMapping("/sujet-projets")
         @Operation(summary = "Lister les sujets", description = "Liste paginée de tous les sujets déposés, avec recherche et filtres.")
         public ResponseEntity<PagedResponse<SujetProjetResponse>> listerSujets(
@@ -155,6 +174,14 @@ public class AdminController {
                                 sujets.getTotalPages(),
                                 sujets.isFirst(),
                                 sujets.isLast()));
+        }
+
+        @PostMapping("/sujet-projets")
+        @Operation(summary = "Créer un sujet pour un encadrant", description = "Crée un sujet validé et publié au nom d'un enseignant affilié.")
+        public ResponseEntity<SujetProjetResponse> creerSujet(
+                        @Valid @RequestBody AdminCreateSujetProjetRequest request) {
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(sujetProjetService.creerSujetAsAdmin(request));
         }
 
         @PostMapping("/sujet-projets/{id}/valider")

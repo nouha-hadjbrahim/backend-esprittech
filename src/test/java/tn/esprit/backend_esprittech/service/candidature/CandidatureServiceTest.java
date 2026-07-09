@@ -396,15 +396,12 @@ class CandidatureServiceTest {
     }
 
     @Test
-    void fermerCandidatures_chefEquipePeutGererSujetNonPossede() {
+    void fermerCandidatures_chefEquipeNonProprietaire_refuse() {
         when(userService.getCurrentUser()).thenReturn(user(Role.ROLE_CHEF_EQUIPE, 44L));
         sujetOuvert.setEncadrantId(2L);
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
-        when(candidatureRepository.findBySujetIdAndStatut(10L, StatutCandidature.DEPOSEE)).thenReturn(List.of());
 
-        candidatureService.fermerCandidatures(10L);
-
-        assertEquals(StatutSujet.REALISATION_EN_COURS, sujetOuvert.getStatut());
+        assertThrows(AccessDeniedException.class, () -> candidatureService.fermerCandidatures(10L));
     }
 
     @Test
