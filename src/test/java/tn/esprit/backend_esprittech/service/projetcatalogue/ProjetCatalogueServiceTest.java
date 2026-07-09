@@ -636,12 +636,23 @@ class ProjetCatalogueServiceTest {
             assertEquals("Java", result.get(0).nom());
         }
 
-        @Test
-        void getDomaines_empty() {
-            when(domaineRepository.findAllByOrderByNomAsc()).thenReturn(List.of());
+    @Test
+    void getDomaines_empty() {
+        when(domaineRepository.findAllByOrderByNomAsc()).thenReturn(List.of());
 
-            List<ReferenceItemResponse> result = service.getDomaines();
-            assertTrue(result.isEmpty());
-        }
+        List<ReferenceItemResponse> result = service.getDomaines();
+        assertTrue(result.isEmpty());
     }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsProjetFields() {
+        when(projetRepository.findById(1L)).thenReturn(Optional.of(projet));
+
+        var result = service.getOldValues(1L);
+
+        assertEquals(projet.getStatut(), result.get("statut"));
+    }
+}
 }

@@ -437,4 +437,21 @@ class AffiliationEnseignantServiceTest {
 
         assertTrue(result.isEmpty());
     }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsAffiliationFields() {
+        savedAffiliation.getEnseignant().setId(1L);
+        savedAffiliation.getEquipe().setId(10L);
+        savedAffiliation.setMotifDecision("Approuve");
+        when(affiliationRepository.findById(100L)).thenReturn(Optional.of(savedAffiliation));
+
+        var result = service.getOldValues(100L);
+
+        assertEquals(savedAffiliation.getStatut().name(), result.get("statut"));
+        assertEquals(1L, result.get("enseignantId"));
+        assertEquals(10L, result.get("equipeId"));
+        assertEquals("Approuve", result.get("motifDecision"));
+    }
 }

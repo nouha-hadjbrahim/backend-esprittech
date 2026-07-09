@@ -1,0 +1,17 @@
+package tn.esprit.backend_esprittech.enums;
+
+public enum EntityType {
+    USER,
+    SUJET_PROJET,
+    CANDIDATURE,
+    PROJET_CATALOGUE,
+    LIVRABLE,
+    EQUIPE_RECHERCHE,
+    AFFILIATION_ENSEIGNANT,
+    CRITERE_NOTE,
+    CRITERE_ELIMINATOIRE,
+    CRITERE_NOTE_RULE,
+    NOTE_LEVEL,
+    EVALUATION,
+    CANDIDATURE_INDUSTRIALISATION
+}

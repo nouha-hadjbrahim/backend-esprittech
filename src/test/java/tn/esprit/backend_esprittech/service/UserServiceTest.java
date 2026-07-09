@@ -371,4 +371,18 @@ class UserServiceTest {
         assertThrows(IllegalArgumentException.class, () -> userService.delete(1L));
         verify(userRepository, never()).delete(any());
     }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsUserFields() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        var result = userService.getOldValues(1L);
+
+        assertEquals(user.getNom(), result.get("nom"));
+        assertEquals(user.getPrenom(), result.get("prenom"));
+        assertEquals(user.getEmail(), result.get("email"));
+        assertEquals(user.getRole(), result.get("role"));
+    }
 }

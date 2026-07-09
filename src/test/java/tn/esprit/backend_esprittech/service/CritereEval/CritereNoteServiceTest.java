@@ -377,6 +377,22 @@ class CritereNoteServiceTest {
         verify(repository).findByActifTrueOrderByOrdreAsc();
     }
 
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsCritereFields() {
+        when(repository.findById(1L)).thenReturn(Optional.of(critere));
+
+        var result = service.getOldValues(1L);
+
+        assertEquals(critere.getLibelle(), result.get("libelle"));
+        assertEquals(critere.getActif(), result.get("actif"));
+        assertEquals(critere.getOrdre(), result.get("ordre"));
+        assertEquals(critere.getDomaine(), result.get("domaine"));
+        assertEquals(critere.getBareme(), result.get("bareme"));
+        assertEquals(critere.getPoids(), result.get("poids"));
+    }
+
     /**
      * Creates a request through the current 28-argument canonical constructor.
      *

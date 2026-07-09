@@ -22,7 +22,6 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.CandidatureIndustrialisation;
-import tn.esprit.backend_esprittech.entity.industrialisation.HistoriqueIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.OrientationIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.ReponseIndustrialisation;
@@ -35,7 +34,10 @@ import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
-import tn.esprit.backend_esprittech.repository.industrialisation.HistoriqueIndustrialisationRepository;
+import tn.esprit.backend_esprittech.dto.response.HistoriqueResponse;
+import tn.esprit.backend_esprittech.dto.response.PagedResponse;
+import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
@@ -47,6 +49,8 @@ import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Pageable;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -72,7 +76,7 @@ class IndustrialisationServiceTest {
     private ReponseIndustrialisationRepository reponseRepository;
 
     @Mock
-    private HistoriqueIndustrialisationRepository historiqueRepository;
+    private HistoriqueService historiqueService;
 
     @Mock
     private SujetProjetRepository sujetProjetRepository;
@@ -160,7 +164,8 @@ class IndustrialisationServiceTest {
         when(sujetProjetRepository.save(projet)).thenReturn(projet);
         when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
 
         var response = industrialisationService.soumettre(11L, new SubmitIndustrialisationRequest(true));
 
@@ -176,7 +181,8 @@ class IndustrialisationServiceTest {
         when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
         when(candidatureRepository.findBySujetProjetIdOrderByDateDemandeDesc(42L)).thenReturn(List.of(candidature));
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
 
         var response = industrialisationService.create(42L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.EXTERNE, null));
@@ -219,7 +225,6 @@ class IndustrialisationServiceTest {
         assertEquals(TypeIndustrialisation.EXTERNE, captor.getValue().getTypeIndustrialisation());
         assertEquals("besoin client", captor.getValue().getCommentaire());
         assertEquals(76.0, captor.getValue().getScoreEvaluationProjet());
-        verify(historiqueRepository).save(any());
     }
 
     @Test
@@ -316,7 +321,8 @@ class IndustrialisationServiceTest {
         when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(question));
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of(reponse));
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
 
         var response = industrialisationService.getFormulaire(11L);
 
@@ -439,6 +445,8 @@ class IndustrialisationServiceTest {
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of(reponse));
         when(sujetProjetRepository.save(projet)).thenReturn(projet);
         when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
 
         var response = industrialisationService.soumettre(11L);
 
@@ -488,7 +496,8 @@ class IndustrialisationServiceTest {
         when(sujetProjetRepository.save(projet)).thenReturn(projet);
         when(candidatureRepository.save(candidature)).thenReturn(candidature);
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
 
         var response = industrialisationService.soumettre(11L);
 
@@ -507,7 +516,8 @@ class IndustrialisationServiceTest {
         when(sujetProjetRepository.save(projet)).thenReturn(projet);
         when(candidatureRepository.save(candidature)).thenReturn(candidature);
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
 
         var response = industrialisationService.soumettre(11L);
 
@@ -560,6 +570,8 @@ class IndustrialisationServiceTest {
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of(reponse));
         when(sujetProjetRepository.save(projet)).thenReturn(projet);
         when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
 
         var response = industrialisationService.soumettre(11L);
 
@@ -648,27 +660,24 @@ class IndustrialisationServiceTest {
 
     @Test
     void detail_withHistory_shouldMapActorAndTransitionFields() {
-        User actor = user(9L, Role.ROLE_CI);
-        actor.setPrenom("Comite");
-        actor.setNom("Industrie");
         LocalDateTime transitionDate = LocalDateTime.of(2026, 2, 1, 10, 30);
-        HistoriqueIndustrialisation history = new HistoriqueIndustrialisation();
-        history.setId(70L);
-        history.setCandidatureIndustrialisation(candidature);
-        history.setStatutSource(StatutIndustrialisation.SOUMISE);
-        history.setStatutCible(StatutIndustrialisation.GO);
-        history.setActeur(actor);
-        history.setRoleActeur(Role.ROLE_CI.name());
-        history.setDateTransition(transitionDate);
-        history.setMotif("Recevable");
-        history.setCommentaire("Go DSI");
+        HistoriqueResponse history = new HistoriqueResponse(
+                70L, 9L, "Industrie", "Comite", Role.ROLE_CI,
+                tn.esprit.backend_esprittech.enums.ActionType.DECISION_GO,
+                EntityType.CANDIDATURE_INDUSTRIALISATION, 11L,
+                "Décision GO - DSI",
+                "{\"statut\":\"SOUMISE\"}",
+                "{\"statut\":\"GO\",\"orientation\":\"DSI\"}",
+                "{\"commentaire\":\"Go DSI\"}",
+                transitionDate
+        );
 
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of());
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L))
-                .thenReturn(List.of(history));
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(history), 0, 20, 1, 1, true, true));
 
         var response = industrialisationService.detail(11L);
 
@@ -679,9 +688,8 @@ class IndustrialisationServiceTest {
         assertEquals(StatutIndustrialisation.GO, mapped.statutCible());
         assertEquals(9L, mapped.acteurId());
         assertEquals("Comite Industrie", mapped.acteurNom());
-        assertEquals(Role.ROLE_CI.name(), mapped.roleActeur());
+        assertEquals(Role.ROLE_CI, mapped.roleActeur());
         assertEquals(transitionDate, mapped.dateTransition());
-        assertEquals("Recevable", mapped.motif());
         assertEquals("Go DSI", mapped.commentaire());
     }
 
@@ -717,7 +725,6 @@ class IndustrialisationServiceTest {
         assertEquals(OrientationIndustrialisation.DSI, candidature.getOrientation());
         assertEquals("ok dsi", candidature.getMotifDecision());
         assertEquals(StatutSujet.INDUSTRIALISE_DSI, projet.getStatut());
-        verify(historiqueRepository).save(any());
     }
 
     @Test
@@ -794,7 +801,6 @@ class IndustrialisationServiceTest {
         assertFalse(candidature.getDecisionGoNoGo());
         assertEquals("manque de maturite", candidature.getMotifDecision());
         assertEquals(ci, candidature.getCiDecideur());
-        verify(historiqueRepository).save(any());
     }
 
     @Test
@@ -805,7 +811,8 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(ci);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(11L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
         when(livrableService.findByProjet(42L)).thenReturn(List.of(
                 new LivrableResponse(1L, 42L, "Plateforme IoT", null, "Rapport", null, null, null, null, null, null, 7L, "Ali Mansour", null, true)
         ));
@@ -833,7 +840,8 @@ class IndustrialisationServiceTest {
     private void stubDetails(Long candidatureId, Long projetId) {
         when(reponseRepository.findByCandidatureIndustrialisationId(candidatureId)).thenReturn(List.of());
         when(livrableService.findByProjet(projetId)).thenReturn(List.of());
-        when(historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(candidatureId)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, candidatureId, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
     }
 
     private User user(Long id, Role role) {
@@ -925,5 +933,16 @@ class IndustrialisationServiceTest {
                 "Score calcule",
                 List.of("Licence incompatible")
         );
+    }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsCandidatureFields() {
+        when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
+
+        var result = industrialisationService.getOldValues(11L);
+
+        assertEquals(candidature.getStatut().name(), result.get("statut"));
     }
 }

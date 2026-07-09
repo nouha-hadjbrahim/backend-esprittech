@@ -10,6 +10,7 @@ import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationReq
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
@@ -77,9 +78,12 @@ class SujetProjetServiceTest {
 
     @Test
     void creerSujet_savesAndReturnsResponse() {
+        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("Equipe Test").build();
+        enseignant.setEquipeRecherche(equipe);
+        when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
         when(sujetProjetMapper.toEntity(request, 10L)).thenReturn(entity);
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
-        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", "Equipe Test", 0)).thenReturn(response);
 
         assertEquals(response, service.creerSujet(request));
     }
@@ -168,7 +172,9 @@ class SujetProjetServiceTest {
     void validerSujet_chefEquipeValidatesPendingSubject() {
         enseignant.setRole(Role.ROLE_CHEF_EQUIPE);
         entity.setStatut(StatutSujet.SOUMIS_EN_VALIDATION);
-        when(equipeRechercheRepository.findByChefId(10L)).thenReturn(Optional.empty());
+        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("Equipe Test").build();
+        when(equipeRechercheRepository.findByChefId(10L)).thenReturn(Optional.of(equipe));
+        when(userRepository.findByEquipeRechercheId(1L)).thenReturn(List.of(enseignant));
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
         when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
@@ -210,6 +216,9 @@ class SujetProjetServiceTest {
     void invaliderSujet_chefInvalidatesWithReason() {
         enseignant.setRole(Role.ROLE_CHEF_EQUIPE);
         entity.setStatut(StatutSujet.SOUMIS_EN_VALIDATION);
+        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("Equipe Test").build();
+        when(equipeRechercheRepository.findByChefId(10L)).thenReturn(Optional.of(equipe));
+        when(userRepository.findByEquipeRechercheId(1L)).thenReturn(List.of(enseignant));
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetRepository.save(entity)).thenReturn(entity);
         when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
@@ -275,7 +284,7 @@ class SujetProjetServiceTest {
 
     @Test
     void getSujetsDisponibles_withoutCategorieReturnsAllAvailable() {
-        when(sujetProjetRepository.findByStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(entity));
+        when(sujetProjetRepository.findByCatalogueTrueAndStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(entity));
         when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getSujetsDisponibles(null));
@@ -287,7 +296,7 @@ class SujetProjetServiceTest {
                 .statut(StatutSujet.VALIDE).encadrantId(10L).build();
         SujetProjet other = SujetProjet.builder().id(3L).categorie(CategorieSujet.RDI)
                 .statut(StatutSujet.VALIDE).encadrantId(10L).build();
-        when(sujetProjetRepository.findByStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(matching, other));
+        when(sujetProjetRepository.findByCatalogueTrueAndStatutInOrderByDateCreationDesc(any())).thenReturn(List.of(matching, other));
         when(sujetProjetMapper.toResponse(eq(matching), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
 
         assertEquals(List.of(response), service.getSujetsDisponibles(CategorieSujet.PFE));
@@ -410,15 +419,25 @@ class SujetProjetServiceTest {
         assertThrows(IllegalStateException.class, () -> service.declarerTerminaison(1L));
     }
 
+    // ---- getOldValues ----
+
     @Test
-    @SuppressWarnings("unchecked")
-    void getMembresEquipeIds_privateHelperReturnsChefIdForBothBranches() throws Exception {
-        Method method = SujetProjetService.class.getDeclaredMethod("getMembresEquipeIds", User.class);
-        method.setAccessible(true);
+    void getOldValues_returnsSujetFields() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
 
-        when(equipeRechercheRepository.existsByChefId(10L)).thenReturn(false, true);
+        var result = service.getOldValues(1L);
 
-        assertEquals(Set.of(10L), (Set<Long>) method.invoke(service, enseignant));
-        assertEquals(Set.of(10L), (Set<Long>) method.invoke(service, enseignant));
+        assertEquals(entity.getStatut(), result.get("statut"));
+        assertEquals(entity.getTitre(), result.get("titre"));
+        assertEquals(entity.getCatalogue(), result.get("catalogue"));
+    }
+
+    @Test
+    void getOldValues_sujetNotFound_returnsEmptyMap() {
+        when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        var result = service.getOldValues(99L);
+
+        assertTrue(result.isEmpty());
     }
 }

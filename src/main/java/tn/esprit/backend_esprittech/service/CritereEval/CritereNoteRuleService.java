@@ -3,18 +3,23 @@ package tn.esprit.backend_esprittech.service.CritereEval;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRuleRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRuleResponse;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNoteRule;
 import tn.esprit.backend_esprittech.entity.CritereEval.RuleOperator;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +39,7 @@ public class CritereNoteRuleService {
                 .toList();
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#result.id()", summaryExpression = "'Création règle ' + #result.ruleName()")
     public CritereNoteRuleResponse create(Long critereId, CritereNoteRuleRequest request) {
         validate(request);
         CritereNote critere = getCritere(critereId);
@@ -44,6 +50,17 @@ public class CritereNoteRuleService {
         return toResponse(ruleRepository.save(rule));
     }
 
+    public Map<String, Object> getOldValues(Long ruleId) {
+        CritereNoteRule r = getRule(ruleId);
+        Map<String, Object> map = new HashMap<>();
+        map.put("ruleName", r.getRuleName());
+        map.put("active", r.getActive());
+        map.put("noteValue", r.getNoteValue());
+        map.put("priority", r.getPriority());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", summaryExpression = "'Modification règle ' + #result.ruleName()")
     public CritereNoteRuleResponse update(Long ruleId, CritereNoteRuleRequest request) {
         validate(request);
         CritereNoteRule rule = getRule(ruleId);
@@ -52,16 +69,19 @@ public class CritereNoteRuleService {
         return toResponse(ruleRepository.save(rule));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", summaryExpression = "'Suppression règle (id=' + #ruleId + ')'")
     public void delete(Long ruleId) {
         ruleRepository.delete(getRule(ruleId));
     }
 
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", newValuesExpression = "{'active': true}", summaryExpression = "'Activation règle (id=' + #ruleId + ')'")
     public void activate(Long ruleId) {
         CritereNoteRule rule = getRule(ruleId);
         rule.setActive(true);
         ruleRepository.save(rule);
     }
 
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_NOTE_RULE, entityIdExpression = "#ruleId", oldValuesExpression = "@critereNoteRuleService.getOldValues(#ruleId)", newValuesExpression = "{'active': false}", summaryExpression = "'Désactivation règle (id=' + #ruleId + ')'")
     public void deactivate(Long ruleId) {
         CritereNoteRule rule = getRule(ruleId);
         rule.setActive(false);

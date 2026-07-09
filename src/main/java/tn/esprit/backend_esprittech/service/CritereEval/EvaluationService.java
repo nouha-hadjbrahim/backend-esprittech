@@ -9,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationOverrideRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
@@ -37,6 +38,8 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.BusinessException;
@@ -98,6 +101,7 @@ public class EvaluationService {
         return persistEvaluation(projet, data, resolveActorName(userService.getCurrentUser()), null);
     }
 
+    @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet (id=' + #projetId + ')'")
     public EvaluationResponse calculateAutomaticEvaluation(Long projetId, String recalculationReason) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
         User currentUser = userService.getCurrentUser();
@@ -175,6 +179,17 @@ public class EvaluationService {
                 .toList();
     }
 
+    public Map<String, Object> getOldValues(Long projetId) {
+        Evaluation e = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId).orElse(null);
+        if (e == null) return Map.of();
+        Map<String, Object> map = new HashMap<>();
+        map.put("validationStatus", e.getValidationStatus());
+        map.put("scoreFinal", e.getScoreFinal());
+        map.put("finalValidatedScore", e.getFinalValidatedScore());
+        return map;
+    }
+
+    @Historise(action = ActionType.ACCEPT, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'VALIDATED', 'finalValidatedScore': #result.finalValidatedScore()}", summaryExpression = "'Validation évaluation projet (id=' + #projetId + ')'")
     public EvaluationResponse validateLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
         SujetProjet projet = getProjet(projetId);
         User current = userService.getCurrentUser();
@@ -192,6 +207,7 @@ public class EvaluationService {
         return toResponse(evaluationRepository.save(evaluation));
     }
 
+    @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet (id=' + #projetId + ')'")
     public EvaluationResponse rejectLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
         User current = userService.getCurrentUser();
         ensureCanValidate(current);
@@ -205,6 +221,7 @@ public class EvaluationService {
         return toResponse(evaluationRepository.save(evaluation));
     }
 
+    @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet (id=' + #projetId + ')'")
     public EvaluationResponse overrideLatestEvaluation(Long projetId, EvaluationOverrideRequest request) {
         SujetProjet projet = getProjet(projetId);
         User current = userService.getCurrentUser();
