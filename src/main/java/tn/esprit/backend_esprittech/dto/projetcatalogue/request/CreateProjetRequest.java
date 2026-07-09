@@ -45,6 +45,12 @@ public record CreateProjetRequest(
         @NotEmpty(message = "Au moins une technologie doit être sélectionnée")
         List<@NotNull @Positive(message = "Identifiant de technologie invalide") Long> technologiesIds,
 
-        List<@NotNull @Positive(message = "Identifiant de prérequis invalide") Long> prerequisIds
+        List<@NotNull @Positive(message = "Identifiant de prérequis invalide") Long> prerequisIds,
+
+        /** Image de couverture encodée en base64 (data URI ou base64 brut), optionnelle. */
+        String coverImageBase64,
+
+        /** Type MIME de l'image de couverture (image/png ou image/jpeg). */
+        String coverImageContentType
 ) {
 }

@@ -112,7 +112,7 @@ class ProjetCatalogueServiceTest {
         return new CreateProjetRequest(
                 TypeProjet.RDI, "Projet Test", "Description longue du projet",
                 "Objectifs", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
-                List.of(1L), List.of(1L), List.of());
+                List.of(1L), List.of(1L), List.of(), null, null);
     }
 
     private ProjetCatalogueResponse dummyResponse() {
@@ -127,15 +127,15 @@ class ProjetCatalogueServiceTest {
         return new ProjetCardResponse(1L, TypeProjet.RDI, "Projet Test",
                 "Description", StatutProjet.SOUMIS_EN_VALIDATION, 0, 1L, "Enseignant Test",
                 100L, "Equipe RDI", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
-                LocalDateTime.now(), List.of("IA"), List.of("Spring Boot"));
+                LocalDateTime.now(), List.of("IA"), List.of("Spring Boot"), null);
     }
 
     private ProjetDetailsResponse dummyDetails() {
         return new ProjetDetailsResponse(1L, TypeProjet.RDI, "Projet Test",
                 "Description", "Objectifs", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
                 StatutProjet.VALIDE, 0, 1L, "Enseignant Test", "test@esprit.tn",
-                100L, "Equipe RDI", null, null, null, LocalDateTime.now(), null,
-                List.of("IA"), List.of("Spring Boot"), List.of());
+                100L, "Equipe RDI", "Chef Equipe", null, null, null, LocalDateTime.now(), null,
+                List.of("IA"), List.of("Spring Boot"), List.of(), null);
     }
 
     private void stubCurrentEnseignantManaged() {
@@ -188,7 +188,7 @@ class ProjetCatalogueServiceTest {
             var request = new CreateProjetRequest(
                     TypeProjet.PFE, "Titre test", "Description longue",
                     "Objectifs", LocalDate.of(2026, 12, 31), LocalDate.of(2026, 1, 1),
-                    List.of(1L), List.of(1L), null);
+                    List.of(1L), List.of(1L), null, null, null);
 
             assertThrows(BusinessException.class, () -> service.creerProjet(request));
             verify(projetRepository, never()).save(any());
@@ -200,7 +200,7 @@ class ProjetCatalogueServiceTest {
             LocalDate same = LocalDate.of(2026, 6, 15);
             var request = new CreateProjetRequest(
                     TypeProjet.PFE, "Titre test", "Description longue",
-                    "Objectifs", same, same, List.of(1L), List.of(1L), null);
+                    "Objectifs", same, same, List.of(1L), List.of(1L), null, null, null);
 
             assertThrows(BusinessException.class, () -> service.creerProjet(request));
         }
@@ -239,7 +239,7 @@ class ProjetCatalogueServiceTest {
             var request = new CreateProjetRequest(
                     TypeProjet.STAGE_INGENIEUR, "Stage", "Description longue du stage",
                     "Objectifs du stage", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 9, 1),
-                    List.of(1L), List.of(1L), null);
+                    List.of(1L), List.of(1L), null, null, null);
 
             when(domaineRepository.findAllById(any())).thenReturn(List.of(domaine));
             when(technologieRepository.findAllById(any())).thenReturn(List.of(technologie));
