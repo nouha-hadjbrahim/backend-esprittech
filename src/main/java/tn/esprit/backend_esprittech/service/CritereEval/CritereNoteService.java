@@ -7,6 +7,7 @@ import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
+import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
@@ -28,12 +29,14 @@ public class CritereNoteService {
     private final CritereNoteRuleRepository ruleRepository;
     private final ResultatCritereRepository resultatCritereRepository;
     private final NoteLevelService noteLevelService;
+    private final CriterionConfigurationPolicy configurationPolicy;
 
     public CritereNoteResponse create(CritereNoteRequest request) {
         validateRequest(request);
         ensureUniqueLibelle(request.libelle(), null);
         CritereNote critere = new CritereNote();
         applyRequest(critere, request);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.NOTE);
         return toResponse(repository.save(critere));
     }
 
@@ -42,6 +45,7 @@ public class CritereNoteService {
         CritereNote critere = getEntity(id);
         ensureUniqueLibelle(request.libelle(), id);
         applyRequest(critere, request);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.NOTE);
         return toResponse(repository.save(critere));
     }
 
@@ -63,6 +67,7 @@ public class CritereNoteService {
     public void activate(Long id) {
         CritereNote critere = getEntity(id);
         critere.setActif(true);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.NOTE);
         repository.save(critere);
     }
 
@@ -113,11 +118,27 @@ public class CritereNoteService {
         critere.setExpectedKeyword(trimToNull(request.expectedKeyword()));
         critere.setNoteMaxAuto(request.noteMaxAuto());
         critere.setRuleDescription(trimToNull(request.ruleDescription()));
+        applyConfigurationFields(critere, request);
 
         if (request.actif() != null) {
             critere.setActif(request.actif());
         }
         critere.setRuleEnabled(Boolean.TRUE.equals(request.ruleEnabled()));
+    }
+
+    private void applyConfigurationFields(CritereNote critere, CritereNoteRequest request) {
+        critere.setCriterionFamily(trimToNull(request.criterionFamily()));
+        critere.setConfigurationVersion(trimToNull(request.configurationVersion()));
+        critere.setApplicability(trimToNull(request.applicability()));
+        critere.setRequiredEvidenceTypes(trimToNull(request.requiredEvidenceTypes()));
+        critere.setOptionalEvidenceTypes(trimToNull(request.optionalEvidenceTypes()));
+        critere.setPositiveEvidenceExpectations(trimToNull(request.positiveEvidenceExpectations()));
+        critere.setNegativeEvidenceExpectations(trimToNull(request.negativeEvidenceExpectations()));
+        critere.setPermittedEvidenceNatures(trimToNull(request.permittedEvidenceNatures()));
+        critere.setMinimumSupportingEvidenceCount(request.minimumSupportingEvidenceCount());
+        critere.setScoringPolicy(trimToNull(request.scoringPolicy()));
+        critere.setEliminatoryDecisionRule(trimToNull(request.eliminatoryDecisionRule()));
+        critere.setSourceAuthorityRules(trimToNull(request.sourceAuthorityRules()));
     }
 
     private void validateRequest(CritereNoteRequest request) {
@@ -166,6 +187,8 @@ public class CritereNoteService {
     }
 
     private CritereNoteResponse toResponse(CritereNote critere) {
+        CriterionConfigurationPolicy.ConfigurationReport report =
+                configurationPolicy.inspect(critere, TypeCritere.NOTE);
         return new CritereNoteResponse(
                 critere.getId(),
                 critere.getLibelle(),
@@ -185,7 +208,23 @@ public class CritereNoteService {
                 critere.getExpectedKeyword(),
                 critere.getNoteMaxAuto(),
                 critere.getRuleEnabled(),
-                critere.getRuleDescription()
+                critere.getRuleDescription(),
+                critere.getCriterionFamily(),
+                critere.getConfigurationVersion(),
+                critere.getApplicability(),
+                critere.getRequiredEvidenceTypes(),
+                critere.getOptionalEvidenceTypes(),
+                critere.getPositiveEvidenceExpectations(),
+                critere.getNegativeEvidenceExpectations(),
+                critere.getPermittedEvidenceNatures(),
+                critere.getMinimumSupportingEvidenceCount(),
+                critere.getScoringPolicy(),
+                critere.getEliminatoryDecisionRule(),
+                critere.getSourceAuthorityRules(),
+                report.configurationComplete(),
+                report.blockingMissingFields(),
+                report.nonBlockingMissingFields(),
+                report.configurationReasonCodes()
         );
     }
 }

@@ -33,6 +33,13 @@ public record ResultatCritereResponse(
         Double mlMaxScore,
         Double normalizedScore,
         Double confidence,
+        String criterionStatus,
+        Double evidenceQuality,
+        Double extractionQuality,
+        Double sourceCoverage,
+        String eliminatoryState,
+        List<String> analysisMethods,
+        String evidenceJson,
         List<String> strengths,
         List<String> weaknesses,
         List<String> recommendations
@@ -65,6 +72,7 @@ public record ResultatCritereResponse(
                 scorePondere, bareme, poids, noteValue, noteLabel, matchedRule,
                 metadataUsed, explanation, evidenceSummary, evidenceLivrableIds,
                 ruleConfigured, commentaire, null, null, null, null,
+                null, null, null, null, null, List.of(), null,
                 List.of(), List.of(), List.of());
     }
 }

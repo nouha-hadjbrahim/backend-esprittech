@@ -24,6 +24,11 @@ public record EvaluationResponse(
         Integer totalCriteresEliminatoires,
         Integer criteresEliminatoiresSatisfaits,
         Integer criteresEliminatoiresNonConfigures,
+        Integer criteresEliminatoiresNonSatisfaits,
+        Integer criteresEliminatoiresIndetermines,
+        Integer criteresEliminatoiresConfigurationIncomplete,
+        Integer incompleteCriteriaCount,
+        List<CriterionConfigurationIssueResponse> incompleteCriteria,
         Boolean evaluationComplete,
         String scoreCalculationCoverageMessage,
         List<String> blockingCriteriaNames,
@@ -40,7 +45,18 @@ public record EvaluationResponse(
         List<String> strengths,
         List<String> weaknesses,
         List<String> recommendations,
-        String errorMessage
+        String errorMessage,
+        String trigger,
+        String correlationId,
+        String engineType,
+        String modelName,
+        String pipelineVersion,
+        String criteriaVersion,
+        String projectSnapshotHash,
+        String deliverableSnapshotHash,
+        String inputSnapshotHash,
+        String processingStatus,
+        String eligibilityStatus
 ) {
     public EvaluationResponse(
             Long id,
@@ -72,10 +88,15 @@ public record EvaluationResponse(
                 commentaire, calculatedBy, recalculationReason, resultats,
                 totalCriteresNotes, criteresNotesConfigures, criteresNotesNonConfigures,
                 totalCriteresEliminatoires, criteresEliminatoiresSatisfaits,
-                criteresEliminatoiresNonConfigures, evaluationComplete,
+                criteresEliminatoiresNonConfigures, 0, criteresEliminatoiresNonConfigures,
+                criteresEliminatoiresNonConfigures,
+                (criteresNotesNonConfigures == null ? 0 : criteresNotesNonConfigures)
+                        + (criteresEliminatoiresNonConfigures == null ? 0 : criteresEliminatoiresNonConfigures),
+                List.of(), evaluationComplete,
                 scoreCalculationCoverageMessage, blockingCriteriaNames,
                 null, null, null, scoreFinal, null, "PENDING", null, null, null,
-                List.of(), List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), List.of(), List.of(), null,
+                null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public EvaluationResponse(
@@ -93,8 +114,9 @@ public record EvaluationResponse(
         this(id, sujetProjetId, scoreFinal, eligibleIndustrialisation, bloqueParEliminatoire,
                 Boolean.TRUE.equals(bloqueParEliminatoire), 0, List.of(), dateCalcul,
                 commentaire, calculatedBy, recalculationReason, resultats,
-                null, null, null, null, null, null, null, null, List.of(),
-                null, null, null, scoreFinal, null, "PENDING", null, null, null,
-                List.of(), List.of(), List.of(), List.of(), null);
+                null, null, null, null, null, null, null, null, null, 0, List.of(),
+                null, null, List.of(), null, null, null, scoreFinal, null, "PENDING", null, null, null,
+                List.of(), List.of(), List.of(), List.of(), null,
+                null, null, null, null, null, null, null, null, null, null, null);
     }
 }
