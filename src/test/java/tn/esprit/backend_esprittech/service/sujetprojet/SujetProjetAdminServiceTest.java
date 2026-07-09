@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.AdminCreateSujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
@@ -85,7 +86,7 @@ class SujetProjetAdminServiceTest {
         when(userRepository.findById(10L)).thenReturn(Optional.of(
                 User.builder().id(10L).nom("Ben Ali").prenom("Sami").email("sami@esprit.tn").build()));
         when(affectationRepository.countBySujetIdAndStatut(anyLong(), any())).thenReturn(0L);
-        when(sujetProjetMapper.toResponse(any(SujetProjet.class), anyString(), anyString(), isNull(), anyInt()))
+        when(sujetProjetMapper.toResponse(any(SujetProjet.class), anyString(), anyString(), nullable(String.class), anyInt()))
                 .thenReturn(response);
     }
 
@@ -138,8 +139,7 @@ class SujetProjetAdminServiceTest {
         assertEquals(1, result.getTotalElements());
         verify(sujetProjetRepository).searchDisponiblesForAdmin(
                 argThat(statuts -> statuts.contains(StatutSujet.VALIDE)
-                        && statuts.contains(StatutSujet.CANDIDATURE_OUVERTE)
-                        && statuts.contains(StatutSujet.CANDIDATURE_FERMEE)),
+                        && statuts.contains(StatutSujet.CANDIDATURE_OUVERTE)),
                 isNull(), isNull(), eq(pageable));
     }
 
@@ -239,5 +239,37 @@ class SujetProjetAdminServiceTest {
         when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> service.supprimerSujetAsAdmin(99L));
+    }
+
+    @Test
+    void creerSujetAsAdmin_createsValidatedSubjectForAffiliatedEncadrant() {
+        var equipe = tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche.builder()
+                .id(1L).nom("AI Lab").build();
+        User encadrant = User.builder().id(10L).nom("Ben Ali").prenom("Sami")
+                .email("sami@esprit.tn").role(Role.ROLE_ENSEIGNANT).equipeRecherche(equipe).build();
+        when(userRepository.findById(10L)).thenReturn(Optional.of(encadrant));
+        when(sujetProjetMapper.toEntity(request, 10L)).thenReturn(entity);
+        when(sujetProjetRepository.save(entity)).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdminCreateSujetProjetRequest createRequest = new AdminCreateSujetProjetRequest(10L, request);
+        SujetProjetResponse result = service.creerSujetAsAdmin(createRequest);
+
+        assertNotNull(result);
+        assertEquals(StatutSujet.VALIDE, entity.getStatut());
+        assertTrue(entity.getCatalogue());
+        assertNotNull(entity.getDateValidation());
+        assertNotNull(entity.getDateSoumission());
+        verify(sujetProjetRepository).save(entity);
+    }
+
+    @Test
+    void creerSujetAsAdmin_nonAffiliatedEncadrant_throwsIllegalArgument() {
+        User encadrant = User.builder().id(10L).role(Role.ROLE_ENSEIGNANT).build();
+        when(userRepository.findById(10L)).thenReturn(Optional.of(encadrant));
+
+        AdminCreateSujetProjetRequest createRequest = new AdminCreateSujetProjetRequest(10L, request);
+
+        assertThrows(IllegalArgumentException.class, () -> service.creerSujetAsAdmin(createRequest));
+        verify(sujetProjetRepository, never()).save(any());
     }
 }

@@ -16,6 +16,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.AdminCreateSujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
@@ -85,6 +86,13 @@ class AdminControllerTest {
                 "titre", "Sujet test", "categorie", "PFE", "description", "Description",
                 "objectifs", "Objectifs", "prerequis", List.of("Soft skills"),
                 "domaines", List.of("Informatique"), "technologies", List.of("Java"), "capaciteAccueil", 2
+        );
+    }
+
+    private Map<String, Object> validAdminCreateSujetPayload() {
+        return Map.of(
+                "encadrantId", 10,
+                "sujet", validSujetPayload()
         );
     }
 
@@ -380,6 +388,20 @@ class AdminControllerTest {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(sujetProjetService);
+    }
+
+    @Test
+    void creerSujet_validRequest_returnsCreated() throws Exception {
+        when(sujetProjetService.creerSujetAsAdmin(any(AdminCreateSujetProjetRequest.class)))
+                .thenReturn(sampleSujetResponse());
+
+        mockMvc.perform(post("/api/admin/sujet-projets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validAdminCreateSujetPayload())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.titre").value("Sujet test"));
+
+        verify(sujetProjetService).creerSujetAsAdmin(any(AdminCreateSujetProjetRequest.class));
     }
 
     @Test
