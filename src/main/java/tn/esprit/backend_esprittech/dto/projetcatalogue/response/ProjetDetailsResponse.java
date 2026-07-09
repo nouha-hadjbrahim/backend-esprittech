@@ -28,6 +28,7 @@ public record ProjetDetailsResponse(
         String encadrantEmail,
         Long equipeId,
         String equipeNom,
+        String chefEquipeNom,
         Long chefValidateurId,
         String chefValidateurNom,
         String motifRefus,
@@ -35,6 +36,7 @@ public record ProjetDetailsResponse(
         LocalDateTime dateValidation,
         List<String> domaines,
         List<String> technologies,
-        List<String> prerequis
+        List<String> prerequis,
+        String coverImage
 ) {
 }

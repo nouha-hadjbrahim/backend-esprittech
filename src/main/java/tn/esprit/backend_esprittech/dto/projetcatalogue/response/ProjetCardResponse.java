@@ -26,6 +26,7 @@ public record ProjetCardResponse(
         LocalDate dateFin,
         LocalDateTime dateCreation,
         List<String> domaines,
-        List<String> technologies
+        List<String> technologies,
+        String coverImage
 ) {
 }
