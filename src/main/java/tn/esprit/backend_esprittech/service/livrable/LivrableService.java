@@ -40,7 +40,7 @@ import java.util.UUID;
 public class LivrableService {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "pdf", "doc", "docx", "png", "jpg", "jpeg", "txt"
+            "pdf", "doc", "docx", "png", "jpg", "jpeg", "txt", "md", "markdown", "html", "htm", "json", "xml", "lcov"
     );
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -49,7 +49,13 @@ public class LivrableService {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "image/png",
             "image/jpeg",
-            "text/plain"
+            "text/plain",
+            "text/markdown",
+            "text/html",
+            "application/json",
+            "application/xml",
+            "text/xml",
+            "application/octet-stream"
     );
 
     private static final Set<StatutSujet> DEPOT_ALLOWED_STATUSES = Set.of(
@@ -256,7 +262,7 @@ public class LivrableService {
         }
         String extension = extensionOf(originalFileName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new BusinessException("Format non autorise. Formats acceptes: pdf, doc, docx, png, jpg, jpeg, txt.");
+            throw new BusinessException("Format non autorise. Formats acceptes: pdf, doc, docx, png, jpg, jpeg, txt, md, html, json, xml, lcov.");
         }
         String contentType = file.getContentType();
         if (!StringUtils.hasText(contentType) || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {

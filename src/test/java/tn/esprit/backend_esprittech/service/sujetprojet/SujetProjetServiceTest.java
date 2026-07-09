@@ -383,6 +383,7 @@ class SujetProjetServiceTest {
 
         assertEquals(response, service.declarerTerminaison(1L));
         assertEquals(StatutSujet.REALISATION_TERMINEE, entity.getStatut());
+        assertNotNull(entity.getDateTerminaison());
     }
 
     @Test

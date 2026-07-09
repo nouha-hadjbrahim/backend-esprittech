@@ -596,6 +596,7 @@ public class SujetProjetService {
         }
 
         sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
+        sujet.setDateTerminaison(LocalDateTime.now());
 
         SujetProjet saved = sujetProjetRepository.save(sujet);
         return toResponse(saved);

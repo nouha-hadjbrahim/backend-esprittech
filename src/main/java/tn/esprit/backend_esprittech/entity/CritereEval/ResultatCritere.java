@@ -66,6 +66,26 @@ public class ResultatCritere {
 
     private Double confidence;
 
+    @Column(length = 80)
+    private String criterionStatus;
+
+    private Double evidenceQuality;
+
+    private Double extractionQuality;
+
+    private Double sourceCoverage;
+
+    @Column(length = 80)
+    private String eliminatoryState;
+
+    @Lob
+    @Column(name = "analysis_methods", columnDefinition = "TEXT")
+    private String analysisMethods;
+
+    @Lob
+    @Column(name = "evidence_json", columnDefinition = "TEXT")
+    private String evidenceJson;
+
     private Integer noteValue;
 
     @Column(length = 255)
