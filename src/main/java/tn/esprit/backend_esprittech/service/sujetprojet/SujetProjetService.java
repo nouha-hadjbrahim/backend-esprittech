@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.AdminCreateSujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
@@ -70,9 +71,17 @@ public class SujetProjetService {
     }
 
     public SujetProjetResponse creerSujet(SujetProjetRequest request) {
-        User encadrant = getCurrentEnseignant();
+        User encadrant = getCurrentEncadrant();
         ensureEncadrantAffilie(encadrant);
         SujetProjet sujet = sujetProjetMapper.toEntity(request, encadrant.getId());
+        if (encadrant.getRole() == Role.ROLE_CHEF_EQUIPE) {
+            LocalDateTime now = LocalDateTime.now();
+            sujet.setStatut(StatutSujet.VALIDE);
+            sujet.setCatalogue(true);
+            sujet.setDateSoumission(now);
+            sujet.setDateValidation(now);
+            sujet.setMotifInvalidation(null);
+        }
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
@@ -138,7 +147,7 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getMesSujets(CategorieSujet categorie, StatutSujet statut) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         List<SujetProjet> sujets;
 
         if (categorie != null && statut != null) {
@@ -265,7 +274,7 @@ public class SujetProjetService {
     }
 
     public SujetProjetResponse modifierSujet(Long id, SujetProjetRequest request) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
@@ -274,7 +283,7 @@ public class SujetProjetService {
     }
 
     public void supprimerSujet(Long id) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
@@ -296,6 +305,14 @@ public class SujetProjetService {
         return referenceService.getAllDomaineNoms();
     }
 
+    private User getCurrentEncadrant() {
+        User current = userService.getCurrentUser();
+        if (current.getRole() != Role.ROLE_ENSEIGNANT && current.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            throw new AccessDeniedException("Seuls les enseignants et chefs d'équipe peuvent déposer ou gérer des sujets");
+        }
+        return current;
+    }
+
     private User getCurrentEnseignant() {
         User current = userService.getCurrentUser();
         if (current.getRole() != Role.ROLE_ENSEIGNANT) {
@@ -306,10 +323,14 @@ public class SujetProjetService {
 
     private void ensureEncadrantAffilie(User encadrant) {
         User managed = userRepository.findById(encadrant.getId()).orElse(encadrant);
-        if (managed.getEquipeRecherche() == null) {
-            throw new IllegalArgumentException(
-                    "Vous devez être affilié à une équipe de recherche pour déposer un sujet.");
+        if (managed.getEquipeRecherche() != null) {
+            return;
         }
+        if (managed.getRole() == Role.ROLE_CHEF_EQUIPE && resolveEquipeForChef(managed).isPresent()) {
+            return;
+        }
+        throw new IllegalArgumentException(
+                "Vous devez être affilié à une équipe de recherche pour déposer un sujet.");
     }
 
     private SujetProjetResponse toResponse(SujetProjet sujet) {
@@ -549,6 +570,28 @@ public class SujetProjetService {
         sujetProjetRepository.delete(sujet);
     }
 
+    public SujetProjetResponse creerSujetAsAdmin(AdminCreateSujetProjetRequest request) {
+        getCurrentAdmin();
+        User encadrant = userRepository.findById(request.encadrantId())
+                .orElseThrow(() -> new IllegalArgumentException("Encadrant introuvable"));
+
+        if (encadrant.getRole() != Role.ROLE_ENSEIGNANT && encadrant.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            throw new IllegalArgumentException("L'encadrant doit être enseignant ou chef d'équipe.");
+        }
+
+        ensureEncadrantAffilie(encadrant);
+
+        SujetProjet sujet = sujetProjetMapper.toEntity(request.sujet(), encadrant.getId());
+        LocalDateTime now = LocalDateTime.now();
+        sujet.setStatut(StatutSujet.VALIDE);
+        sujet.setCatalogue(true);
+        sujet.setDateSoumission(now);
+        sujet.setDateValidation(now);
+        sujet.setMotifInvalidation(null);
+
+        return toResponse(sujetProjetRepository.save(sujet));
+    }
+
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getProjetsEvaluables() {
         if (userService.getCurrentUser().getRole() != Role.ROLE_ADMIN) {
@@ -562,7 +605,7 @@ public class SujetProjetService {
 
     @Transactional
     public SujetProjetResponse declarerTerminaison(Long id) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));

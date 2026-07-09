@@ -79,4 +79,28 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> searchEligibleMembers(@Param("q") String q,
                                      @Param("roles") List<Role> roles,
                                      Pageable pageable);
+
+    /**
+     * Enseignants et chefs d'équipe affiliés à une équipe de recherche
+     * (membre ou chef d'une équipe).
+     */
+    @Query("""
+            SELECT u FROM User u
+            WHERE u.role IN :roles
+              AND (
+                u.equipeRecherche IS NOT NULL
+                OR EXISTS (SELECT 1 FROM EquipeRecherche e WHERE e.chef.id = u.id)
+              )
+              AND (
+                :q = ''
+                OR LOWER(u.nom) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(u.identifiant) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(CONCAT(u.prenom, ' ', u.nom)) LIKE LOWER(CONCAT('%', :q, '%'))
+              )
+            """)
+    Page<User> searchAffiliatedEncadrants(@Param("q") String q,
+                                          @Param("roles") List<Role> roles,
+                                          Pageable pageable);
 }
