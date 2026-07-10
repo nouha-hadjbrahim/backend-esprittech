@@ -13,6 +13,8 @@ import java.util.List;
 @Repository
 public interface ProjetCatalogueRepository extends JpaRepository<ProjetCatalogue, Long> {
 
+    long countByStatut(StatutProjet statut);
+
     /** Projets déposés par un encadrant (page « Mes projets »), les plus récents d'abord. */
     List<ProjetCatalogue> findByEncadrantIdOrderByDateCreationDesc(Long encadrantId);
 
