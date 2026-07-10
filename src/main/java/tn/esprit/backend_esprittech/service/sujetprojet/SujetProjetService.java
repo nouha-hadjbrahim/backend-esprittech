@@ -5,6 +5,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.AdminCreateSujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
@@ -14,6 +16,8 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutAffectation;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
@@ -23,6 +27,7 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository
 import tn.esprit.backend_esprittech.service.UserService;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -69,10 +74,19 @@ public class SujetProjetService {
         this.affectationRepository = affectationRepository;
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#result.id()", summaryExpression = "'Création sujet ' + #result.titre()")
     public SujetProjetResponse creerSujet(SujetProjetRequest request) {
-        User encadrant = getCurrentEnseignant();
+        User encadrant = getCurrentEncadrant();
         ensureEncadrantAffilie(encadrant);
         SujetProjet sujet = sujetProjetMapper.toEntity(request, encadrant.getId());
+        if (encadrant.getRole() == Role.ROLE_CHEF_EQUIPE) {
+            LocalDateTime now = LocalDateTime.now();
+            sujet.setStatut(StatutSujet.VALIDE);
+            sujet.setCatalogue(true);
+            sujet.setDateSoumission(now);
+            sujet.setDateValidation(now);
+            sujet.setMotifInvalidation(null);
+        }
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
@@ -138,7 +152,7 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getMesSujets(CategorieSujet categorie, StatutSujet statut) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         List<SujetProjet> sujets;
 
         if (categorie != null && statut != null) {
@@ -232,6 +246,17 @@ public class SujetProjetService {
         return toResponses(sujets);
     }
 
+    public Map<String, Object> getOldValues(Long id) {
+        SujetProjet s = sujetProjetRepository.findById(id).orElse(null);
+        if (s == null) return Map.of();
+        Map<String, Object> map = new HashMap<>();
+        map.put("statut", s.getStatut());
+        map.put("titre", s.getTitre());
+        map.put("catalogue", s.getCatalogue());
+        return map;
+    }
+
+    @Historise(action = ActionType.VALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation sujet (id=' + #id + ')'")
     public SujetProjetResponse validerSujet(Long id) {
         User chef = getCurrentChefEquipe();
         SujetProjet sujet = findSujetForValidation(chef, id);
@@ -248,6 +273,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
+    @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet (id=' + #id + ')'")
     public SujetProjetResponse invaliderSujet(Long id, SujetInvalidationRequest request) {
         User chef = getCurrentChefEquipe();
         SujetProjet sujet = findSujetForValidation(chef, id);
@@ -264,8 +290,9 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet (id=' + #id + ')'")
     public SujetProjetResponse modifierSujet(Long id, SujetProjetRequest request) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
@@ -273,8 +300,9 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Suppression sujet (id=' + #id + ')'")
     public void supprimerSujet(Long id) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
@@ -296,6 +324,14 @@ public class SujetProjetService {
         return referenceService.getAllDomaineNoms();
     }
 
+    private User getCurrentEncadrant() {
+        User current = userService.getCurrentUser();
+        if (current.getRole() != Role.ROLE_ENSEIGNANT && current.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            throw new AccessDeniedException("Seuls les enseignants et chefs d'équipe peuvent déposer ou gérer des sujets");
+        }
+        return current;
+    }
+
     private User getCurrentEnseignant() {
         User current = userService.getCurrentUser();
         if (current.getRole() != Role.ROLE_ENSEIGNANT) {
@@ -306,10 +342,14 @@ public class SujetProjetService {
 
     private void ensureEncadrantAffilie(User encadrant) {
         User managed = userRepository.findById(encadrant.getId()).orElse(encadrant);
-        if (managed.getEquipeRecherche() == null) {
-            throw new IllegalArgumentException(
-                    "Vous devez être affilié à une équipe de recherche pour déposer un sujet.");
+        if (managed.getEquipeRecherche() != null) {
+            return;
         }
+        if (managed.getRole() == Role.ROLE_CHEF_EQUIPE && resolveEquipeForChef(managed).isPresent()) {
+            return;
+        }
+        throw new IllegalArgumentException(
+                "Vous devez être affilié à une équipe de recherche pour déposer un sujet.");
     }
 
     private SujetProjetResponse toResponse(SujetProjet sujet) {
@@ -492,6 +532,7 @@ public class SujetProjetService {
         return page.map(this::toResponse);
     }
 
+    @Historise(action = ActionType.VALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation sujet par admin (id=' + #id + ')'")
     public SujetProjetResponse validerSujetAsAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -509,6 +550,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
+    @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet par admin (id=' + #id + ')'")
     public SujetProjetResponse invaliderSujetAsAdmin(Long id, SujetInvalidationRequest request) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -534,6 +576,7 @@ public class SujetProjetService {
         return toResponse(sujet);
     }
 
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet par admin (id=' + #id + ')'")
     public SujetProjetResponse modifierSujetAsAdmin(Long id, SujetProjetRequest request) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -542,11 +585,34 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Suppression sujet par admin (id=' + #id + ')'")
     public void supprimerSujetAsAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
         sujetProjetRepository.delete(sujet);
+    }
+
+    public SujetProjetResponse creerSujetAsAdmin(AdminCreateSujetProjetRequest request) {
+        getCurrentAdmin();
+        User encadrant = userRepository.findById(request.encadrantId())
+                .orElseThrow(() -> new IllegalArgumentException("Encadrant introuvable"));
+
+        if (encadrant.getRole() != Role.ROLE_ENSEIGNANT && encadrant.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            throw new IllegalArgumentException("L'encadrant doit être enseignant ou chef d'équipe.");
+        }
+
+        ensureEncadrantAffilie(encadrant);
+
+        SujetProjet sujet = sujetProjetMapper.toEntity(request.sujet(), encadrant.getId());
+        LocalDateTime now = LocalDateTime.now();
+        sujet.setStatut(StatutSujet.VALIDE);
+        sujet.setCatalogue(true);
+        sujet.setDateSoumission(now);
+        sujet.setDateValidation(now);
+        sujet.setMotifInvalidation(null);
+
+        return toResponse(sujetProjetRepository.save(sujet));
     }
 
     @Transactional(readOnly = true)
@@ -561,8 +627,9 @@ public class SujetProjetService {
     }
 
     @Transactional
+    @Historise(action = ActionType.DECLARER_TERMINAISON, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'REALISATION_TERMINEE'}", summaryExpression = "'Déclaration terminaison sujet (id=' + #id + ')'")
     public SujetProjetResponse declarerTerminaison(Long id) {
-        Long encadrantId = getCurrentEnseignant().getId();
+        Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
                 .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
@@ -572,6 +639,7 @@ public class SujetProjetService {
         }
 
         sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
+        sujet.setDateTerminaison(LocalDateTime.now());
 
         SujetProjet saved = sujetProjetRepository.save(sujet);
         return toResponse(saved);

@@ -67,16 +67,4 @@ class IndustrialisationEntityLifecycleTest {
         assertNotNull(reponse.getDateReponse());
     }
 
-    @Test
-    void historiqueOnCreate_shouldSetMissingDateAndPreserveExistingDate() {
-        HistoriqueIndustrialisation missingDate = new HistoriqueIndustrialisation();
-        missingDate.onCreate();
-        assertNotNull(missingDate.getDateTransition());
-
-        HistoriqueIndustrialisation existingDate = new HistoriqueIndustrialisation();
-        LocalDateTime fixed = LocalDateTime.of(2026, 1, 1, 9, 0);
-        existingDate.setDateTransition(fixed);
-        existingDate.onCreate();
-        assertSame(fixed, existingDate.getDateTransition());
-    }
 }

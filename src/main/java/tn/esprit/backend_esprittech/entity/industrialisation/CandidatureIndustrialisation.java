@@ -80,9 +80,6 @@ public class CandidatureIndustrialisation {
     @OneToMany(mappedBy = "candidatureIndustrialisation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReponseIndustrialisation> reponses = new ArrayList<>();
 
-    @OneToMany(mappedBy = "candidatureIndustrialisation", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<HistoriqueIndustrialisation> historique = new ArrayList<>();
-
     @PrePersist
     void onCreate() {
         if (dateDemande == null) {

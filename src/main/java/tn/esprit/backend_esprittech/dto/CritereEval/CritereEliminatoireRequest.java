@@ -20,7 +20,19 @@ public record CritereEliminatoireRequest(
         String expectedKeyword,
         Double noteMaxAuto,
         Boolean ruleEnabled,
-        String ruleDescription
+        String ruleDescription,
+        String criterionFamily,
+        String configurationVersion,
+        String applicability,
+        String requiredEvidenceTypes,
+        String optionalEvidenceTypes,
+        String positiveEvidenceExpectations,
+        String negativeEvidenceExpectations,
+        String permittedEvidenceNatures,
+        Integer minimumSupportingEvidenceCount,
+        String scoringPolicy,
+        String eliminatoryDecisionRule,
+        String sourceAuthorityRules
 ) {
     public CritereEliminatoireRequest(
             String libelle,
@@ -30,6 +42,7 @@ public record CritereEliminatoireRequest(
             ReponseEliminatoire reponseAttendue,
             Boolean actif
     ) {
-        this(libelle, description, domaine, ordre, reponseAttendue, actif, null, null, null, null, null, false, null);
+        this(libelle, description, domaine, ordre, reponseAttendue, actif, null, null, null, null, null, false, null,
+                null, null, null, null, null, null, null, null, null, null, null, null);
     }
 }

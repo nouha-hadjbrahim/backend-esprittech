@@ -37,14 +37,14 @@ public class SujetProjetController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ENSEIGNANT')")
-    @Operation(summary = "Déposer un sujet", description = "Enregistre une demande de partage avec le statut Soumis en validation.")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE')")
+    @Operation(summary = "Déposer un sujet", description = "Enregistre une demande de partage avec le statut Soumis en validation (validé directement pour le chef d'équipe).")
     public ResponseEntity<SujetProjetResponse> creerSujet(@Valid @RequestBody SujetProjetRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(sujetProjetService.creerSujet(request));
     }
 
     @GetMapping("/mes-sujets")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE')")
     @Operation(summary = "Mes sujets", description = "Liste les sujets déposés par l'enseignant connecté.")
     public ResponseEntity<List<SujetProjetResponse>> getMesSujets(
             @RequestParam(required = false) CategorieSujet categorie,
@@ -62,7 +62,7 @@ public class SujetProjetController {
 
     // ==================== NEW METHOD ADDED HERE ====================
     @PostMapping("/{id}/terminer")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE')")
     @Operation(summary = "Déclarer la terminaison d'un projet",
             description = "Passe un sujet en cours de réalisation à 'REALISATION_TERMINEE'")
     public ResponseEntity<SujetProjetResponse> declarerTerminaison(
@@ -131,7 +131,7 @@ public class SujetProjetController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE')")
     @Operation(summary = "Modifier un sujet", description = "Met à jour un sujet déposé par l'enseignant connecté.")
     public ResponseEntity<SujetProjetResponse> modifierSujet(
             @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
@@ -140,7 +140,7 @@ public class SujetProjetController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE')")
     @Operation(summary = "Supprimer un sujet", description = "Supprime un sujet déposé par l'enseignant connecté.")
     public ResponseEntity<Void> supprimerSujet(
             @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
@@ -156,35 +156,35 @@ public class SujetProjetController {
     }
 
     @GetMapping("/suggestions/prerequis")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     @Operation(summary = "Suggestions de prérequis", description = "Choix par défaut modifiables dans le formulaire.")
     public ResponseEntity<List<String>> getPrerequisSuggestions() {
         return ResponseEntity.ok(sujetProjetService.getPrerequisSuggestions());
     }
 
     @GetMapping("/suggestions/domaines")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     @Operation(summary = "Suggestions de domaines", description = "Liste des domaines disponibles pour le formulaire.")
     public ResponseEntity<List<String>> getDomainesSuggestions() {
         return ResponseEntity.ok(sujetProjetService.getDomainesSuggestions());
     }
 
     @PostMapping("/references/domaines")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     @Operation(summary = "Ajouter un domaine", description = "Crée le domaine s'il n'existe pas encore.")
     public ResponseEntity<ReferenceItemResponse> suggestDomaine(@Valid @RequestBody ReferenceItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(referenceService.findOrCreateDomaine(request.nom()));
     }
 
     @PostMapping("/references/prerequis")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     @Operation(summary = "Ajouter un prérequis", description = "Crée le prérequis s'il n'existe pas encore.")
     public ResponseEntity<ReferenceItemResponse> suggestPrerequis(@Valid @RequestBody ReferenceItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(referenceService.findOrCreatePrerequis(request.nom()));
     }
 
     @PostMapping("/references/technologies")
-    @PreAuthorize("hasRole('ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE', 'ADMIN')")
     @Operation(summary = "Ajouter une technologie", description = "Crée la technologie si elle n'existe pas encore.")
     public ResponseEntity<ReferenceItemResponse> suggestTechnologie(@Valid @RequestBody ReferenceItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(referenceService.findOrCreateTechnologie(request.nom()));

@@ -1181,4 +1181,71 @@ class EquipeRechercheServiceTest {
         verify(affiliationRepository).findByEnseignantIdAndStatut(20L, StatutAffiliation.EN_ATTENTE);
         verify(affiliationRepository, never()).saveAll(any());
     }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsEquipeFields() {
+        EquipeRecherche e = equipeVide();
+        e.setNom("Equipe RDI");
+        e.setDescription("Description");
+        EquipeDomaine domaine = new EquipeDomaine();
+        domaine.setId(1L);
+        e.setDomaine(domaine);
+        User chef = enseignant(5L);
+        e.setChef(chef);
+        User member = enseignant(10L);
+        e.setMembers(List.of(member));
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+
+        var result = service.getOldValues(1L);
+
+        assertEquals("Equipe RDI", result.get("nom"));
+        assertEquals("Description", result.get("description"));
+        assertEquals(1L, result.get("domaineId"));
+        assertEquals(5L, result.get("chefId"));
+        assertEquals(List.of(10L), result.get("memberIds"));
+    }
+
+    @Test
+    void getOldValues_nullDomaine_setsDomaineIdToNull() {
+        EquipeRecherche e = equipeVide();
+        e.setNom("Equipe");
+        e.setDomaine(null);
+        e.setChef(enseignant(5L));
+        e.setMembers(List.of());
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+
+        var result = service.getOldValues(1L);
+
+        assertNull(result.get("domaineId"));
+    }
+
+    @Test
+    void getOldValues_nullChef_setsChefIdToNull() {
+        EquipeRecherche e = equipeVide();
+        e.setNom("Equipe");
+        e.setDomaine(new EquipeDomaine());
+        e.setChef(null);
+        e.setMembers(List.of());
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+
+        var result = service.getOldValues(1L);
+
+        assertNull(result.get("chefId"));
+    }
+
+    @Test
+    void getOldValues_nullMembers_returnsEmptyList() {
+        EquipeRecherche e = equipeVide();
+        e.setNom("Equipe");
+        e.setDomaine(new EquipeDomaine());
+        e.setChef(enseignant(5L));
+        e.setMembers(null);
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+
+        var result = service.getOldValues(1L);
+
+        assertEquals(List.of(), result.get("memberIds"));
+    }
 }

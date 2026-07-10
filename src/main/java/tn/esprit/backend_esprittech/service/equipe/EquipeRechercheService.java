@@ -2,6 +2,7 @@ package tn.esprit.backend_esprittech.service.equipe;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.equipe.CreateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.UpdateEquipeRechercheRequest;
 import tn.esprit.backend_esprittech.dto.equipe.EquipeResponse;
@@ -9,6 +10,8 @@ import tn.esprit.backend_esprittech.entity.equipe.EquipeDomaine;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
@@ -20,8 +23,10 @@ import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -59,6 +64,7 @@ public class EquipeRechercheService {
      * et affecte les membres optionnels.
      */
     @Transactional
+    @Historise(action = ActionType.CREATE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#result.id()", summaryExpression = "'Création de l''équipe ' + #result.nom()", metadataExpression = "{'nom': #request.nom()}")
     public EquipeResponse create(CreateEquipeRechercheRequest request) {
         if (equipeRepository.existsByNom(request.nom())) {
             throw new BusinessException("Une équipe portant ce nom existe déjà");
@@ -86,6 +92,7 @@ public class EquipeRechercheService {
 
     /** Met à jour une équipe existante (nom, description, chef, membres). */
     @Transactional
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#id", oldValuesExpression = "@equipeRechercheService.getOldValues(#id)", summaryExpression = "'Modification de l''équipe ' + #result.nom()", metadataExpression = "{'nom': #request.nom()}")
     public EquipeResponse update(Long id, UpdateEquipeRechercheRequest request) {
         EquipeRecherche equipe = getEntite(id);
 
@@ -128,6 +135,7 @@ public class EquipeRechercheService {
 
     /** (Ré)assigne uniquement le chef d'une équipe existante. */
     @Transactional
+    @Historise(action = ActionType.ASSIGN_CHEF, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#equipeId", oldValuesExpression = "@equipeRechercheService.getOldValues(#equipeId)", summaryExpression = "'Assignation du chef à l''équipe ' + #result.nom()", metadataExpression = "{'chefId': #chefId}")
     public EquipeResponse assignerChef(Long equipeId, Long chefId) {
         EquipeRecherche equipe = getEntite(equipeId);
         User chef = promouvoirChef(chefId);
@@ -143,6 +151,7 @@ public class EquipeRechercheService {
 
     /** Ajoute des membres à une équipe existante. */
     @Transactional
+    @Historise(action = ActionType.AJOUTER_MEMBRE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#equipeId", oldValuesExpression = "@equipeRechercheService.getOldValues(#equipeId)", summaryExpression = "'Ajout de membres à l''équipe ' + #result.nom()", metadataExpression = "{'memberIds': #memberIds}")
     public EquipeResponse ajouterMembres(Long equipeId, List<Long> memberIds) {
         EquipeRecherche equipe = getEntite(equipeId);
         assignerMembres(equipe, memberIds, equipe.getChef());
@@ -151,6 +160,7 @@ public class EquipeRechercheService {
 
     /** Retire un membre d'une équipe. */
     @Transactional
+    @Historise(action = ActionType.RETIRER_MEMBRE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#equipeId", oldValuesExpression = "@equipeRechercheService.getOldValues(#equipeId)", summaryExpression = "'Retrait d''un membre de l''équipe ' + #result.nom()", metadataExpression = "{'userId': #userId}")
     public EquipeResponse retirerMembre(Long equipeId, Long userId) {
         EquipeRecherche equipe = getEntite(equipeId);
         User user = userRepository.findById(userId)
@@ -169,6 +179,7 @@ public class EquipeRechercheService {
 
     /** Retire le chef d'une équipe et le rétrograde au rôle ENSEIGNANT. */
     @Transactional
+    @Historise(action = ActionType.RETIRER_CHEF, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#equipeId", oldValuesExpression = "@equipeRechercheService.getOldValues(#equipeId)", summaryExpression = "'Retrait du chef de l''équipe ' + #result.nom()")
     public EquipeResponse retirerChef(Long equipeId) {
         EquipeRecherche equipe = getEntite(equipeId);
         User chef = equipe.getChef();
@@ -182,6 +193,7 @@ public class EquipeRechercheService {
 
     /** Supprime une équipe (uniquement si elle ne contient aucun membre). */
     @Transactional
+    @Historise(action = ActionType.DELETE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#id", oldValuesExpression = "@equipeRechercheService.getOldValues(#id)", summaryExpression = "'Suppression de l''équipe (id=' + #id + ')'")
     public void delete(Long id) {
         EquipeRecherche equipe = getEntite(id);
         if (compterMembres(equipe) > 0) {
@@ -211,6 +223,19 @@ public class EquipeRechercheService {
         Long tid = Objects.requireNonNull(equipeId, "equipeId");
         return equipeRepository.findById(tid)
                 .orElseThrow(() -> new ResourceNotFoundException("Équipe introuvable (id=" + equipeId + ")"));
+    }
+
+    public Map<String, Object> getOldValues(Long id) {
+        EquipeRecherche e = getEntite(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("nom", e.getNom());
+        map.put("description", e.getDescription());
+        map.put("domaineId", e.getDomaine() != null ? e.getDomaine().getId() : null);
+        map.put("chefId", e.getChef() != null ? e.getChef().getId() : null);
+        map.put("memberIds", e.getMembers() != null
+                ? e.getMembers().stream().map(User::getId).toList()
+                : List.of());
+        return map;
     }
 
     /**

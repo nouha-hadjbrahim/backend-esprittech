@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.industrialisation.*;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
@@ -16,21 +17,24 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.*;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
-import tn.esprit.backend_esprittech.repository.industrialisation.HistoriqueIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -67,13 +71,14 @@ public class IndustrialisationService {
     private final CandidatureIndustrialisationRepository candidatureRepository;
     private final QuestionIndustrialisationRepository questionRepository;
     private final ReponseIndustrialisationRepository reponseRepository;
-    private final HistoriqueIndustrialisationRepository historiqueRepository;
+    private final HistoriqueService historiqueService;
     private final SujetProjetRepository sujetProjetRepository;
     private final UserService userService;
     private final EvaluationService evaluationService;
     private final LivrableService livrableService;
     private final MinioStorageService storageService;
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#result.id()", newValuesExpression = "{'statut': #result.statut().name(), 'typeIndustrialisation': #result.typeIndustrialisation().name()}", metadataExpression = "{'typeIndustrialisation': #request.typeIndustrialisation().name()}", summaryExpression = "'Création demande industrialisation (projetId=' + #projetId + ')'")
     public CandidatureIndustrialisationResponse create(Long projetId, CandidatureIndustrialisationRequest request) {
         User current = userService.getCurrentUser();
         SujetProjet projet = getProjet(projetId);
@@ -104,7 +109,6 @@ public class IndustrialisationService {
         applyWarnings(candidature, warnings);
 
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
-        addHistory(saved, null, StatutIndustrialisation.BROUILLON, current, null, "Demande creee");
         return toResponse(saved, true);
     }
 
@@ -184,6 +188,7 @@ public class IndustrialisationService {
         return soumettre(candidatureId, null);
     }
 
+    @Historise(action = ActionType.SUBMIT, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#candidatureId", oldValuesExpression = "@industrialisationService.getOldValues(#candidatureId)", newValuesExpression = "{'statut': 'SOUMISE'}", summaryExpression = "'Soumission demande industrialisation (id=' + #candidatureId + ')'")
     public CandidatureIndustrialisationResponse soumettre(Long candidatureId, SubmitIndustrialisationRequest request) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
@@ -201,7 +206,6 @@ public class IndustrialisationService {
         requireConfirmationIfNeeded(warnings, request != null && request.isConfirmed());
         applyWarnings(candidature, warnings);
 
-        StatutIndustrialisation oldStatus = candidature.getStatut();
         candidature.setStatut(StatutIndustrialisation.SOUMISE);
         candidature.setDateSoumission(java.time.LocalDateTime.now());
         candidature.setDateReceptionCI(java.time.LocalDateTime.now());
@@ -210,7 +214,6 @@ public class IndustrialisationService {
                 : StatutSujet.CANDIDAT_INDUSTRIALISATION_EXTERNE);
         sujetProjetRepository.save(projet);
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
-        addHistory(saved, oldStatus, StatutIndustrialisation.SOUMISE, current, null, "Demande soumise a la CI");
         return toResponse(saved, true, !hasActiveLivrables);
     }
 
@@ -260,6 +263,14 @@ public class IndustrialisationService {
         return toResponse(candidature, true);
     }
 
+    public Map<String, Object> getOldValues(Long id) {
+        CandidatureIndustrialisation c = getCandidature(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("statut", c.getStatut().name());
+        return map;
+    }
+
+    @Historise(action = ActionType.DECISION_GO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getOldValues(#id)", newValuesExpression = "{'statut': 'GO', 'orientation': #request.orientation().name()}", metadataExpression = "{'commentaire': #request.commentaire()}", summaryExpression = "'Décision GO - ' + #request.orientation().name()")
     public CandidatureIndustrialisationResponse decideGo(Long id, DecisionGoRequest request) {
         User current = userService.getCurrentUser();
         ensureCi(current);
@@ -269,7 +280,6 @@ public class IndustrialisationService {
             throw new BusinessException("L'orientation est obligatoire pour une decision Go.");
         }
 
-        StatutIndustrialisation oldStatus = candidature.getStatut();
         candidature.setStatut(StatutIndustrialisation.GO);
         candidature.setDecisionGoNoGo(true);
         candidature.setOrientation(request.orientation());
@@ -284,10 +294,10 @@ public class IndustrialisationService {
         sujetProjetRepository.save(projet);
 
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
-        addHistory(saved, oldStatus, StatutIndustrialisation.GO, current, null, request.commentaire());
         return toResponse(saved, true);
     }
 
+    @Historise(action = ActionType.DECISION_NOGO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getOldValues(#id)", newValuesExpression = "{'statut': 'NO_GO'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Décision NO GO (id=' + #id + ')'")
     public CandidatureIndustrialisationResponse decideNoGo(Long id, DecisionNoGoRequest request) {
         User current = userService.getCurrentUser();
         ensureCi(current);
@@ -297,14 +307,12 @@ public class IndustrialisationService {
             throw new BusinessException("Le motif est obligatoire pour une decision No Go.");
         }
 
-        StatutIndustrialisation oldStatus = candidature.getStatut();
         candidature.setStatut(StatutIndustrialisation.NO_GO);
         candidature.setDecisionGoNoGo(false);
         candidature.setMotifDecision(request.motif().trim());
         candidature.setCiDecideur(current);
         candidature.setDateDecisionCI(java.time.LocalDateTime.now());
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
-        addHistory(saved, oldStatus, StatutIndustrialisation.NO_GO, current, request.motif(), null);
         return toResponse(saved, true);
     }
 
@@ -480,23 +488,6 @@ public class IndustrialisationService {
         }
     }
 
-    private void addHistory(CandidatureIndustrialisation candidature,
-                            StatutIndustrialisation source,
-                            StatutIndustrialisation target,
-                            User actor,
-                            String motif,
-                            String commentaire) {
-        HistoriqueIndustrialisation history = new HistoriqueIndustrialisation();
-        history.setCandidatureIndustrialisation(candidature);
-        history.setStatutSource(source);
-        history.setStatutCible(target);
-        history.setActeur(actor);
-        history.setRoleActeur(actor.getRole().name());
-        history.setMotif(trimToNull(motif));
-        history.setCommentaire(trimToNull(commentaire));
-        historiqueRepository.save(history);
-    }
-
     private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature, boolean includeDetails) {
         return toResponse(candidature, includeDetails, false);
     }
@@ -516,9 +507,9 @@ public class IndustrialisationService {
                 : List.of();
         List<LivrableResponse> livrables = includeDetails ? livrableService.findByProjet(projet.getId()) : List.of();
         List<HistoriqueIndustrialisationResponse> historique = includeDetails
-                ? historiqueRepository.findByCandidatureIndustrialisationIdOrderByDateTransitionAsc(candidature.getId())
+                ? historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, candidature.getId(), org.springframework.data.domain.Pageable.unpaged()).content()
                     .stream()
-                    .map(this::toHistoriqueResponse)
+                    .map(HistoriqueIndustrialisationResponse::from)
                     .toList()
                 : List.of();
         EvaluationResponse latestEvaluation = includeDetails ? findLatestEvaluation(projet.getId()) : null;
@@ -628,21 +619,6 @@ public class IndustrialisationService {
                 reponse.getNoteObtenue(),
                 reponse.getJustificatif(),
                 reponse.getDateReponse()
-        );
-    }
-
-    private HistoriqueIndustrialisationResponse toHistoriqueResponse(HistoriqueIndustrialisation history) {
-        User actor = history.getActeur();
-        return new HistoriqueIndustrialisationResponse(
-                history.getId(),
-                history.getStatutSource(),
-                history.getStatutCible(),
-                actor.getId(),
-                actor.getPrenom() + " " + actor.getNom(),
-                history.getRoleActeur(),
-                history.getDateTransition(),
-                history.getMotif(),
-                history.getCommentaire()
         );
     }
 

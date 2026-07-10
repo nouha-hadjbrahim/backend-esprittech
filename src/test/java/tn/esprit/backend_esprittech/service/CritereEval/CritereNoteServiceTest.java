@@ -66,7 +66,11 @@ class CritereNoteServiceTest {
         critere.setPoids(2.0);
         critere.setSeuil(3.0);
         critere.setDefaultNoteValue(3);
-        lenient().doNothing().when(noteLevelService).requireActiveValue(anyInt(), anyString());
+
+        lenient()
+                .doNothing()
+                .when(noteLevelService)
+                .requireActiveValue(anyInt(), anyString());
     }
 
     @Test
@@ -77,7 +81,7 @@ class CritereNoteServiceTest {
             return saved;
         });
 
-        CritereNoteRequest request = new CritereNoteRequest(
+        CritereNoteRequest request = createRequestWithDefaultNote(
                 "Critere note",
                 "Description",
                 "Domaine",
@@ -86,14 +90,7 @@ class CritereNoteServiceTest {
                 2.0,
                 null,
                 4,
-                true,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false,
-                null
+                true
         );
 
         var response = service.create(request);
@@ -104,6 +101,7 @@ class CritereNoteServiceTest {
         assertEquals(5.0, response.bareme());
         assertEquals(3.0, response.seuil());
         assertEquals(4, response.defaultNoteValue());
+
         verify(repository).save(any(CritereNote.class));
     }
 
@@ -120,7 +118,10 @@ class CritereNoteServiceTest {
                 true
         );
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.create(request));
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> service.create(request)
+        );
 
         assertEquals("Le bareme doit etre superieur a 0.", ex.getMessage());
         verify(repository, never()).save(any());
@@ -128,7 +129,8 @@ class CritereNoteServiceTest {
 
     @Test
     void create_duplicateLibelle_shouldThrowBusinessConflictException() {
-        when(repository.findByLibelleIgnoreCase("Critere note")).thenReturn(Optional.of(critere));
+        when(repository.findByLibelleIgnoreCase("Critere note"))
+                .thenReturn(Optional.of(critere));
 
         CritereNoteRequest request = new CritereNoteRequest(
                 "Critere note",
@@ -141,17 +143,27 @@ class CritereNoteServiceTest {
                 true
         );
 
-        BusinessConflictException ex = assertThrows(BusinessConflictException.class, () -> service.create(request));
+        BusinessConflictException ex = assertThrows(
+                BusinessConflictException.class,
+                () -> service.create(request)
+        );
 
-        assertEquals("Un critere note existe deja avec le libelle: Critere note", ex.getMessage());
+        assertEquals(
+                "Un critere note existe deja avec le libelle: Critere note",
+                ex.getMessage()
+        );
         verify(repository, never()).save(any());
     }
 
     @Test
     void create_invalidDefaultNote_shouldThrowBadRequestException() {
-        doThrow(new BadRequestException("La note par defaut doit correspondre a un niveau de note actif configure."))
-                .when(noteLevelService).requireActiveValue(6, "La note par defaut");
-        CritereNoteRequest request = new CritereNoteRequest(
+        doThrow(new BadRequestException(
+                "La note par defaut doit correspondre a un niveau de note actif configure."
+        ))
+                .when(noteLevelService)
+                .requireActiveValue(6, "La note par defaut");
+
+        CritereNoteRequest request = createRequestWithDefaultNote(
                 "Critere note",
                 "Description",
                 "Domaine",
@@ -160,28 +172,28 @@ class CritereNoteServiceTest {
                 2.0,
                 null,
                 6,
-                true,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false,
-                null
+                true
         );
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.create(request));
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> service.create(request)
+        );
 
-        assertEquals("La note par defaut doit correspondre a un niveau de note actif configure.", ex.getMessage());
+        assertEquals(
+                "La note par defaut doit correspondre a un niveau de note actif configure.",
+                ex.getMessage()
+        );
         verify(repository, never()).save(any());
     }
 
     @Test
     void update_existingCriterion_shouldReturnUpdatedResponse() {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
-        when(repository.save(any(CritereNote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(any(CritereNote.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        CritereNoteRequest request = new CritereNoteRequest(
+        CritereNoteRequest request = createRequestWithDefaultNote(
                 "Autre critere",
                 "Nouvelle description",
                 "Domaine modifie",
@@ -190,14 +202,7 @@ class CritereNoteServiceTest {
                 3.0,
                 null,
                 2,
-                false,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false,
-                null
+                false
         );
 
         var response = service.update(1L, request);
@@ -208,6 +213,7 @@ class CritereNoteServiceTest {
         assertEquals(3.0, response.poids());
         assertEquals(2, response.defaultNoteValue());
         assertFalse(response.actif());
+
         verify(repository).findById(1L);
         verify(repository).save(any(CritereNote.class));
     }
@@ -227,8 +233,10 @@ class CritereNoteServiceTest {
                 true
         );
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                () -> service.update(1L, request));
+        ResourceNotFoundException ex = assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.update(1L, request)
+        );
 
         assertEquals("Critere note introuvable avec id: 1", ex.getMessage());
         verify(repository).findById(1L);
@@ -239,7 +247,10 @@ class CritereNoteServiceTest {
     void delete_missingCriterion_shouldThrowResourceNotFoundException() {
         when(repository.findById(404L)).thenReturn(Optional.empty());
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> service.delete(404L));
+        ResourceNotFoundException ex = assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.delete(404L)
+        );
 
         assertEquals("Critere note introuvable avec id: 404", ex.getMessage());
         verify(repository, never()).delete(any());
@@ -250,10 +261,16 @@ class CritereNoteServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
         when(resultatCritereRepository.existsByCritereId(1L)).thenReturn(true);
 
-        BusinessConflictException ex = assertThrows(BusinessConflictException.class, () -> service.delete(1L));
+        BusinessConflictException ex = assertThrows(
+                BusinessConflictException.class,
+                () -> service.delete(1L)
+        );
 
-        assertEquals("Ce critère est déjà utilisé dans des évaluations. Vous pouvez le désactiver au lieu de le supprimer.",
-                ex.getMessage());
+        assertEquals(
+                "Ce critère est déjà utilisé dans des évaluations. "
+                        + "Vous pouvez le désactiver au lieu de le supprimer.",
+                ex.getMessage()
+        );
         verify(repository, never()).delete(any());
     }
 
@@ -261,7 +278,8 @@ class CritereNoteServiceTest {
     void delete_unusedCriterion_shouldDeleteRulesThenCriterion() {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
         when(resultatCritereRepository.existsByCritereId(1L)).thenReturn(false);
-        when(ruleRepository.findByCritereNoteIdOrderByPriorityAscIdAsc(1L)).thenReturn(List.of());
+        when(ruleRepository.findByCritereNoteIdOrderByPriorityAscIdAsc(1L))
+                .thenReturn(List.of());
 
         service.delete(1L);
 
@@ -272,7 +290,8 @@ class CritereNoteServiceTest {
     @Test
     void deactivate_shouldSetActifFalse() {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
-        when(repository.save(any(CritereNote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(any(CritereNote.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         service.deactivate(1L);
 
@@ -283,8 +302,10 @@ class CritereNoteServiceTest {
     @Test
     void activate_shouldSetActifTrue() {
         critere.setActif(false);
+
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
-        when(repository.save(any(CritereNote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(any(CritereNote.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         service.activate(1L);
 
@@ -296,7 +317,10 @@ class CritereNoteServiceTest {
     void activate_missingCriterion_shouldThrowResourceNotFoundException() {
         when(repository.findById(404L)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> service.activate(404L));
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.activate(404L)
+        );
         verify(repository, never()).save(any());
     }
 
@@ -304,7 +328,10 @@ class CritereNoteServiceTest {
     void deactivate_missingCriterion_shouldThrowResourceNotFoundException() {
         when(repository.findById(404L)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> service.deactivate(404L));
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.deactivate(404L)
+        );
         verify(repository, never()).save(any());
     }
 
@@ -312,10 +339,15 @@ class CritereNoteServiceTest {
     void reorder_invalidOrder_shouldThrowBadRequestException() {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
 
-        BadRequestException ex = assertThrows(BadRequestException.class,
-                () -> service.reorder(List.of(new OrdreCritereRequest(1L, 0))));
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> service.reorder(List.of(new OrdreCritereRequest(1L, 0)))
+        );
 
-        assertEquals("L'ordre doit etre superieur ou egal a 1.", ex.getMessage());
+        assertEquals(
+                "L'ordre doit etre superieur ou egal a 1.",
+                ex.getMessage()
+        );
         verify(repository, never()).save(any());
     }
 
@@ -328,17 +360,87 @@ class CritereNoteServiceTest {
         assertEquals(1, responses.size());
         assertEquals(1L, responses.get(0).id());
         assertEquals(3, responses.get(0).defaultNoteValue());
+
         verify(repository).findAll();
     }
 
     @Test
     void findActive_shouldReturnMappedResponses() {
-        when(repository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(critere));
+        when(repository.findByActifTrueOrderByOrdreAsc())
+                .thenReturn(List.of(critere));
 
         var responses = service.findActive();
 
         assertEquals(1, responses.size());
         assertEquals(1L, responses.get(0).id());
+
         verify(repository).findByActifTrueOrderByOrdreAsc();
+    }
+
+    // ---- getOldValues ----
+
+    @Test
+    void getOldValues_returnsCritereFields() {
+        when(repository.findById(1L)).thenReturn(Optional.of(critere));
+
+        var result = service.getOldValues(1L);
+
+        assertEquals(critere.getLibelle(), result.get("libelle"));
+        assertEquals(critere.getActif(), result.get("actif"));
+        assertEquals(critere.getOrdre(), result.get("ordre"));
+        assertEquals(critere.getDomaine(), result.get("domaine"));
+        assertEquals(critere.getBareme(), result.get("bareme"));
+        assertEquals(critere.getPoids(), result.get("poids"));
+    }
+
+    /**
+     * Creates a request through the current 28-argument canonical constructor.
+     *
+     * The tests in this class only need the common criterion fields and
+     * defaultNoteValue. All optional ML/evaluation configuration fields remain
+     * unset, except the historical boolean field that was explicitly false in
+     * the previous 16-argument calls.
+     */
+    private CritereNoteRequest createRequestWithDefaultNote(
+            String libelle,
+            String description,
+            String domaine,
+            Integer ordre,
+            Double bareme,
+            Double poids,
+            Double seuil,
+            Integer defaultNoteValue,
+            Boolean actif
+    ) {
+        return new CritereNoteRequest(
+                libelle,            // 1  String
+                description,        // 2  String
+                domaine,            // 3  String
+                ordre,              // 4  Integer
+                bareme,             // 5  Double
+                poids,              // 6  Double
+                seuil,              // 7  Double
+                defaultNoteValue,   // 8  Integer
+                actif,              // 9  Boolean
+                null,               // 10 ModeEvaluation
+                null,               // 11 String
+                null,               // 12 Integer
+                null,               // 13 String
+                null,               // 14 Double
+                false,              // 15 Boolean
+                null,               // 16 String
+                null,               // 17 String
+                null,               // 18 String
+                null,               // 19 String
+                null,               // 20 String
+                null,               // 21 String
+                null,               // 22 String
+                null,               // 23 String
+                null,               // 24 String
+                null,               // 25 Integer
+                null,               // 26 String
+                null,               // 27 String
+                null                // 28 String
+        );
     }
 }

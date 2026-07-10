@@ -3,9 +3,12 @@ package tn.esprit.backend_esprittech.service.CritereEval;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.CritereEval.NoteLevelRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.NoteLevelResponse;
 import tn.esprit.backend_esprittech.entity.CritereEval.NoteLevel;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
@@ -14,6 +17,7 @@ import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleReposi
 import tn.esprit.backend_esprittech.repository.CritereEval.NoteLevelRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.ResultatCritereRepository;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,6 +112,7 @@ public class NoteLevelService {
                 .orElse(FALLBACK_LABELS.getOrDefault(value, "Niveau " + value));
     }
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#result.id()", summaryExpression = "'Création niveau note valeur=' + #result.value()")
     public NoteLevelResponse create(NoteLevelRequest request) {
         validate(request, null);
         NoteLevel level = new NoteLevel();
@@ -115,6 +120,17 @@ public class NoteLevelService {
         return toResponse(repository.save(level));
     }
 
+    public Map<String, Object> getOldValues(Long id) {
+        NoteLevel l = getEntity(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("value", l.getValue());
+        map.put("label", l.getLabel());
+        map.put("active", l.getActive());
+        map.put("orderIndex", l.getOrderIndex());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", summaryExpression = "'Modification niveau note (id=' + #id + ')'")
     public NoteLevelResponse update(Long id, NoteLevelRequest request) {
         validate(request, id);
         NoteLevel level = getEntity(id);
@@ -122,18 +138,21 @@ public class NoteLevelService {
         return toResponse(repository.save(level));
     }
 
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", newValuesExpression = "{'active': true}", summaryExpression = "'Activation niveau note (id=' + #id + ')'")
     public void activate(Long id) {
         NoteLevel level = getEntity(id);
         level.setActive(true);
         repository.save(level);
     }
 
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", newValuesExpression = "{'active': false}", summaryExpression = "'Désactivation niveau note (id=' + #id + ')'")
     public void deactivate(Long id) {
         NoteLevel level = getEntity(id);
         level.setActive(false);
         repository.save(level);
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.NOTE_LEVEL, entityIdExpression = "#id", oldValuesExpression = "@noteLevelService.getOldValues(#id)", summaryExpression = "'Suppression niveau note (id=' + #id + ')'")
     public void delete(Long id) {
         NoteLevel level = getEntity(id);
         ensureNotUsed(level);

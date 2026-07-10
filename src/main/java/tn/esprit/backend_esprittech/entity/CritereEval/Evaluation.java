@@ -36,8 +36,41 @@ public class Evaluation {
     @Column(length = 40)
     private String mlStatus;
 
+    @Column(name = "evaluation_trigger", length = 80)
+    private String trigger;
+
+    @Column(length = 120)
+    private String correlationId;
+
+    @Column(length = 80)
+    private String engineType;
+
+    @Column(length = 255)
+    private String modelName;
+
     @Column(length = 255)
     private String mlModelVersion;
+
+    @Column(length = 120)
+    private String pipelineVersion;
+
+    @Column(length = 80)
+    private String criteriaVersion;
+
+    @Column(length = 128)
+    private String projectSnapshotHash;
+
+    @Column(length = 128)
+    private String deliverableSnapshotHash;
+
+    @Column(length = 128)
+    private String inputSnapshotHash;
+
+    @Column(length = 80)
+    private String processingStatus;
+
+    @Column(length = 80)
+    private String eligibilityStatus;
 
     private Double mlGlobalConfidence;
 

@@ -3,10 +3,14 @@ package tn.esprit.backend_esprittech.service.CritereEval;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereNoteResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
+import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.enums.ActionType;
+import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
@@ -14,7 +18,9 @@ import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRuleRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.ResultatCritereRepository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -28,23 +34,41 @@ public class CritereNoteService {
     private final CritereNoteRuleRepository ruleRepository;
     private final ResultatCritereRepository resultatCritereRepository;
     private final NoteLevelService noteLevelService;
+    private final CriterionConfigurationPolicy configurationPolicy;
 
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#result.id()", summaryExpression = "'Création critère note ' + #result.libelle()")
     public CritereNoteResponse create(CritereNoteRequest request) {
         validateRequest(request);
         ensureUniqueLibelle(request.libelle(), null);
         CritereNote critere = new CritereNote();
         applyRequest(critere, request);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.NOTE);
         return toResponse(repository.save(critere));
     }
 
+    public Map<String, Object> getOldValues(Long id) {
+        CritereNote c = getEntity(id);
+        Map<String, Object> map = new HashMap<>();
+        map.put("libelle", c.getLibelle());
+        map.put("actif", c.getActif());
+        map.put("ordre", c.getOrdre());
+        map.put("domaine", c.getDomaine());
+        map.put("bareme", c.getBareme());
+        map.put("poids", c.getPoids());
+        return map;
+    }
+
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", summaryExpression = "'Modification critère note ' + #result.libelle()")
     public CritereNoteResponse update(Long id, CritereNoteRequest request) {
         validateRequest(request);
         CritereNote critere = getEntity(id);
         ensureUniqueLibelle(request.libelle(), id);
         applyRequest(critere, request);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.NOTE);
         return toResponse(repository.save(critere));
     }
 
+    @Historise(action = ActionType.DELETE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", summaryExpression = "'Suppression critère note (id=' + #id + ')'")
     public void delete(Long id) {
         CritereNote critere = getEntity(id);
         if (resultatCritereRepository.existsByCritereId(id)) {
@@ -54,18 +78,22 @@ public class CritereNoteService {
         repository.delete(critere);
     }
 
+    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation critère note (id=' + #id + ')'")
     public void deactivate(Long id) {
         CritereNote critere = getEntity(id);
         critere.setActif(false);
         repository.save(critere);
     }
 
+    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#id", oldValuesExpression = "@critereNoteService.getOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation critère note (id=' + #id + ')'")
     public void activate(Long id) {
         CritereNote critere = getEntity(id);
         critere.setActif(true);
+        configurationPolicy.requireActiveComplete(critere, TypeCritere.NOTE);
         repository.save(critere);
     }
 
+    @Historise(action = ActionType.REORDER, entityType = EntityType.CRITERE_NOTE, entityIdExpression = "#requests[0].critereId()", oldValuesExpression = "@critereNoteService.getOldValues(#requests[0].critereId())", summaryExpression = "'Réordonnancement de ' + #requests.size() + ' critères note'")
     public void reorder(List<OrdreCritereRequest> requests) {
         for (OrdreCritereRequest request : requests) {
             CritereNote critere = getEntity(request.critereId());
@@ -113,11 +141,27 @@ public class CritereNoteService {
         critere.setExpectedKeyword(trimToNull(request.expectedKeyword()));
         critere.setNoteMaxAuto(request.noteMaxAuto());
         critere.setRuleDescription(trimToNull(request.ruleDescription()));
+        applyConfigurationFields(critere, request);
 
         if (request.actif() != null) {
             critere.setActif(request.actif());
         }
         critere.setRuleEnabled(Boolean.TRUE.equals(request.ruleEnabled()));
+    }
+
+    private void applyConfigurationFields(CritereNote critere, CritereNoteRequest request) {
+        critere.setCriterionFamily(trimToNull(request.criterionFamily()));
+        critere.setConfigurationVersion(trimToNull(request.configurationVersion()));
+        critere.setApplicability(trimToNull(request.applicability()));
+        critere.setRequiredEvidenceTypes(trimToNull(request.requiredEvidenceTypes()));
+        critere.setOptionalEvidenceTypes(trimToNull(request.optionalEvidenceTypes()));
+        critere.setPositiveEvidenceExpectations(trimToNull(request.positiveEvidenceExpectations()));
+        critere.setNegativeEvidenceExpectations(trimToNull(request.negativeEvidenceExpectations()));
+        critere.setPermittedEvidenceNatures(trimToNull(request.permittedEvidenceNatures()));
+        critere.setMinimumSupportingEvidenceCount(request.minimumSupportingEvidenceCount());
+        critere.setScoringPolicy(trimToNull(request.scoringPolicy()));
+        critere.setEliminatoryDecisionRule(trimToNull(request.eliminatoryDecisionRule()));
+        critere.setSourceAuthorityRules(trimToNull(request.sourceAuthorityRules()));
     }
 
     private void validateRequest(CritereNoteRequest request) {
@@ -166,6 +210,8 @@ public class CritereNoteService {
     }
 
     private CritereNoteResponse toResponse(CritereNote critere) {
+        CriterionConfigurationPolicy.ConfigurationReport report =
+                configurationPolicy.inspect(critere, TypeCritere.NOTE);
         return new CritereNoteResponse(
                 critere.getId(),
                 critere.getLibelle(),
@@ -185,7 +231,23 @@ public class CritereNoteService {
                 critere.getExpectedKeyword(),
                 critere.getNoteMaxAuto(),
                 critere.getRuleEnabled(),
-                critere.getRuleDescription()
+                critere.getRuleDescription(),
+                critere.getCriterionFamily(),
+                critere.getConfigurationVersion(),
+                critere.getApplicability(),
+                critere.getRequiredEvidenceTypes(),
+                critere.getOptionalEvidenceTypes(),
+                critere.getPositiveEvidenceExpectations(),
+                critere.getNegativeEvidenceExpectations(),
+                critere.getPermittedEvidenceNatures(),
+                critere.getMinimumSupportingEvidenceCount(),
+                critere.getScoringPolicy(),
+                critere.getEliminatoryDecisionRule(),
+                critere.getSourceAuthorityRules(),
+                report.configurationComplete(),
+                report.blockingMissingFields(),
+                report.nonBlockingMissingFields(),
+                report.configurationReasonCodes()
         );
     }
 }

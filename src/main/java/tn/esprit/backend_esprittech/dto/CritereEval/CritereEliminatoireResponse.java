@@ -5,6 +5,7 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.ModeEvaluation;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record CritereEliminatoireResponse(
         Long id,
@@ -22,7 +23,23 @@ public record CritereEliminatoireResponse(
         String expectedKeyword,
         Double noteMaxAuto,
         Boolean ruleEnabled,
-        String ruleDescription
+        String ruleDescription,
+        String criterionFamily,
+        String configurationVersion,
+        String applicability,
+        String requiredEvidenceTypes,
+        String optionalEvidenceTypes,
+        String positiveEvidenceExpectations,
+        String negativeEvidenceExpectations,
+        String permittedEvidenceNatures,
+        Integer minimumSupportingEvidenceCount,
+        String scoringPolicy,
+        String eliminatoryDecisionRule,
+        String sourceAuthorityRules,
+        Boolean configurationComplete,
+        List<String> blockingMissingFields,
+        List<String> nonBlockingMissingFields,
+        List<String> configurationReasonCodes
 ) {
     public CritereEliminatoireResponse(
             Long id,
@@ -36,6 +53,8 @@ public record CritereEliminatoireResponse(
             ReponseEliminatoire reponseAttendue
     ) {
         this(id, libelle, description, domaine, ordre, actif, dateCreation, dateMiseAJour, reponseAttendue,
-                null, null, null, null, null, false, null);
+                null, null, null, null, null, false, null,
+                null, null, null, null, null, null, null, null, null, null, null, null,
+                true, List.of(), List.of(), List.of());
     }
 }
