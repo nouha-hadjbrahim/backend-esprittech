@@ -1,5 +1,7 @@
 package tn.esprit.backend_esprittech.config;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.MapType;
 import com.fasterxml.jackson.databind.type.TypeFactory;
@@ -13,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -47,6 +50,7 @@ class HistorisationAspectTest {
     private HistorisationAspect aspect;
     private final User actor = User.builder().id(1L).nom("Test").prenom("User").role(Role.ROLE_ADMIN).build();
     private final Method noArgMethod;
+    private Level aspectOriginalLevel;
 
     @SuppressWarnings("unused")
     private static class DummyService {
@@ -59,6 +63,10 @@ class HistorisationAspectTest {
 
     @BeforeEach
     void setUp() {
+        Logger aspectLogger = (Logger) LoggerFactory.getLogger(HistorisationAspect.class);
+        aspectOriginalLevel = aspectLogger.getLevel();
+        aspectLogger.setLevel(Level.ERROR);
+
         aspect = new HistorisationAspect(historiqueService, objectMapper, beanFactory);
         when(joinPoint.getSignature()).thenReturn(methodSignature);
         when(methodSignature.getMethod()).thenReturn(noArgMethod);
@@ -68,6 +76,8 @@ class HistorisationAspectTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        Logger aspectLogger = (Logger) LoggerFactory.getLogger(HistorisationAspect.class);
+        aspectLogger.setLevel(aspectOriginalLevel);
     }
 
     private void authenticateUser() {

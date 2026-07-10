@@ -54,10 +54,11 @@ public class HistorisationAspect {
         Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
         Map<String, Object> oldValues = null;
 
-        if (!historise.oldValuesExpression().isEmpty()) {
+        String oldValExpr = historise.oldValuesExpression();
+        if (oldValExpr != null && !oldValExpr.isEmpty()) {
             try {
                 StandardEvaluationContext beforeContext = buildContext(joinPoint, method, null);
-                oldValues = evaluate(historise.oldValuesExpression(), beforeContext, Map.class);
+                oldValues = evaluate(oldValExpr, beforeContext, Map.class);
             } catch (Exception e) {
                 log.warn("Échec évaluation oldValues", e);
             }
@@ -76,16 +77,18 @@ public class HistorisationAspect {
             if (actor == null) return result;
 
             Map<String, Object> newValues = null;
-            if (!historise.newValuesExpression().isEmpty()) {
-                newValues = evaluate(historise.newValuesExpression(), context, Map.class);
+            String newValExpr = historise.newValuesExpression();
+            if (newValExpr != null && !newValExpr.isEmpty()) {
+                newValues = evaluate(newValExpr, context, Map.class);
             } else if (result != null && (action == ActionType.CREATE || action == ActionType.UPDATE)) {
                 newValues = objectMapper.convertValue(result, objectMapper.getTypeFactory()
                         .constructMapType(Map.class, String.class, Object.class));
             }
 
             Map<String, Object> metadata = null;
-            if (!historise.metadataExpression().isEmpty()) {
-                metadata = evaluate(historise.metadataExpression(), context, Map.class);
+            String metaExpr = historise.metadataExpression();
+            if (metaExpr != null && !metaExpr.isEmpty()) {
+                metadata = evaluate(metaExpr, context, Map.class);
             }
 
             historiqueService.log(new LogRequest(action, historise.entityType(), entityId, summary,
@@ -106,14 +109,16 @@ public class HistorisationAspect {
     }
 
     private ActionType resolveAction(Historise historise, StandardEvaluationContext context) {
-        if (!historise.actionExpression().isEmpty()) {
-            String actionName = evaluate(historise.actionExpression(), context, String.class);
+        String actionExpr = historise.actionExpression();
+        if (actionExpr != null && !actionExpr.isEmpty()) {
+            String actionName = evaluate(actionExpr, context, String.class);
             return ActionType.valueOf(actionName);
         }
-        return historise.action();
+        return historise.action() != null ? historise.action() : ActionType.CREATE;
     }
 
     private <T> T evaluate(String expression, StandardEvaluationContext context, Class<T> type) {
+        if (expression == null) return null;
         Expression expr = spelParser.parseExpression(expression);
         return expr.getValue(context, type);
     }
