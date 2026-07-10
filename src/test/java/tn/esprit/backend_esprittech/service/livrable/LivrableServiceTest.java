@@ -160,7 +160,7 @@ class LivrableServiceTest {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> livrableService.upload(42L, TypeLivrable.AUTRE, "Executable", null, file));
 
-        assertEquals("Format non autorise. Formats acceptes: pdf, doc, docx, png, jpg, jpeg, txt.", ex.getMessage());
+        assertEquals("Format non autorise. Formats acceptes: pdf, doc, docx, png, jpg, jpeg, txt, md, html, json, xml, lcov.", ex.getMessage());
     }
 
     @Test

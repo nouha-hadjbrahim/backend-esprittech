@@ -48,13 +48,23 @@ class CritereNoteServiceTest {
     @Mock
     private NoteLevelService noteLevelService;
 
+    @Mock
+    private CriterionConfigurationPolicy configurationPolicy;
+
     @InjectMocks
     private CritereNoteService service;
 
     private CritereNote critere;
+    private CriterionConfigurationPolicy.ConfigurationReport completeReport;
 
     @BeforeEach
     void setUp() {
+        completeReport = new CriterionConfigurationPolicy.ConfigurationReport(
+                true, List.of(), List.of(), "1.0", List.of("CRITERION_CONFIGURATION_COMPLETE")
+        );
+        lenient().doNothing().when(configurationPolicy).requireActiveComplete(any(), any());
+        lenient().when(configurationPolicy.inspect(any(), any())).thenReturn(completeReport);
+
         critere = new CritereNote();
         critere.setId(1L);
         critere.setLibelle("Critere note");

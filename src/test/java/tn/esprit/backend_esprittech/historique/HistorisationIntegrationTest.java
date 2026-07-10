@@ -103,10 +103,32 @@ class HistorisationIntegrationTest {
         }
     }
 
+    private CritereEliminatoireRequest elimReq(String libelle, String description, String domaine, int ordre, ReponseEliminatoire reponse, boolean actif) {
+        return new CritereEliminatoireRequest(
+                libelle, description, domaine, ordre, reponse, actif,
+                null, null, null, null, null, false, null,
+                "TEST_FAMILY", "1.0", "TEST_APPLICABILITY",
+                "TEST_EVIDENCE_TYPES", null, "POSITIVE", "NEGATIVE",
+                "TEST_NATURE", 1, "AUTOMATIC",
+                "RULE_CONTAINING_INDETERMINATE", null
+        );
+    }
+
+    private CritereNoteRequest noteReq(String libelle, String description, String domaine, int ordre, double bareme, double poids, double seuil, boolean actif) {
+        return new CritereNoteRequest(
+                libelle, description, domaine, ordre, bareme, poids, seuil, 3, actif,
+                null, null, null, null, null, false, null,
+                "TEST_FAMILY", "1.0", "TEST_APPLICABILITY",
+                "TEST_EVIDENCE_TYPES", null, "POSITIVE", null,
+                null, 1, "AUTOMATIC",
+                null, null
+        );
+    }
+
     @Test
     void createCritereEliminatoire_shouldCreateHistoriqueEntry() {
         var response = critereEliminatoireService.create(
-                new CritereEliminatoireRequest("Critere-A", "Description test",
+                elimReq("Critere-A", "Description test",
                         "Informatique", 1, ReponseEliminatoire.OK, true));
 
         var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
@@ -128,11 +150,11 @@ class HistorisationIntegrationTest {
     @Test
     void updateCritereEliminatoire_shouldCaptureOldValues() {
         var created = critereEliminatoireService.create(
-                new CritereEliminatoireRequest("Original", "Desc",
+                elimReq("Original", "Desc",
                         "Informatique", 1, ReponseEliminatoire.OK, true));
 
         critereEliminatoireService.update(created.id(),
-                new CritereEliminatoireRequest("Modifie", "Desc modifiee",
+                elimReq("Modifie", "Desc modifiee",
                         "Reseaux", 2, ReponseEliminatoire.NOT_OK, true));
 
         var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
@@ -152,7 +174,7 @@ class HistorisationIntegrationTest {
     @Test
     void deactivateCritereEliminatoire_shouldUseNewValuesExpression() {
         var created = critereEliminatoireService.create(
-                new CritereEliminatoireRequest("Activable", "Desc",
+                elimReq("Activable", "Desc",
                         "Info", 1, ReponseEliminatoire.OK, true));
 
         critereEliminatoireService.deactivate(created.id());
@@ -171,7 +193,7 @@ class HistorisationIntegrationTest {
     @Test
     void createCritereNote_shouldAutoSerializeNewValues() {
         var response = critereNoteService.create(
-                new CritereNoteRequest("Note critere", "Description",
+                noteReq("Note critere", "Description",
                         "Informatique", 1, 5.0, 1.0, 3.0, true));
 
         var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
@@ -189,10 +211,10 @@ class HistorisationIntegrationTest {
     @Test
     void reorderCritereEliminatoire_shouldCreateHistorique() {
         var c1 = critereEliminatoireService.create(
-                new CritereEliminatoireRequest("Premier", "Desc",
+                elimReq("Premier", "Desc",
                         "Info", 1, ReponseEliminatoire.OK, true));
         var c2 = critereEliminatoireService.create(
-                new CritereEliminatoireRequest("Second", "Desc",
+                elimReq("Second", "Desc",
                         "Info", 2, ReponseEliminatoire.NOT_OK, true));
 
         critereEliminatoireService.reorder(List.of(
@@ -211,7 +233,7 @@ class HistorisationIntegrationTest {
     @Test
     void deleteCritereNote_shouldCaptureOldValues() {
         var created = critereNoteService.create(
-                new CritereNoteRequest("ASupprimer", "Desc",
+                noteReq("ASupprimer", "Desc",
                         "Reseaux", 1, 5.0, 1.0, 3.0, true));
 
         critereNoteService.delete(created.id());
