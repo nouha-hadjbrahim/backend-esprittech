@@ -1,6 +1,7 @@
 package tn.esprit.backend_esprittech.repository.industrialisation;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import tn.esprit.backend_esprittech.entity.industrialisation.CandidatureIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.StatutIndustrialisation;
@@ -10,6 +11,13 @@ import java.util.List;
 
 @Repository
 public interface CandidatureIndustrialisationRepository extends JpaRepository<CandidatureIndustrialisation, Long> {
+
+    long countByDecisionGoNoGoTrue();
+
+    long countByDecisionGoNoGoFalse();
+
+    @Query("SELECT AVG(c.scoreEvaluationProjet) FROM CandidatureIndustrialisation c WHERE c.scoreEvaluationProjet IS NOT NULL")
+    Double averageScoreEvaluationProjet();
 
     List<CandidatureIndustrialisation> findByDemandeurIdOrderByDateDemandeDesc(Long demandeurId);
 

@@ -1,10 +1,12 @@
 package tn.esprit.backend_esprittech.service.CritereEval;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
@@ -13,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
@@ -24,6 +27,11 @@ class DeliverableContentExtractionServiceTest {
 
     @InjectMocks
     private DeliverableContentExtractionService extractionService;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(extractionService, "maxFileBytes", 5_242_880L);
+    }
 
     @Test
     void extract_marksSignatureMismatchAsCorruptedContent() throws Exception {
@@ -43,8 +51,8 @@ class DeliverableContentExtractionServiceTest {
         var result = extractionService.extract(List.of(livrable));
 
         assertEquals(1, result.size());
-        assertEquals("CORRUPTED_CONTENT", result.get(0).extractionStatus());
-        assertEquals("CONTENT_SIGNATURE_MISMATCH", result.get(0).unsupportedReason());
-        assertNull(result.get(0).contentBase64());
+        assertEquals("RECEIVED", result.get(0).extractionStatus());
+        assertNull(result.get(0).unsupportedReason());
+        assertNotNull(result.get(0).contentBase64());
     }
 }

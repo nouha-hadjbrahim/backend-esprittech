@@ -28,13 +28,23 @@ class CritereEliminatoireServiceTest {
     @Mock
     private CritereEliminatoireRepository repository;
 
+    @Mock
+    private CriterionConfigurationPolicy configurationPolicy;
+
     @InjectMocks
     private CritereEliminatoireService service;
 
     private CritereEliminatoire critere;
+    private CriterionConfigurationPolicy.ConfigurationReport completeReport;
 
     @BeforeEach
     void setUp() {
+        completeReport = new CriterionConfigurationPolicy.ConfigurationReport(
+                true, List.of(), List.of(), "1.0", List.of("CRITERION_CONFIGURATION_COMPLETE")
+        );
+        lenient().doNothing().when(configurationPolicy).requireActiveComplete(any(), any());
+        lenient().when(configurationPolicy.inspect(any(), any())).thenReturn(completeReport);
+
         critere = new CritereEliminatoire();
         critere.setId(1L);
         critere.setLibelle("Critère test");

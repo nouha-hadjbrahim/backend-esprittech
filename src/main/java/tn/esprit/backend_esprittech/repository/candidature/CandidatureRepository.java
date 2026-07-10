@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface CandidatureRepository extends JpaRepository<Candidature, Long> {
 
+    long countByStatut(StatutCandidature statut);
+
     /** Toutes les candidatures d'un sujet (vue encadrant) */
     List<Candidature> findBySujetIdOrderByDateDepotAsc(Long sujetId);
 
