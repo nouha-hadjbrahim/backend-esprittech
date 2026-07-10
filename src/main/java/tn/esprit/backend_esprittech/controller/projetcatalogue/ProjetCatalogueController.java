@@ -100,6 +100,15 @@ public class ProjetCatalogueController {
         return ResponseEntity.ok(projetService.refuser(id, request));
     }
 
+    // ── Administration (admin) ─────────────────────────────────────────────────
+
+    @GetMapping("/api/projets/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Tous les projets", description = "Liste tous les projets du catalogue applicatif, quel que soit leur statut.")
+    public ResponseEntity<List<ProjetCardResponse>> tousLesProjets() {
+        return ResponseEntity.ok(projetService.tousLesProjets());
+    }
+
     // ── Détail d'un projet (encadrant / chef / admin) ──────────────────────────
 
     @GetMapping("/api/projets/{id}")
@@ -108,6 +117,15 @@ public class ProjetCatalogueController {
     public ResponseEntity<ProjetDetailsResponse> detailsProjet(
             @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
         return ResponseEntity.ok(projetService.detailsProjet(id));
+    }
+
+    @DeleteMapping("/api/projets/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Supprimer un projet", description = "Supprime définitivement un projet du catalogue (admin).")
+    public ResponseEntity<Void> supprimerProjet(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        projetService.supprimerProjetAsAdmin(id);
+        return ResponseEntity.noContent().build();
     }
 
     // ── Catalogue public (tout authentifié) ────────────────────────────────────
