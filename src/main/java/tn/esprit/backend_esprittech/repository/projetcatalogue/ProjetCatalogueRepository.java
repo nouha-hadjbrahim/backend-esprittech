@@ -15,6 +15,9 @@ public interface ProjetCatalogueRepository extends JpaRepository<ProjetCatalogue
 
     long countByStatut(StatutProjet statut);
 
+    /** Tous les projets du catalogue applicatif, quel que soit leur statut (vue admin). */
+    List<ProjetCatalogue> findAllByOrderByDateCreationDesc();
+
     /** Projets déposés par un encadrant (page « Mes projets »), les plus récents d'abord. */
     List<ProjetCatalogue> findByEncadrantIdOrderByDateCreationDesc(Long encadrantId);
 

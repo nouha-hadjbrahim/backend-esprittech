@@ -28,6 +28,7 @@ import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.mapper.projetcatalogue.ProjetCatalogueMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetDomaineRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisRepository;
@@ -60,6 +61,7 @@ public class ProjetCatalogueService {
     private final SujetDomaineRepository domaineRepository;
     private final SujetTechnologieRepository technologieRepository;
     private final SujetPrerequisRepository prerequisRepository;
+    private final LivrableCatalogueRepository livrableCatalogueRepository;
 
     public ProjetCatalogueService(ProjetCatalogueRepository projetRepository,
                                   ProjetCatalogueMapper mapper,
@@ -68,7 +70,8 @@ public class ProjetCatalogueService {
                                   EquipeRechercheRepository equipeRepository,
                                   SujetDomaineRepository domaineRepository,
                                   SujetTechnologieRepository technologieRepository,
-                                  SujetPrerequisRepository prerequisRepository) {
+                                  SujetPrerequisRepository prerequisRepository,
+                                  LivrableCatalogueRepository livrableCatalogueRepository) {
         this.projetRepository = projetRepository;
         this.mapper = mapper;
         this.userService = userService;
@@ -77,6 +80,7 @@ public class ProjetCatalogueService {
         this.domaineRepository = domaineRepository;
         this.technologieRepository = technologieRepository;
         this.prerequisRepository = prerequisRepository;
+        this.livrableCatalogueRepository = livrableCatalogueRepository;
     }
 
     // -------------------------------------------------------------------------
@@ -223,6 +227,26 @@ public class ProjetCatalogueService {
             throw new ForbiddenException("Vous n'avez pas accès à ce projet");
         }
         return mapper.toDetails(projet);
+    }
+
+    // -------------------------------------------------------------------------
+    // Vue admin : tous les projets
+    // -------------------------------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public List<ProjetCardResponse> tousLesProjets() {
+        return projetRepository.findAllByOrderByDateCreationDesc().stream().map(mapper::toCard).toList();
+    }
+
+    // -------------------------------------------------------------------------
+    // Suppression (admin)
+    // -------------------------------------------------------------------------
+
+    @Historise(action = ActionType.DELETE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", summaryExpression = "'Suppression projet catalogue (id=' + #id + ')'")
+    public void supprimerProjetAsAdmin(Long id) {
+        ProjetCatalogue projet = getProjetOrThrow(id);
+        livrableCatalogueRepository.deleteAll(livrableCatalogueRepository.findByProjetId(id));
+        projetRepository.delete(projet);
     }
 
     // -------------------------------------------------------------------------

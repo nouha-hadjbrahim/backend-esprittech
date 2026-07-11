@@ -12,4 +12,6 @@ public interface LivrableCatalogueRepository extends JpaRepository<LivrableCatal
     List<LivrableCatalogue> findByProjetIdAndActifTrueOrderByDateDepotDesc(Long projetId);
 
     boolean existsByProjetIdAndActifTrue(Long projetId);
+
+    List<LivrableCatalogue> findByProjetId(Long projetId);
 }
