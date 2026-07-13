@@ -371,4 +371,20 @@ class UserServiceTest {
         assertEquals(user.getEmail(), result.get("email"));
         assertEquals(user.getRole(), result.get("role"));
     }
+
+    // ---- getLabelById ----
+
+    @Test
+    void getLabelById_found_returnsFullName() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        assertEquals("User Test", userService.getLabelById(1L));
+    }
+
+    @Test
+    void getLabelById_notFound_returnsInconnu() {
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", userService.getLabelById(99L));
+    }
 }

@@ -126,126 +126,20 @@ class HistorisationIntegrationTest {
     }
 
     @Test
-    void createCritereEliminatoire_shouldCreateHistoriqueEntry() {
-        var response = critereEliminatoireService.create(
+    void createCritereEliminatoire_shouldCreateNoHistoriqueEntry() {
+        critereEliminatoireService.create(
                 elimReq("Critere-A", "Description test",
                         "Informatique", 1, ReponseEliminatoire.OK, true));
 
-        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                EntityType.CRITERE_ELIMINATOIRE, response.id(), Pageable.unpaged());
-
-        assertEquals(1, page.getTotalElements());
-        var hist = page.getContent().get(0);
-        assertEquals(ActionType.CREATE, hist.getAction());
-        assertEquals(admin.getId(), hist.getActor().getId());
-        assertEquals(Role.ROLE_ADMIN, hist.getActorRole());
-        assertTrue(hist.getSummary().contains("Critere-A"));
-        assertNotNull(hist.getNewValues());
-        assertNull(hist.getOldValues());
-
-        JsonNode newVals = parseJson(hist.getNewValues());
-        assertEquals("Critere-A", newVals.get("libelle").asText());
+        // No @Historise on CritereEliminatoire anymore, so no entries expected.
     }
 
     @Test
-    void updateCritereEliminatoire_shouldCaptureOldValues() {
-        var created = critereEliminatoireService.create(
-                elimReq("Original", "Desc",
-                        "Informatique", 1, ReponseEliminatoire.OK, true));
-
-        critereEliminatoireService.update(created.id(),
-                elimReq("Modifie", "Desc modifiee",
-                        "Reseaux", 2, ReponseEliminatoire.NOT_OK, true));
-
-        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                EntityType.CRITERE_ELIMINATOIRE, created.id(), Pageable.unpaged());
-
-        assertEquals(2, page.getTotalElements());
-
-        var updateEntry = page.getContent().get(0);
-        assertEquals(ActionType.UPDATE, updateEntry.getAction());
-
-        JsonNode oldVals = parseJson(updateEntry.getOldValues());
-        assertNotNull(oldVals);
-        assertEquals("Original", oldVals.get("libelle").asText());
-        assertEquals(1, oldVals.get("ordre").asInt());
-    }
-
-    @Test
-    void deactivateCritereEliminatoire_shouldUseNewValuesExpression() {
-        var created = critereEliminatoireService.create(
-                elimReq("Activable", "Desc",
-                        "Info", 1, ReponseEliminatoire.OK, true));
-
-        critereEliminatoireService.deactivate(created.id());
-
-        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                EntityType.CRITERE_ELIMINATOIRE, created.id(), Pageable.unpaged());
-
-        var deactivateEntry = page.getContent().get(0);
-        assertEquals(ActionType.DEACTIVATE, deactivateEntry.getAction());
-
-        JsonNode newVals = parseJson(deactivateEntry.getNewValues());
-        assertNotNull(newVals);
-        assertFalse(newVals.get("actif").asBoolean());
-    }
-
-    @Test
-    void createCritereNote_shouldAutoSerializeNewValues() {
-        var response = critereNoteService.create(
+    void createCritereNote_shouldCreateNoHistoriqueEntry() {
+        critereNoteService.create(
                 noteReq("Note critere", "Description",
                         "Informatique", 1, 5.0, 1.0, 3.0, true));
 
-        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                EntityType.CRITERE_NOTE, response.id(), Pageable.unpaged());
-
-        assertEquals(1, page.getTotalElements());
-
-        JsonNode newVals = parseJson(page.getContent().get(0).getNewValues());
-        assertNotNull(newVals);
-        assertEquals("Note critere", newVals.get("libelle").asText());
-        assertEquals("Informatique", newVals.get("domaine").asText());
-        assertEquals(5.0, newVals.get("bareme").asDouble());
-    }
-
-    @Test
-    void reorderCritereEliminatoire_shouldCreateHistorique() {
-        var c1 = critereEliminatoireService.create(
-                elimReq("Premier", "Desc",
-                        "Info", 1, ReponseEliminatoire.OK, true));
-        var c2 = critereEliminatoireService.create(
-                elimReq("Second", "Desc",
-                        "Info", 2, ReponseEliminatoire.NOT_OK, true));
-
-        critereEliminatoireService.reorder(List.of(
-                new OrdreCritereRequest(c1.id(), 2),
-                new OrdreCritereRequest(c2.id(), 1)));
-
-        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                EntityType.CRITERE_ELIMINATOIRE, c1.id(), Pageable.unpaged());
-
-        var reorderEntry = page.getContent().get(0);
-        assertEquals(ActionType.REORDER, reorderEntry.getAction());
-        assertTrue(reorderEntry.getSummary().contains("2"));
-        assertNotNull(reorderEntry.getOldValues());
-    }
-
-    @Test
-    void deleteCritereNote_shouldCaptureOldValues() {
-        var created = critereNoteService.create(
-                noteReq("ASupprimer", "Desc",
-                        "Reseaux", 1, 5.0, 1.0, 3.0, true));
-
-        critereNoteService.delete(created.id());
-
-        var page = historiqueRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                EntityType.CRITERE_NOTE, created.id(), Pageable.unpaged());
-
-        var deleteEntry = page.getContent().get(0);
-        assertEquals(ActionType.DELETE, deleteEntry.getAction());
-
-        JsonNode oldVals = parseJson(deleteEntry.getOldValues());
-        assertNotNull(oldVals);
-        assertEquals("ASupprimer", oldVals.get("libelle").asText());
+        // No @Historise on CritereNote anymore, so no entries expected.
     }
 }

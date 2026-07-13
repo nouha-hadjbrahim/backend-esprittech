@@ -144,6 +144,12 @@ public class LivrableService {
         return toResponse(livrable);
     }
 
+    public String getNomById(Long id) {
+        return livrableRepository.findById(id)
+                .map(Livrable::getNom)
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long id) {
         Livrable l = getLivrable(id);
         Map<String, Object> map = new HashMap<>();
@@ -172,7 +178,7 @@ public class LivrableService {
         return toResponse(livrableRepository.save(livrable));
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Suppression livrable (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.LIVRABLE, entityIdExpression = "#id", oldValuesExpression = "@livrableService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Suppression livrable ' + @livrableService.getNomById(#id)")
     public void delete(Long id) {
         Livrable livrable = getLivrable(id);
         ensureCanManage(userService.getCurrentUser(), livrable.getSujetProjet());

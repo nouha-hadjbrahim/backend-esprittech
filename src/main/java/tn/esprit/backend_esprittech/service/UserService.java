@@ -95,6 +95,12 @@ public class UserService {
         return userRepository.searchEligibleMembers(q, roles, pageable);
     }
 
+    public String getLabelById(Long id) {
+        return userRepository.findById(id)
+                .map(u -> u.getPrenom() + " " + u.getNom())
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long id) {
         User u = findById(id);
         Map<String, Object> map = new HashMap<>();
@@ -156,7 +162,7 @@ public class UserService {
 
     /** Supprime un utilisateur ; un admin ne peut pas supprimer son propre compte. */
     @Transactional
-    @Historise(action = ActionType.DELETE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getOldValues(#id)", summaryExpression = "'Suppression utilisateur (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getOldValues(#id)", summaryExpression = "'Suppression utilisateur ' + @userService.getLabelById(#id)")
     public void delete(Long id) {
         User user = findById(id);
         User current = getCurrentUser();

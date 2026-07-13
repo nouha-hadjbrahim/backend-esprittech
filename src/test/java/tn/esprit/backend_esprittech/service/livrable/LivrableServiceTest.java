@@ -479,4 +479,20 @@ class LivrableServiceTest {
         livrable.setActif(true);
         return livrable;
     }
+
+    // ---- getNomById ----
+
+    @Test
+    void getNomById_found_returnsNom() {
+        when(livrableRepository.findById(100L)).thenReturn(Optional.of(existingLivrable()));
+
+        assertEquals("Rapport", livrableService.getNomById(100L));
+    }
+
+    @Test
+    void getNomById_notFound_returnsInconnu() {
+        when(livrableRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", livrableService.getNomById(99L));
+    }
 }

@@ -54,7 +54,7 @@ public class CandidatureService {
     private final SujetProjetService sujetProjetService;
 
     @Transactional
-    @Historise(action = ActionType.OUVRIR_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'CANDIDATURE_OUVERTE'}", summaryExpression = "'Ouverture candidatures sujet (id=' + #sujetId + ')'")
+    @Historise(action = ActionType.OUVRIR_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'CANDIDATURE_OUVERTE'}", summaryExpression = "'Ouverture candidatures sujet ' + @sujetProjetService.getTitreById(#sujetId)")
     public void ouvrirCandidatures(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
         checkSujetAccess(sujet);
@@ -68,7 +68,7 @@ public class CandidatureService {
     }
 
     @Transactional
-    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE, entityIdExpression = "#result.id()", summaryExpression = "'Dépôt candidature sujet (id=' + #request.sujetId() + ')'")
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE, entityIdExpression = "#result.id()", summaryExpression = "'Dépôt candidature sujet ' + @sujetProjetService.getTitreById(#request.sujetId())")
     public CandidatureResponse deposerCandidature(CandidatureRequest request) {
         User etudiant = userService.getCurrentUser();
         SujetProjet sujet = getSujetOrThrow(request.sujetId());
@@ -88,6 +88,24 @@ public class CandidatureService {
         return candidatureMapper.toResponse(candidatureRepository.save(candidature));
     }
 
+    public String getCandidatureLabel(Long id) {
+        Candidature c = candidatureRepository.findById(id).orElse(null);
+        if (c == null) return "Inconnu";
+        SujetProjet sujet = sujetProjetRepository.findById(c.getSujetId()).orElse(null);
+        String etudiantNom = c.getEtudiant() != null ? c.getEtudiant().getPrenom() + " " + c.getEtudiant().getNom() : "Inconnu";
+        String sujetTitre = sujet != null ? sujet.getTitre() : "Inconnu";
+        return etudiantNom + " - sujet " + sujetTitre;
+    }
+
+    public String getAffectationLabel(Long id) {
+        Affectation a = affectationRepository.findById(id).orElse(null);
+        if (a == null) return "Inconnu";
+        SujetProjet sujet = sujetProjetRepository.findById(a.getSujetId()).orElse(null);
+        String etudiantNom = a.getEtudiant() != null ? a.getEtudiant().getPrenom() + " " + a.getEtudiant().getNom() : "Inconnu";
+        String sujetTitre = sujet != null ? sujet.getTitre() : "Inconnu";
+        return etudiantNom + " - sujet " + sujetTitre;
+    }
+
     public Map<String, Object> getOldValues(Long id) {
         Candidature c = getCandidatureOrThrow(id);
         Map<String, Object> map = new HashMap<>();
@@ -96,7 +114,7 @@ public class CandidatureService {
     }
 
     @Transactional
-    @Historise(action = ActionType.UPDATE, actionExpression = "#request.accepter() ? 'ACCEPT' : 'REFUSE'", entityType = EntityType.CANDIDATURE, entityIdExpression = "#candidatureId", oldValuesExpression = "@candidatureService.getOldValues(#candidatureId)", metadataExpression = "#request.accepter() ? null : {'motifRefus': #request.motifRefus()}", summaryExpression = "#request.accepter() ? 'Acceptation candidature (id=' + #candidatureId + ')' : 'Refus candidature (id=' + #candidatureId + ')'")
+    @Historise(action = ActionType.UPDATE, actionExpression = "#request.accepter() ? 'ACCEPT' : 'REFUSE'", entityType = EntityType.CANDIDATURE, entityIdExpression = "#candidatureId", oldValuesExpression = "@candidatureService.getOldValues(#candidatureId)", metadataExpression = "#request.accepter() ? null : {'motifRefus': #request.motifRefus()}", summaryExpression = "#request.accepter() ? 'Acceptation candidature ' + @candidatureService.getCandidatureLabel(#candidatureId) : 'Refus candidature ' + @candidatureService.getCandidatureLabel(#candidatureId)")
     public CandidatureResponse deciderCandidature(Long candidatureId, DecisionCandidatureRequest request) {
         Candidature candidature = getCandidatureOrThrow(candidatureId);
         checkSujetAccess(getSujetOrThrow(candidature.getSujetId()));
@@ -139,7 +157,7 @@ public class CandidatureService {
     }
 
     @Transactional
-    @Historise(action = ActionType.FERMER_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'REALISATION_EN_COURS'}", summaryExpression = "'Fermeture candidatures sujet (id=' + #sujetId + ')'")
+    @Historise(action = ActionType.FERMER_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'REALISATION_EN_COURS'}", summaryExpression = "'Fermeture candidatures sujet ' + @sujetProjetService.getTitreById(#sujetId)")
     public void fermerCandidatures(Long sujetId) {
         SujetProjet sujet = getSujetOrThrow(sujetId);
         checkSujetAccess(sujet);
@@ -160,7 +178,7 @@ public class CandidatureService {
     }
 
     @Transactional
-    @Historise(action = ActionType.RETRAIT, entityType = EntityType.CANDIDATURE, entityIdExpression = "#affectationId", metadataExpression = "{'motifRetrait': #request.motifRetrait()}", summaryExpression = "'Retrait étudiant affectation (id=' + #affectationId + ')'")
+    @Historise(action = ActionType.RETRAIT, entityType = EntityType.CANDIDATURE, entityIdExpression = "#affectationId", metadataExpression = "{'motifRetrait': #request.motifRetrait()}", summaryExpression = "'Retrait étudiant affectation ' + @candidatureService.getAffectationLabel(#affectationId)")
     public AffectationResponse retirerEtudiant(Long affectationId, RetraitEtudiantRequest request) {
         Affectation affectation = getAffectationOrThrow(affectationId);
         checkSujetAccess(getSujetOrThrow(affectation.getSujetId()));
@@ -211,7 +229,7 @@ public class CandidatureService {
     }
 
     @Transactional
-    @Historise(action = ActionType.RETRAIT_ETUDIANT, entityType = EntityType.CANDIDATURE, entityIdExpression = "#candidatureId", oldValuesExpression = "@candidatureService.getOldValues(#candidatureId)", summaryExpression = "'Retrait candidature par étudiant (id=' + #candidatureId + ')'")
+    @Historise(action = ActionType.RETRAIT_ETUDIANT, entityType = EntityType.CANDIDATURE, entityIdExpression = "#candidatureId", oldValuesExpression = "@candidatureService.getOldValues(#candidatureId)", summaryExpression = "'Retrait candidature par étudiant ' + @candidatureService.getCandidatureLabel(#candidatureId)")
     public void retirerMaCandidature(Long candidatureId) {
         User etudiant = userService.getCurrentUser();
         Candidature candidature = getCandidatureOrThrow(candidatureId);
