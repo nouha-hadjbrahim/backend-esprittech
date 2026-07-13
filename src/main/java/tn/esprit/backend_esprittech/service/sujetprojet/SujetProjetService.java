@@ -24,7 +24,9 @@ import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.TerminaisonSujetRequest;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -57,6 +59,7 @@ public class SujetProjetService {
     private final SujetReferenceService referenceService;
     private final EquipeRechercheRepository equipeRechercheRepository;
     private final AffectationRepository affectationRepository;
+    private final ProjetCatalogueService projetCatalogueService;
 
     public SujetProjetService(SujetProjetRepository sujetProjetRepository,
                               SujetProjetMapper sujetProjetMapper,
@@ -64,7 +67,8 @@ public class SujetProjetService {
                               UserRepository userRepository,
                               SujetReferenceService referenceService,
                               EquipeRechercheRepository equipeRechercheRepository,
-                              AffectationRepository affectationRepository) {
+                              AffectationRepository affectationRepository,
+                              ProjetCatalogueService projetCatalogueService) {
         this.sujetProjetRepository = sujetProjetRepository;
         this.sujetProjetMapper = sujetProjetMapper;
         this.userService = userService;
@@ -72,9 +76,15 @@ public class SujetProjetService {
         this.referenceService = referenceService;
         this.equipeRechercheRepository = equipeRechercheRepository;
         this.affectationRepository = affectationRepository;
+        this.projetCatalogueService = projetCatalogueService;
     }
 
-    @Historise(action = ActionType.CREATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#result.id()", summaryExpression = "'Création sujet ' + #result.titre()")
+    @Historise(
+            action = ActionType.CREATE,
+            entityType = EntityType.SUJET_PROJET,
+            entityIdExpression = "#result.id()",
+            newValuesExpression = "{'statut': #result.statut()}",
+            summaryExpression = "'Création sujet ' + #result.titre()")
     public SujetProjetResponse creerSujet(SujetProjetRequest request) {
         User encadrant = getCurrentEncadrant();
         ensureEncadrantAffilie(encadrant);
@@ -256,7 +266,7 @@ public class SujetProjetService {
         SujetProjet s = sujetProjetRepository.findById(id).orElse(null);
         if (s == null) return Map.of();
         Map<String, Object> map = new HashMap<>();
-        map.put("statut", s.getStatut());
+        map.put("statut", s.getStatut() != null ? s.getStatut().name() : null);
         map.put("titre", s.getTitre());
         map.put("catalogue", s.getCatalogue());
         return map;
@@ -646,8 +656,21 @@ public class SujetProjetService {
 
         sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
         sujet.setDateTerminaison(LocalDateTime.now());
+        sujet.setCatalogue(true);
 
         SujetProjet saved = sujetProjetRepository.save(sujet);
+
+        String coverBase64 = request != null ? request.coverImageBase64() : null;
+        String coverType = request != null ? request.coverImageContentType() : null;
+        projetCatalogueService.publierDepuisSujetTermine(saved, coverBase64, coverType);
+
+        // Le score est calculé après commit par le listener d'évaluation existant,
+        // puis synchronisé sur le projet catalogue (évite le rollback-only).
         return toResponse(saved);
+    }
+
+    @Transactional
+    public SujetProjetResponse declarerTerminaison(Long id) {
+        return declarerTerminaison(id, null);
     }
 }

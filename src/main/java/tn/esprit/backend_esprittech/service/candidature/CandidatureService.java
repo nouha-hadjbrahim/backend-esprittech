@@ -109,8 +109,25 @@ public class CandidatureService {
     public Map<String, Object> getOldValues(Long id) {
         Candidature c = getCandidatureOrThrow(id);
         Map<String, Object> map = new HashMap<>();
-        map.put("statut", c.getStatut());
+        map.put("statut", c.getStatut() != null ? c.getStatut().name() : null);
         return map;
+    }
+
+    public Map<String, Object> getAffectationOldValues(Long affectationId) {
+        Affectation affectation = getAffectationOrThrow(affectationId);
+        Map<String, Object> map = new HashMap<>();
+        map.put("statut", affectation.getStatut() != null ? affectation.getStatut().name() : null);
+        return map;
+    }
+
+    @Transactional(readOnly = true)
+    public Long getSujetIdByCandidature(Long candidatureId) {
+        return getCandidatureOrThrow(candidatureId).getSujetId();
+    }
+
+    @Transactional(readOnly = true)
+    public Long getSujetIdByAffectation(Long affectationId) {
+        return getAffectationOrThrow(affectationId).getSujetId();
     }
 
     @Transactional

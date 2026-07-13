@@ -33,7 +33,9 @@ import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRe
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetDomaineRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetReferenceService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +58,8 @@ class ProjetCatalogueServiceTest {
     @Mock private SujetDomaineRepository domaineRepository;
     @Mock private SujetTechnologieRepository technologieRepository;
     @Mock private SujetPrerequisRepository prerequisRepository;
+    @Mock private LivrableCatalogueRepository livrableCatalogueRepository;
+    @Mock private SujetReferenceService sujetReferenceService;
 
     @InjectMocks private ProjetCatalogueService service;
 

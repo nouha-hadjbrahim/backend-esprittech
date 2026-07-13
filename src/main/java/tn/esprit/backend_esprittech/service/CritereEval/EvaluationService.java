@@ -51,6 +51,7 @@ import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -85,6 +86,7 @@ public class EvaluationService {
     private final DeliverableContentExtractionService contentExtractionService;
     private final MlEvaluationClient mlEvaluationClient;
     private final ObjectMapper objectMapper;
+    private final ProjetCatalogueService projetCatalogueService;
 
     @Value("${evaluation.ml.recalculation-cooldown-seconds:0}")
     private long recalculationCooldownSeconds;
@@ -537,6 +539,13 @@ public class EvaluationService {
         projet.setHasEliminatoryWarnings(data.hasEliminatoryWarnings());
         projet.setEliminatoryWarningsCount(data.eliminatoryWarnings().size());
         sujetProjetRepository.save(projet);
+
+        if (data.scoreFinal() != null) {
+            projetCatalogueService.mettreAJourScoreParSujetId(
+                    projet.getId(),
+                    (int) Math.round(data.scoreFinal())
+            );
+        }
 
         return toResponse(savedEvaluation);
     }
@@ -1312,7 +1321,8 @@ public class EvaluationService {
         if (current.getRole() == Role.ROLE_ADMIN) {
             return;
         }
-        if (current.getRole() == Role.ROLE_ENSEIGNANT && projet.getEncadrantId().equals(current.getId())) {
+        if ((current.getRole() == Role.ROLE_ENSEIGNANT || current.getRole() == Role.ROLE_CHEF_EQUIPE)
+                && projet.getEncadrantId().equals(current.getId())) {
             return;
         }
         throw new AccessDeniedException("Vous n'etes pas autorise a recalculer le score de ce projet.");

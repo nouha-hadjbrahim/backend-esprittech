@@ -22,6 +22,7 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
@@ -42,6 +43,7 @@ class SujetProjetServiceTest {
     @Mock private SujetReferenceService referenceService;
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
     @Mock private AffectationRepository affectationRepository;
+    @Mock private ProjetCatalogueService projetCatalogueService;
 
     @InjectMocks private SujetProjetService service;
 
@@ -401,7 +403,9 @@ class SujetProjetServiceTest {
 
         assertEquals(response, service.declarerTerminaison(1L));
         assertEquals(StatutSujet.REALISATION_TERMINEE, entity.getStatut());
+        assertTrue(Boolean.TRUE.equals(entity.getCatalogue()));
         assertNotNull(entity.getDateTerminaison());
+        verify(projetCatalogueService).publierDepuisSujetTermine(entity, null, null);
     }
 
     @Test

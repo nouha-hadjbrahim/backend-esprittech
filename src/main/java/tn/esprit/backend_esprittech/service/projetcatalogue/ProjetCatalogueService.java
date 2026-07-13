@@ -35,13 +35,20 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisReposit
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 
+import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetReferenceService;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Logique métier du catalogue applicatif : dépôt d'un projet complet par un enseignant
@@ -62,6 +69,7 @@ public class ProjetCatalogueService {
     private final SujetTechnologieRepository technologieRepository;
     private final SujetPrerequisRepository prerequisRepository;
     private final LivrableCatalogueRepository livrableCatalogueRepository;
+    private final SujetReferenceService sujetReferenceService;
 
     public ProjetCatalogueService(ProjetCatalogueRepository projetRepository,
                                   ProjetCatalogueMapper mapper,
@@ -71,7 +79,8 @@ public class ProjetCatalogueService {
                                   SujetDomaineRepository domaineRepository,
                                   SujetTechnologieRepository technologieRepository,
                                   SujetPrerequisRepository prerequisRepository,
-                                  LivrableCatalogueRepository livrableCatalogueRepository) {
+                                  LivrableCatalogueRepository livrableCatalogueRepository,
+                                  SujetReferenceService sujetReferenceService) {
         this.projetRepository = projetRepository;
         this.mapper = mapper;
         this.userService = userService;
@@ -81,6 +90,7 @@ public class ProjetCatalogueService {
         this.technologieRepository = technologieRepository;
         this.prerequisRepository = prerequisRepository;
         this.livrableCatalogueRepository = livrableCatalogueRepository;
+        this.sujetReferenceService = sujetReferenceService;
     }
 
     // -------------------------------------------------------------------------
@@ -129,6 +139,146 @@ public class ProjetCatalogueService {
             }
             throw ex;
         }
+    }
+
+    /**
+     * Publie automatiquement un sujet terminé dans le catalogue public (statut VALIDE),
+     * sans passer par la validation chef. Ne modifie pas le flux de dépôt manuel.
+     */
+    public ProjetCatalogueResponse publierDepuisSujetTermine(SujetProjet sujet,
+                                                            String coverImageBase64,
+                                                            String coverImageContentType) {
+        if (sujet == null || sujet.getId() == null) {
+            throw new BusinessException("Sujet introuvable pour publication au catalogue.");
+        }
+        if (projetRepository.existsBySujetId(sujet.getId())) {
+            return mapper.toResponse(projetRepository.findBySujetId(sujet.getId())
+                    .orElseThrow(() -> new ConflictException("Ce sujet est déjà publié au catalogue.")));
+        }
+
+        User encadrant = userRepository.findById(sujet.getEncadrantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Encadrant introuvable"));
+        EquipeRecherche equipe = encadrant.getEquipeRecherche();
+        if (equipe == null) {
+            equipe = equipeRepository.findByChefId(encadrant.getId()).orElse(null);
+        }
+        if (equipe == null) {
+            throw new ForbiddenException(
+                    "L'encadrant doit être affilié à une équipe pour publier le sujet au catalogue.");
+        }
+
+        User chef = equipe.getChef();
+        LocalDate dateDebut = resolveDateDebut(sujet);
+        LocalDate dateFin = sujet.getDateTerminaison() != null
+                ? sujet.getDateTerminaison().toLocalDate()
+                : LocalDate.now();
+        if (!dateDebut.isBefore(dateFin)) {
+            dateDebut = dateFin.minusDays(1);
+        }
+
+        int score = sujet.getScoreFinalEvaluation() != null
+                ? (int) Math.round(sujet.getScoreFinalEvaluation())
+                : 0;
+
+        ProjetCatalogue projet = ProjetCatalogue.builder()
+                .sujetId(sujet.getId())
+                .typeProjet(mapTypeProjet(sujet.getCategorie()))
+                .titre(sujet.getTitre().trim())
+                .description(sujet.getDescription().trim())
+                .objectifs(sujet.getObjectifs().trim())
+                .dateDebut(dateDebut)
+                .dateFin(dateFin)
+                .statut(StatutProjet.VALIDE)
+                .score(score)
+                .encadrant(encadrant)
+                .equipeRecherche(equipe)
+                .chefValidateur(chef)
+                .motifRefus(null)
+                .dateValidation(LocalDateTime.now())
+                .domaines(resolveDomainesByNoms(sujet.getDomaine()))
+                .technologies(resolveTechnologiesByNoms(sujet.getTechnologies()))
+                .prerequis(resolvePrerequisByNoms(sujet.getPrerequis()))
+                .build();
+
+        applyCover(projet, coverImageBase64, coverImageContentType);
+
+        try {
+            return mapper.toResponse(projetRepository.save(projet));
+        } catch (DataAccessException ex) {
+            if (isPacketTooLarge(ex)) {
+                throw new BusinessException(
+                        "L'image de couverture est trop volumineuse pour être enregistrée (max " + MAX_COVER_LABEL + "). "
+                                + "Choisissez une image plus légère.");
+            }
+            throw ex;
+        }
+    }
+
+    private LocalDate resolveDateDebut(SujetProjet sujet) {
+        if (sujet.getDateDebutRealisation() != null) {
+            return sujet.getDateDebutRealisation().toLocalDate();
+        }
+        if (sujet.getDateValidation() != null) {
+            return sujet.getDateValidation().toLocalDate();
+        }
+        if (sujet.getDateCreation() != null) {
+            return sujet.getDateCreation().toLocalDate();
+        }
+        return LocalDate.now().minusMonths(1);
+    }
+
+    private TypeProjet mapTypeProjet(CategorieSujet categorie) {
+        if (categorie == null) {
+            return TypeProjet.PFE;
+        }
+        return switch (categorie) {
+            case RDI -> TypeProjet.RDI;
+            case STAGE_INGENIEUR -> TypeProjet.STAGE_INGENIEUR;
+            case PFE, PROJET_COMPLET -> TypeProjet.PFE;
+        };
+    }
+
+    private Set<SujetDomaine> resolveDomainesByNoms(String csv) {
+        Set<SujetDomaine> result = new LinkedHashSet<>();
+        for (String nom : splitCsv(csv)) {
+            Long id = sujetReferenceService.findOrCreateDomaine(nom).id();
+            domaineRepository.findById(id).ifPresent(result::add);
+        }
+        if (result.isEmpty()) {
+            throw new BusinessException("Le sujet doit avoir au moins un domaine pour être publié au catalogue.");
+        }
+        return result;
+    }
+
+    private Set<SujetTechnologie> resolveTechnologiesByNoms(String csv) {
+        Set<SujetTechnologie> result = new LinkedHashSet<>();
+        for (String nom : splitCsv(csv)) {
+            Long id = sujetReferenceService.findOrCreateTechnologie(nom).id();
+            technologieRepository.findById(id).ifPresent(result::add);
+        }
+        if (result.isEmpty()) {
+            throw new BusinessException("Le sujet doit avoir au moins une technologie pour être publié au catalogue.");
+        }
+        return result;
+    }
+
+    private Set<SujetPrerequis> resolvePrerequisByNoms(String csv) {
+        Set<SujetPrerequis> result = new LinkedHashSet<>();
+        for (String nom : splitCsv(csv)) {
+            Long id = sujetReferenceService.findOrCreatePrerequis(nom).id();
+            prerequisRepository.findById(id).ifPresent(result::add);
+        }
+        return result;
+    }
+
+    private List<String> splitCsv(String csv) {
+        if (csv == null || csv.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -294,13 +444,12 @@ public class ProjetCatalogueService {
 
     /**
      * Taille maximale (octets décodés) de l'image de couverture.
-     * Limitée à ~900 Ko pour rester sous le {@code max_allowed_packet} MySQL par défaut
-     * (1 Mo), l'image étant stockée directement en base.
+     * Alignée sur spring.servlet.multipart.max-file-size (5 Mo).
      */
-    private static final int MAX_COVER_BYTES = 900 * 1024;
+    private static final int MAX_COVER_BYTES = 5 * 1024 * 1024;
 
     /** Libellé de la taille maximale, réutilisé dans les messages d'erreur. */
-    private static final String MAX_COVER_LABEL = "900 Ko";
+    private static final String MAX_COVER_LABEL = "5 Mo";
 
     /**
      * Décode l'image de couverture (base64 ou data URI) et l'attache au projet après
@@ -312,9 +461,11 @@ public class ProjetCatalogueService {
         }
         int commaIndex = base64.indexOf(',');
         String data = commaIndex >= 0 ? base64.substring(commaIndex + 1) : base64;
+        // Nettoyer les retours à la ligne éventuels du base64
+        data = data.replaceAll("\\s", "");
         byte[] bytes;
         try {
-            bytes = Base64.getDecoder().decode(data.trim());
+            bytes = Base64.getDecoder().decode(data);
         } catch (IllegalArgumentException ex) {
             throw new BusinessException("Image de couverture invalide.");
         }
@@ -325,11 +476,45 @@ public class ProjetCatalogueService {
             throw new BusinessException("L'image de couverture est trop volumineuse (max " + MAX_COVER_LABEL + ").");
         }
         String type = contentType != null ? contentType.trim().toLowerCase(java.util.Locale.ROOT) : null;
+        if (type != null && type.contains(";")) {
+            type = type.substring(0, type.indexOf(';')).trim();
+        }
+        if (type == null || type.isBlank() || !ALLOWED_COVER_TYPES.contains(type)) {
+            type = detectImageContentType(bytes);
+        }
         if (type == null || !ALLOWED_COVER_TYPES.contains(type)) {
             throw new BusinessException("Format d'image non autorisé. Formats acceptés : PNG, JPG.");
         }
         projet.setCoverImage(bytes);
         projet.setCoverImageContentType("image/jpg".equals(type) ? "image/jpeg" : type);
+    }
+
+    private String detectImageContentType(byte[] bytes) {
+        if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xD8
+                && (bytes[2] & 0xFF) == 0xFF) {
+            return "image/jpeg";
+        }
+        if (bytes.length >= 8
+                && (bytes[0] & 0xFF) == 0x89
+                && bytes[1] == 0x50
+                && bytes[2] == 0x4E
+                && bytes[3] == 0x47) {
+            return "image/png";
+        }
+        return null;
+    }
+
+    /** Met à jour le score d'un projet catalogue publié depuis un sujet terminé. */
+    public void mettreAJourScoreParSujetId(Long sujetId, Integer score) {
+        if (sujetId == null || score == null) {
+            return;
+        }
+        projetRepository.findBySujetId(sujetId).ifPresent(projet -> {
+            projet.setScore(Math.max(0, score));
+            projetRepository.save(projet);
+        });
     }
 
     /** Détecte l'erreur MySQL « packet too large » (max_allowed_packet dépassé) dans la chaîne d'exceptions. */

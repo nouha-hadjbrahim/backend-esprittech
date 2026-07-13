@@ -11,6 +11,8 @@ import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 
 @Repository
 public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
@@ -46,4 +48,22 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
     Page<Historique> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(EntityType entityType, Long entityId, Pageable pageable);
 
     Page<Historique> findByActorIdOrderByCreatedAtDesc(Long actorId, Pageable pageable);
+
+    @Query("""
+            SELECT h FROM Historique h
+            WHERE h.entityType = :entityType
+              AND h.entityId IN :entityIds
+            ORDER BY h.createdAt DESC
+            """)
+    List<Historique> findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+            @Param("entityType") EntityType entityType,
+            @Param("entityIds") Collection<Long> entityIds);
+
+    @Query("""
+            SELECT h FROM Historique h
+            WHERE h.entityType = tn.esprit.backend_esprittech.enums.EntityType.SUJET_PROJET
+              AND h.entityId = :sujetId
+            ORDER BY h.createdAt DESC
+            """)
+    List<Historique> findAllBySujetProjetId(@Param("sujetId") Long sujetId);
 }

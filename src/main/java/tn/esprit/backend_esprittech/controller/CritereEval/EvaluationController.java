@@ -22,13 +22,13 @@ public class EvaluationController {
     private final SujetProjetService sujetProjetService;
 
     @PostMapping("/{id}/evaluations/calculer")
-    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE')")
     public EvaluationResponse calculerEvaluation(@PathVariable Long id) {
         return evaluationService.calculateAutomaticEvaluation(id, "Recalcul manuel");
     }
 
     @PostMapping("/{id}/calculer-score")
-    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT')")
+    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE')")
     public EvaluationResponse calculerScore(@PathVariable Long id) {
         return evaluationService.calculateAutomaticEvaluation(id, "Recalcul manuel");
     }

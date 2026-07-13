@@ -37,6 +37,7 @@ import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -67,6 +68,7 @@ class EvaluationServiceTest {
     @Mock private UserService userService;
     @Mock private DeliverableContentExtractionService contentExtractionService;
     @Mock private MlEvaluationClient mlEvaluationClient;
+    @Mock private ProjetCatalogueService projetCatalogueService;
 
     @InjectMocks
     private EvaluationService evaluationService;
