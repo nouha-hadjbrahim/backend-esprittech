@@ -15,6 +15,11 @@ import java.util.List;
 @Repository
 public interface SujetProjetRepository extends JpaRepository<SujetProjet, Long> {
 
+    long countByStatut(StatutSujet statut);
+
+    @Query("SELECT FUNCTION('YEAR', s.dateCreation) as y, FUNCTION('MONTH', s.dateCreation) as m, COUNT(s) FROM SujetProjet s GROUP BY y, m ORDER BY y, m")
+    List<Object[]> countSujetsByMonth();
+
     List<SujetProjet> findByEncadrantIdOrderByDateCreationDesc(Long encadrantId);
 
     List<SujetProjet> findByEncadrantIdAndCategorieOrderByDateCreationDesc(Long encadrantId, CategorieSujet categorie);

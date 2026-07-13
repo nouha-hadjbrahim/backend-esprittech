@@ -8,10 +8,7 @@ import tn.esprit.backend_esprittech.enums.StatutCandidature;
 import java.time.Instant;
 
 @Entity
-@Table(name = "candidatures", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_candidature_sujet_etudiant",
-                columnNames = {"sujet_id", "etudiant_id"})
-})
+@Table(name = "candidatures")
 @Getter
 @Setter
 @NoArgsConstructor

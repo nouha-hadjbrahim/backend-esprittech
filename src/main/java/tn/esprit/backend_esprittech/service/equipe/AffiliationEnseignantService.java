@@ -71,6 +71,8 @@ public class AffiliationEnseignantService {
         return toResponse(affiliationRepository.save(affiliation));
     }
 
+    
+    @Transactional(readOnly = true)
     public String getLabelById(Long id) {
         AffiliationEnseignant a = affiliationRepository.findById(id).orElse(null);
         if (a == null) return "Inconnu";
@@ -78,6 +80,7 @@ public class AffiliationEnseignantService {
         return enseignantNom + " - équipe " + a.getEquipe().getNom();
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> getOldValues(Long affiliationId) {
         AffiliationEnseignant a = affiliationRepository.findById(affiliationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Demande d'affiliation introuvable (id=" + affiliationId + ")"));

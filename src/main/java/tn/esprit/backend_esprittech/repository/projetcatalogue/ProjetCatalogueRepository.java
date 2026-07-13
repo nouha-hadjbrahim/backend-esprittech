@@ -10,6 +10,8 @@ import tn.esprit.backend_esprittech.enums.TypeProjet;
 
 import java.util.List;
 
+
+
 @Repository
 public interface ProjetCatalogueRepository extends JpaRepository<ProjetCatalogue, Long> {
 
@@ -17,6 +19,12 @@ public interface ProjetCatalogueRepository extends JpaRepository<ProjetCatalogue
 
     /** Tous les projets du catalogue applicatif, quel que soit leur statut (vue admin). */
     List<ProjetCatalogue> findAllByOrderByDateCreationDesc();
+
+    @Query("SELECT FUNCTION('YEAR', p.dateCreation) as y, FUNCTION('MONTH', p.dateCreation) as m, COUNT(p) FROM ProjetCatalogue p GROUP BY y, m ORDER BY y, m")
+    List<Object[]> countProjetsByMonth();
+
+    @Query("SELECT d.nom, COUNT(p) FROM ProjetCatalogue p JOIN p.domaines d GROUP BY d.nom ORDER BY COUNT(p) DESC")
+    List<Object[]> countByDomaine();
 
     /** Projets déposés par un encadrant (page « Mes projets »), les plus récents d'abord. */
     List<ProjetCatalogue> findByEncadrantIdOrderByDateCreationDesc(Long encadrantId);

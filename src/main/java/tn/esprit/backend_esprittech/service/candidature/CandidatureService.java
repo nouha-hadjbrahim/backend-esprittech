@@ -75,10 +75,24 @@ public class CandidatureService {
         if (sujet.getStatut() != StatutSujet.CANDIDATURE_OUVERTE) {
             throw new IllegalStateException("Le sujet n'est pas ouvert aux candidatures.");
         }
-        candidatureRepository.findBySujetIdAndEtudiantId(request.sujetId(), etudiant.getId())
-                .ifPresent(c -> {
-                    throw new IllegalStateException("Vous avez déjà déposé une candidature pour ce sujet.");
-                });
+
+        long ongoingProjects = affectationRepository.countActiveByEtudiantIdOnOngoingProjects(etudiant.getId());
+        if (ongoingProjects > 0) {
+            throw new IllegalStateException("Vous êtes déjà affecté à un sujet en cours.");
+        }
+
+        boolean hasActiveCandidature = candidatureRepository
+                .existsBySujetIdAndEtudiantIdAndStatutIn(
+                        request.sujetId(), etudiant.getId(),
+                        List.of(StatutCandidature.DEPOSEE, StatutCandidature.ACCEPTEE));
+        if (hasActiveCandidature) {
+            throw new IllegalStateException("Vous avez déjà déposé une candidature pour ce sujet.");
+        }
+
+        long activeAffectations = affectationRepository.countBySujetIdAndStatut(request.sujetId(), StatutAffectation.ACTIVE);
+        if (activeAffectations >= sujet.getCapaciteAccueil()) {
+            throw new IllegalStateException("Le sujet a atteint sa capacité d'accueil maximale.");
+        }
 
         Candidature candidature = Candidature.builder()
                 .sujetId(request.sujetId())
@@ -141,6 +155,12 @@ public class CandidatureService {
         }
 
         if (request.accepter()) {
+            SujetProjet sujet = getSujetOrThrow(candidature.getSujetId());
+            long activeAffectations = affectationRepository.countBySujetIdAndStatut(candidature.getSujetId(), StatutAffectation.ACTIVE);
+            if (activeAffectations >= sujet.getCapaciteAccueil()) {
+                throw new IllegalStateException("Le sujet a atteint sa capacité d'accueil maximale.");
+            }
+
             candidature.setStatut(StatutCandidature.ACCEPTEE);
             candidature.setDateDecision(Instant.now());
 
@@ -212,6 +232,11 @@ public class CandidatureService {
         affectation.setStatut(StatutAffectation.RETIREE_ARCHIVEE);
         affectation.setDateRetrait(Instant.now());
         affectation.setMotifRetrait(request.motifRetrait());
+
+        Candidature candidature = affectation.getCandidature();
+        candidature.setStatut(StatutCandidature.RETIREE);
+        candidature.setDateDecision(Instant.now());
+        candidatureRepository.save(candidature);
 
         return affectationMapper.toResponse(affectationRepository.save(affectation));
     }
