@@ -155,16 +155,20 @@ public class UserService {
                 .orElseThrow(() -> new NoSuchElementException("Utilisateur introuvable (" + email + ")"));
     }
 
+    @Transactional(readOnly = true)
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication.getPrincipal() instanceof String) {
             throw new NoSuchElementException("Aucun utilisateur authentifié");
         }
+        String email;
         if (authentication.getPrincipal() instanceof User user) {
-            return user;
+            email = user.getEmail();
+        } else {
+            email = authentication.getName();
         }
-        return findByEmail(authentication.getName());
+        return findByEmail(email);
     }
 
     /** Profil enrichi de l'utilisateur courant (avec son affiliation), pour /auth/me. */

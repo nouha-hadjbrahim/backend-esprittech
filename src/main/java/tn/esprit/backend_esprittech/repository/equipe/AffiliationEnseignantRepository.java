@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface AffiliationEnseignantRepository extends JpaRepository<AffiliationEnseignant, Long> {
 
+    long countByStatut(StatutAffiliation statut);
+
     List<AffiliationEnseignant> findByEnseignantIdOrderByDateDemandeDesc(Long enseignantId);
 
     List<AffiliationEnseignant> findByEquipeIdOrderByDateDemandeDesc(Long equipeId);

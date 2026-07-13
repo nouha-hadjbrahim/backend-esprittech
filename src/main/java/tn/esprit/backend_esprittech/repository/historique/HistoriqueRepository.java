@@ -11,6 +11,7 @@ import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Repository
 public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
@@ -36,4 +37,6 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
     Page<Historique> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(EntityType entityType, Long entityId, Pageable pageable);
 
     Page<Historique> findByActorIdOrderByCreatedAtDesc(Long actorId, Pageable pageable);
+
+    List<Historique> findTop15ByOrderByCreatedAtDesc();
 }

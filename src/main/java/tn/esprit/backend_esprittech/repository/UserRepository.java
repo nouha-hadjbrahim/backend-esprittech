@@ -13,8 +13,14 @@ import java.util.Optional;
 
 import tn.esprit.backend_esprittech.enums.Role;
 
+
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+
+    long countByRole(Role role);
+
+    @Query(value = "SELECT YEAR(u.created_at) as y, MONTH(u.created_at) as m, COUNT(*) FROM users u GROUP BY y, m ORDER BY y, m", nativeQuery = true)
+    List<Object[]> countUsersByMonth();
 
     Optional<User> findByEmail(String email);
 

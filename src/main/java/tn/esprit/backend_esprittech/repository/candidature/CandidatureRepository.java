@@ -8,10 +8,15 @@ import tn.esprit.backend_esprittech.enums.StatutCandidature;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.jpa.repository.Query;
+
 @Repository
 public interface CandidatureRepository extends JpaRepository<Candidature, Long> {
 
     long countByStatut(StatutCandidature statut);
+
+    @Query(value = "SELECT YEAR(c.date_depot) as y, MONTH(c.date_depot) as m, COUNT(*) FROM candidatures c GROUP BY y, m ORDER BY y, m", nativeQuery = true)
+    List<Object[]> countCandidaturesByMonth();
 
     /** Toutes les candidatures d'un sujet (vue encadrant) */
     List<Candidature> findBySujetIdOrderByDateDepotAsc(Long sujetId);
