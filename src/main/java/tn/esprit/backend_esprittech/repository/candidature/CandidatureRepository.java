@@ -30,8 +30,14 @@ public interface CandidatureRepository extends JpaRepository<Candidature, Long> 
     /** Vérifier si un étudiant a déjà candidaté sur ce sujet (unicité) */
     Optional<Candidature> findBySujetIdAndEtudiantId(Long sujetId, Long etudiantId);
 
+    /** Vérifier si un étudiant a une candidature avec un statut donné sur un sujet */
+    boolean existsBySujetIdAndEtudiantIdAndStatutIn(Long sujetId, Long etudiantId, List<StatutCandidature> statuts);
+
     /** Nombre de candidatures acceptées pour un sujet (pour vérif capacité) */
     long countBySujetIdAndStatut(Long sujetId, StatutCandidature statut);
+
+    /** Vérifier si un étudiant a déjà une candidature acceptée (any sujet) */
+    boolean existsByEtudiantIdAndStatut(Long etudiantId, StatutCandidature statut);
 
     /** Autres candidatures en attente du même étudiant (pour archivage auto à l'acceptation) */
     List<Candidature> findByEtudiantIdAndStatut(Long etudiantId, StatutCandidature statut);
