@@ -454,4 +454,20 @@ class AffiliationEnseignantServiceTest {
         assertEquals(10L, result.get("equipeId"));
         assertEquals("Approuve", result.get("motifDecision"));
     }
+
+    // ---- getLabelById ----
+
+    @Test
+    void getLabelById_found_returnsLabel() {
+        when(affiliationRepository.findById(100L)).thenReturn(Optional.of(savedAffiliation));
+
+        assertEquals("John Doe - équipe Équipe Alpha", service.getLabelById(100L));
+    }
+
+    @Test
+    void getLabelById_notFound_returnsInconnu() {
+        when(affiliationRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getLabelById(99L));
+    }
 }

@@ -5,21 +5,16 @@ package tn.esprit.backend_esprittech.service.CritereEval;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereEliminatoireRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.CritereEliminatoireResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.CritereEval.CritereEliminatoire;
-import tn.esprit.backend_esprittech.enums.ActionType;
-import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +24,6 @@ public class CritereEliminatoireService {
     private final CritereEliminatoireRepository repository;
     private final CriterionConfigurationPolicy configurationPolicy;
 
-    @Historise(action = ActionType.CREATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#result.id()", summaryExpression = "'Création critère éliminatoire ' + #result.libelle()")
     public CritereEliminatoireResponse create(CritereEliminatoireRequest request) {
         validateRequest(request);
 
@@ -40,16 +34,6 @@ public class CritereEliminatoireService {
         return toResponse(repository.save(critere));
     }
 
-    public Map<String, Object> getOldValues(Long id) {
-        CritereEliminatoire c = getEntity(id);
-        Map<String, Object> map = new HashMap<>();
-        map.put("libelle", c.getLibelle());
-        map.put("actif", c.getActif());
-        map.put("ordre", c.getOrdre());
-        return map;
-    }
-
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getOldValues(#id)", summaryExpression = "'Modification critère éliminatoire ' + #result.libelle()")
     public CritereEliminatoireResponse update(Long id, CritereEliminatoireRequest request) {
         validateRequest(request);
 
@@ -60,14 +44,12 @@ public class CritereEliminatoireService {
         return toResponse(repository.save(critere));
     }
 
-    @Historise(action = ActionType.DEACTIVATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getOldValues(#id)", newValuesExpression = "{'actif': false}", summaryExpression = "'Désactivation critère éliminatoire (id=' + #id + ')'")
     public void deactivate(Long id) {
         CritereEliminatoire critere = getEntity(id);
         critere.setActif(false);
         repository.save(critere);
     }
 
-    @Historise(action = ActionType.ACTIVATE, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#id", oldValuesExpression = "@critereEliminatoireService.getOldValues(#id)", newValuesExpression = "{'actif': true}", summaryExpression = "'Activation critère éliminatoire (id=' + #id + ')'")
     public void activate(Long id) {
         CritereEliminatoire critere = getEntity(id);
         critere.setActif(true);
@@ -75,7 +57,6 @@ public class CritereEliminatoireService {
         repository.save(critere);
     }
 
-    @Historise(action = ActionType.REORDER, entityType = EntityType.CRITERE_ELIMINATOIRE, entityIdExpression = "#requests[0].critereId()", oldValuesExpression = "@critereEliminatoireService.getOldValues(#requests[0].critereId())", summaryExpression = "'Réordonnancement de ' + #requests.size() + ' critères éliminatoires'")
     public void reorder(List<OrdreCritereRequest> requests) {
         for (OrdreCritereRequest request : requests) {
             CritereEliminatoire critere = getEntity(request.critereId());

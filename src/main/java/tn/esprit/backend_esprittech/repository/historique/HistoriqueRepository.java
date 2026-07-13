@@ -15,8 +15,9 @@ import java.time.LocalDateTime;
 @Repository
 public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
 
-    @Query("""
+    @Query(value = """
             SELECT h FROM Historique h
+            LEFT JOIN FETCH h.actor
             WHERE (:entityType IS NULL OR h.entityType = :entityType)
               AND (:entityId IS NULL OR h.entityId = :entityId)
               AND (:action IS NULL OR h.action = :action)
@@ -24,6 +25,15 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
               AND (:dateFrom IS NULL OR h.createdAt >= :dateFrom)
               AND (:dateTo IS NULL OR h.createdAt <= :dateTo)
             ORDER BY h.createdAt DESC
+            """,
+            countQuery = """
+            SELECT COUNT(h) FROM Historique h
+            WHERE (:entityType IS NULL OR h.entityType = :entityType)
+              AND (:entityId IS NULL OR h.entityId = :entityId)
+              AND (:action IS NULL OR h.action = :action)
+              AND (:actorId IS NULL OR h.actor.id = :actorId)
+              AND (:dateFrom IS NULL OR h.createdAt >= :dateFrom)
+              AND (:dateTo IS NULL OR h.createdAt <= :dateTo)
             """)
     Page<Historique> search(@Param("entityType") EntityType entityType,
                              @Param("entityId") Long entityId,

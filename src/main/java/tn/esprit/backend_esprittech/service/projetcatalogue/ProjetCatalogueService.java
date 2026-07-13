@@ -155,6 +155,12 @@ public class ProjetCatalogueService {
                 .stream().map(mapper::toCard).toList();
     }
 
+    public String getTitreById(Long id) {
+        return projetRepository.findById(id)
+                .map(ProjetCatalogue::getTitre)
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long id) {
         ProjetCatalogue p = getProjetOrThrow(id);
         Map<String, Object> map = new HashMap<>();
@@ -162,7 +168,7 @@ public class ProjetCatalogueService {
         return map;
     }
 
-    @Historise(action = ActionType.ACCEPT, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation projet catalogue (id=' + #id + ')'")
+    @Historise(action = ActionType.ACCEPT, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation projet catalogue ' + @projetCatalogueService.getTitreById(#id)")
     public ProjetCatalogueResponse valider(Long id) {
         User chef = currentChef();
         ProjetCatalogue projet = getProjetOrThrow(id);
@@ -176,7 +182,7 @@ public class ProjetCatalogueService {
         return mapper.toResponse(projetRepository.save(projet));
     }
 
-    @Historise(action = ActionType.REFUSE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", metadataExpression = "{'motifRefus': #request.motifRefus()}", summaryExpression = "'Refus projet catalogue (id=' + #id + ')'")
+    @Historise(action = ActionType.REFUSE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", metadataExpression = "{'motifRefus': #request.motifRefus()}", summaryExpression = "'Refus projet catalogue ' + @projetCatalogueService.getTitreById(#id)")
     public ProjetCatalogueResponse refuser(Long id, RefuserProjetRequest request) {
         User chef = currentChef();
         ProjetCatalogue projet = getProjetOrThrow(id);
@@ -242,7 +248,7 @@ public class ProjetCatalogueService {
     // Suppression (admin)
     // -------------------------------------------------------------------------
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", summaryExpression = "'Suppression projet catalogue (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", summaryExpression = "'Suppression projet catalogue ' + @projetCatalogueService.getTitreById(#id)")
     public void supprimerProjetAsAdmin(Long id) {
         ProjetCatalogue projet = getProjetOrThrow(id);
         livrableCatalogueRepository.deleteAll(livrableCatalogueRepository.findByProjetId(id));
