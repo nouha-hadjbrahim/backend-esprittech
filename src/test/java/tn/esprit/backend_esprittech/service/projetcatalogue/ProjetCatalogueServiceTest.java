@@ -658,5 +658,21 @@ class ProjetCatalogueServiceTest {
 
         assertEquals(projet.getStatut(), result.get("statut"));
     }
+
+    // ---- getTitreById ----
+
+    @Test
+    void getTitreById_found_returnsTitre() {
+        when(projetRepository.findById(1L)).thenReturn(Optional.of(projet));
+
+        assertEquals("Projet Test", service.getTitreById(1L));
+    }
+
+    @Test
+    void getTitreById_notFound_returnsInconnu() {
+        when(projetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getTitreById(99L));
+    }
 }
 }

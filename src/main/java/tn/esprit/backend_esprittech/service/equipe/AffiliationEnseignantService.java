@@ -71,6 +71,13 @@ public class AffiliationEnseignantService {
         return toResponse(affiliationRepository.save(affiliation));
     }
 
+    public String getLabelById(Long id) {
+        AffiliationEnseignant a = affiliationRepository.findById(id).orElse(null);
+        if (a == null) return "Inconnu";
+        String enseignantNom = a.getEnseignant().getPrenom() + " " + a.getEnseignant().getNom();
+        return enseignantNom + " - équipe " + a.getEquipe().getNom();
+    }
+
     public Map<String, Object> getOldValues(Long affiliationId) {
         AffiliationEnseignant a = affiliationRepository.findById(affiliationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Demande d'affiliation introuvable (id=" + affiliationId + ")"));
@@ -83,7 +90,7 @@ public class AffiliationEnseignantService {
     }
 
     @Transactional
-    @Historise(action = ActionType.TRAITER_AFFILIATION, entityType = EntityType.AFFILIATION_ENSEIGNANT, entityIdExpression = "#affiliationId", oldValuesExpression = "@affiliationEnseignantService.getOldValues(#affiliationId)", summaryExpression = "'Traitement de la demande d''affiliation (id=' + #affiliationId + ', statut=' + #result.statut() + ')'", metadataExpression = "{'equipeId': #equipeId, 'statut': #statut.name(), 'motif': #motifDecision, 'deciderId': #decider.id}")
+    @Historise(action = ActionType.TRAITER_AFFILIATION, entityType = EntityType.AFFILIATION_ENSEIGNANT, entityIdExpression = "#affiliationId", oldValuesExpression = "@affiliationEnseignantService.getOldValues(#affiliationId)", summaryExpression = "'Traitement de la demande d''affiliation ' + @affiliationEnseignantService.getLabelById(#affiliationId) + ' (statut=' + #result.statut() + ')'", metadataExpression = "{'equipeId': #equipeId, 'statut': #statut.name(), 'motif': #motifDecision, 'deciderId': #decider.id}")
     public AffiliationEnseignantResponse traiter(Long affiliationId, Long equipeId, User decider,
                                                   StatutAffiliation statut, String motifDecision) {
         if (decider.getRole() != Role.ROLE_ADMIN && decider.getRole() != Role.ROLE_CHEF_EQUIPE) {

@@ -444,4 +444,23 @@ class SujetProjetServiceTest {
 
         assertTrue(result.isEmpty());
     }
+
+    // ---- getTitreById ----
+
+    @Test
+    void getTitreById_found_returnsTitre() {
+        SujetProjet entity = new SujetProjet();
+        entity.setId(1L);
+        entity.setTitre("Mon Super Projet");
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        assertEquals("Mon Super Projet", service.getTitreById(1L));
+    }
+
+    @Test
+    void getTitreById_notFound_returnsInconnu() {
+        when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getTitreById(99L));
+    }
 }

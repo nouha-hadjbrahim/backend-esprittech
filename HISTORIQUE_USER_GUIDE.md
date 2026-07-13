@@ -33,7 +33,7 @@ Le système d'historisation enregistre automatiquement **toutes les actions impo
     • Date                       (ex: 05/07/2026 à 14:30)
 ```
 
-**Important :** Vous n'avez rien à configurer. Les développeurs ont déjà annoté ~95 méthodes. Vous pouvez dès maintenant consulter l'historique via l'API.
+**Important :** Vous n'avez rien à configurer. Les développeurs ont déjà annoté ~44 méthodes. Vous pouvez dès maintenant consulter l'historique via l'API.
 
 ---
 
@@ -339,31 +339,6 @@ public CandidatureIndustrialisationResponse decideGo(Long id, DecisionRequest re
 | `new_values` | `{"statut":"GO","orientation":"DSI"}` |
 | `metadata` | `{"commentaire":"Projet validé par la CI"}` |
 
-### Exemple 3 : Désactivation d'un critère
-
-**Code :**
-```java
-@Historise(
-    action = ActionType.DEACTIVATE,
-    entityType = EntityType.CRITERE_NOTE,
-    entityIdExpression = "#id",
-    oldValuesExpression = "@critereNoteService.getOldValues(#id)",
-    newValuesExpression = "{'actif': false}",
-    summaryExpression = "'Désactivation critère note (id=' + #id + ')'"
-)
-public void deactivate(Long id) { ... }
-```
-
-**Entrée en base :**
-| Champ | Valeur |
-|-------|--------|
-| `action` | `DEACTIVATE` |
-| `entity_type` | `CRITERE_NOTE` |
-| `entity_id` | 7 |
-| `summary` | `Désactivation critère note (id=7)` |
-| `old_values` | `{"libelle":"Note soutenance","actif":true,"ponderation":30}` |
-| `new_values` | `{"actif":false}` |
-
 ---
 
 ## 5. Tester l'historisation
@@ -450,19 +425,12 @@ Toutes les actions possibles, avec leur signification :
 |--------|-------------|
 | `USER` | Utilisateur (compte) |
 | `SUJET_PROJET` | Sujet de projet (PFE/Stage) |
-
 | `CANDIDATURE` | Candidature à un sujet |
 | `PROJET_CATALOGUE` | Projet catalogue |
 | `LIVRABLE` | Livrable (fichier ou lien) |
 | `EQUIPE_RECHERCHE` | Équipe de recherche |
-
 | `AFFILIATION_ENSEIGNANT` | Affiliation d'un enseignant à une équipe |
-| `CRITERE_NOTE` | Critère de notation |
-| `CRITERE_ELIMINATOIRE` | Critère éliminatoire |
-| `CRITERE_NOTE_RULE` | Règle de critère de note |
-| `NOTE_LEVEL` | Niveau de note |
 | `EVALUATION` | Évaluation d'un projet |
-
 | `CANDIDATURE_INDUSTRIALISATION` | Candidature à l'industrialisation |
 
 ---

@@ -488,4 +488,56 @@ class CandidatureServiceTest {
         } catch (Exception ignored) {}
         return a;
     }
+
+    // ---- getCandidatureLabel ----
+
+    @Test
+    void getCandidatureLabel_found_returnsLabel() {
+        sujetOuvert.setTitre("Sujet IoT");
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+
+        assertEquals("Sami Ben Ali - sujet Sujet IoT", candidatureService.getCandidatureLabel(100L));
+    }
+
+    @Test
+    void getCandidatureLabel_notFound_returnsInconnu() {
+        when(candidatureRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", candidatureService.getCandidatureLabel(99L));
+    }
+
+    @Test
+    void getCandidatureLabel_sujetNotFound_showsInconnu() {
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertEquals("Sami Ben Ali - sujet Inconnu", candidatureService.getCandidatureLabel(100L));
+    }
+
+    // ---- getAffectationLabel ----
+
+    @Test
+    void getAffectationLabel_found_returnsLabel() {
+        sujetOuvert.setTitre("Sujet IoT");
+        when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+
+        assertEquals("Sami Ben Ali - sujet Sujet IoT", candidatureService.getAffectationLabel(200L));
+    }
+
+    @Test
+    void getAffectationLabel_notFound_returnsInconnu() {
+        when(affectationRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", candidatureService.getAffectationLabel(99L));
+    }
+
+    @Test
+    void getAffectationLabel_sujetNotFound_showsInconnu() {
+        when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertEquals("Sami Ben Ali - sujet Inconnu", candidatureService.getAffectationLabel(200L));
+    }
 }

@@ -103,7 +103,7 @@ public class EvaluationService {
         return persistEvaluation(projet, data, resolveActorName(userService.getCurrentUser()), null);
     }
 
-    @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse calculateAutomaticEvaluation(Long projetId, String recalculationReason) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
         User currentUser = userService.getCurrentUser();
@@ -181,6 +181,12 @@ public class EvaluationService {
                 .toList();
     }
 
+    public String getProjetTitreById(Long projetId) {
+        return sujetProjetRepository.findById(projetId)
+                .map(SujetProjet::getTitre)
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long projetId) {
         Evaluation e = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId).orElse(null);
         if (e == null) return Map.of();
@@ -191,7 +197,7 @@ public class EvaluationService {
         return map;
     }
 
-    @Historise(action = ActionType.ACCEPT, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'VALIDATED', 'finalValidatedScore': #result.finalValidatedScore()}", summaryExpression = "'Validation évaluation projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.ACCEPT, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'VALIDATED', 'finalValidatedScore': #result.finalValidatedScore()}", summaryExpression = "'Validation évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse validateLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
         SujetProjet projet = getProjet(projetId);
         User current = userService.getCurrentUser();
@@ -209,7 +215,7 @@ public class EvaluationService {
         return toResponse(evaluationRepository.save(evaluation));
     }
 
-    @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse rejectLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
         User current = userService.getCurrentUser();
         ensureCanValidate(current);
@@ -223,7 +229,7 @@ public class EvaluationService {
         return toResponse(evaluationRepository.save(evaluation));
     }
 
-    @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse overrideLatestEvaluation(Long projetId, EvaluationOverrideRequest request) {
         SujetProjet projet = getProjet(projetId);
         User current = userService.getCurrentUser();
