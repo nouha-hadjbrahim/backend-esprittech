@@ -193,7 +193,7 @@ public class EquipeRechercheService {
 
     /** Supprime une équipe (uniquement si elle ne contient aucun membre). */
     @Transactional
-    @Historise(action = ActionType.DELETE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#id", oldValuesExpression = "@equipeRechercheService.getOldValues(#id)", summaryExpression = "'Suppression de l''équipe (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#id", oldValuesExpression = "@equipeRechercheService.getOldValues(#id)", summaryExpression = "'Suppression de l''équipe ' + @equipeRechercheService.getNomById(#id)")
     public void delete(Long id) {
         EquipeRecherche equipe = getEntite(id);
         if (compterMembres(equipe) > 0) {
@@ -223,6 +223,12 @@ public class EquipeRechercheService {
         Long tid = Objects.requireNonNull(equipeId, "equipeId");
         return equipeRepository.findById(tid)
                 .orElseThrow(() -> new ResourceNotFoundException("Équipe introuvable (id=" + equipeId + ")"));
+    }
+
+    public String getNomById(Long id) {
+        return equipeRepository.findById(id)
+                .map(EquipeRecherche::getNom)
+                .orElse("Inconnu");
     }
 
     public Map<String, Object> getOldValues(Long id) {

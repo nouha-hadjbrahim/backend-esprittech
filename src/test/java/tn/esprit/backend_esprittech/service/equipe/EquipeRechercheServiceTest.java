@@ -1248,4 +1248,22 @@ class EquipeRechercheServiceTest {
 
         assertEquals(List.of(), result.get("memberIds"));
     }
+
+    // ---- getNomById ----
+
+    @Test
+    void getNomById_found_returnsNom() {
+        EquipeRecherche e = equipeVide();
+        e.setNom("Data Science");
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+
+        assertEquals("Data Science", service.getNomById(1L));
+    }
+
+    @Test
+    void getNomById_notFound_returnsInconnu() {
+        when(equipeRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getNomById(99L));
+    }
 }

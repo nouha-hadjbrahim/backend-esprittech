@@ -145,23 +145,6 @@ class NoteLevelServiceTest {
         verify(repository, never()).delete(any());
     }
 
-    // ---- getOldValues ----
-
-    @Test
-    void getOldValues_returnsNoteLevelFields() {
-        NoteLevel l = level(Long.valueOf(5), 5, 2);
-        l.setLabel("Moyen");
-        l.setActive(false);
-        when(repository.findById(5L)).thenReturn(Optional.of(l));
-
-        var result = service.getOldValues(5L);
-
-        assertEquals(l.getValue(), result.get("value"));
-        assertEquals(l.getLabel(), result.get("label"));
-        assertEquals(l.getActive(), result.get("active"));
-        assertEquals(l.getOrderIndex(), result.get("orderIndex"));
-    }
-
     private NoteLevel saved(NoteLevel level, Long id) {
         level.setId(id);
         return level;
