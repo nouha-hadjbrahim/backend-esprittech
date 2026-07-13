@@ -643,8 +643,14 @@ public class SujetProjetService {
     }
 
     @Transactional
-    @Historise(action = ActionType.DECLARER_TERMINAISON, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'REALISATION_TERMINEE'}", summaryExpression = "'Déclaration terminaison sujet ' + @sujetProjetService.getTitreById(#id)")
-    public SujetProjetResponse declarerTerminaison(Long id) {
+    @Historise(
+            action = ActionType.DECLARER_TERMINAISON,
+            entityType = EntityType.SUJET_PROJET,
+            entityIdExpression = "#id",
+            oldValuesExpression = "@sujetProjetService.getOldValues(#id)",
+            newValuesExpression = "{'statut': 'REALISATION_TERMINEE'}",
+            summaryExpression = "'Déclaration terminaison sujet ' + @sujetProjetService.getTitreById(#id)")
+    public SujetProjetResponse declarerTerminaison(Long id, TerminaisonSujetRequest request) {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
