@@ -24,7 +24,9 @@ import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.TerminaisonSujetRequest;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -57,6 +59,7 @@ public class SujetProjetService {
     private final SujetReferenceService referenceService;
     private final EquipeRechercheRepository equipeRechercheRepository;
     private final AffectationRepository affectationRepository;
+    private final ProjetCatalogueService projetCatalogueService;
 
     public SujetProjetService(SujetProjetRepository sujetProjetRepository,
                               SujetProjetMapper sujetProjetMapper,
@@ -64,7 +67,8 @@ public class SujetProjetService {
                               UserRepository userRepository,
                               SujetReferenceService referenceService,
                               EquipeRechercheRepository equipeRechercheRepository,
-                              AffectationRepository affectationRepository) {
+                              AffectationRepository affectationRepository,
+                              ProjetCatalogueService projetCatalogueService) {
         this.sujetProjetRepository = sujetProjetRepository;
         this.sujetProjetMapper = sujetProjetMapper;
         this.userService = userService;
@@ -72,9 +76,15 @@ public class SujetProjetService {
         this.referenceService = referenceService;
         this.equipeRechercheRepository = equipeRechercheRepository;
         this.affectationRepository = affectationRepository;
+        this.projetCatalogueService = projetCatalogueService;
     }
 
-    @Historise(action = ActionType.CREATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#result.id()", summaryExpression = "'Création sujet ' + #result.titre()")
+    @Historise(
+            action = ActionType.CREATE,
+            entityType = EntityType.SUJET_PROJET,
+            entityIdExpression = "#result.id()",
+            newValuesExpression = "{'statut': #result.statut()}",
+            summaryExpression = "'Création sujet ' + #result.titre()")
     public SujetProjetResponse creerSujet(SujetProjetRequest request) {
         User encadrant = getCurrentEncadrant();
         ensureEncadrantAffilie(encadrant);
@@ -246,17 +256,23 @@ public class SujetProjetService {
         return toResponses(sujets);
     }
 
+    public String getTitreById(Long id) {
+        return sujetProjetRepository.findById(id)
+                .map(SujetProjet::getTitre)
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long id) {
         SujetProjet s = sujetProjetRepository.findById(id).orElse(null);
         if (s == null) return Map.of();
         Map<String, Object> map = new HashMap<>();
-        map.put("statut", s.getStatut());
+        map.put("statut", s.getStatut() != null ? s.getStatut().name() : null);
         map.put("titre", s.getTitre());
         map.put("catalogue", s.getCatalogue());
         return map;
     }
 
-    @Historise(action = ActionType.VALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation sujet (id=' + #id + ')'")
+    @Historise(action = ActionType.VALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation sujet ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse validerSujet(Long id) {
         User chef = getCurrentChefEquipe();
         SujetProjet sujet = findSujetForValidation(chef, id);
@@ -273,7 +289,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
-    @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet (id=' + #id + ')'")
+    @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse invaliderSujet(Long id, SujetInvalidationRequest request) {
         User chef = getCurrentChefEquipe();
         SujetProjet sujet = findSujetForValidation(chef, id);
@@ -290,7 +306,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet (id=' + #id + ')'")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse modifierSujet(Long id, SujetProjetRequest request) {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -300,7 +316,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Suppression sujet (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Suppression sujet ' + @sujetProjetService.getTitreById(#id)")
     public void supprimerSujet(Long id) {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -532,7 +548,7 @@ public class SujetProjetService {
         return page.map(this::toResponse);
     }
 
-    @Historise(action = ActionType.VALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation sujet par admin (id=' + #id + ')'")
+    @Historise(action = ActionType.VALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'VALIDE'}", summaryExpression = "'Validation sujet par admin ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse validerSujetAsAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -550,7 +566,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
-    @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet par admin (id=' + #id + ')'")
+    @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet par admin ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse invaliderSujetAsAdmin(Long id, SujetInvalidationRequest request) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -576,7 +592,7 @@ public class SujetProjetService {
         return toResponse(sujet);
     }
 
-    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet par admin (id=' + #id + ')'")
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet par admin ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse modifierSujetAsAdmin(Long id, SujetProjetRequest request) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -585,7 +601,7 @@ public class SujetProjetService {
         return toResponse(sujetProjetRepository.save(sujet));
     }
 
-    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Suppression sujet par admin (id=' + #id + ')'")
+    @Historise(action = ActionType.DELETE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Suppression sujet par admin ' + @sujetProjetService.getTitreById(#id)")
     public void supprimerSujetAsAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
@@ -627,8 +643,14 @@ public class SujetProjetService {
     }
 
     @Transactional
-    @Historise(action = ActionType.DECLARER_TERMINAISON, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'REALISATION_TERMINEE'}", summaryExpression = "'Déclaration terminaison sujet (id=' + #id + ')'")
-    public SujetProjetResponse declarerTerminaison(Long id) {
+    @Historise(
+            action = ActionType.DECLARER_TERMINAISON,
+            entityType = EntityType.SUJET_PROJET,
+            entityIdExpression = "#id",
+            oldValuesExpression = "@sujetProjetService.getOldValues(#id)",
+            newValuesExpression = "{'statut': 'REALISATION_TERMINEE'}",
+            summaryExpression = "'Déclaration terminaison sujet ' + @sujetProjetService.getTitreById(#id)")
+    public SujetProjetResponse declarerTerminaison(Long id, TerminaisonSujetRequest request) {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
@@ -640,8 +662,21 @@ public class SujetProjetService {
 
         sujet.setStatut(StatutSujet.REALISATION_TERMINEE);
         sujet.setDateTerminaison(LocalDateTime.now());
+        sujet.setCatalogue(true);
 
         SujetProjet saved = sujetProjetRepository.save(sujet);
+
+        String coverBase64 = request != null ? request.coverImageBase64() : null;
+        String coverType = request != null ? request.coverImageContentType() : null;
+        projetCatalogueService.publierDepuisSujetTermine(saved, coverBase64, coverType);
+
+        // Le score est calculé après commit par le listener d'évaluation existant,
+        // puis synchronisé sur le projet catalogue (évite le rollback-only).
         return toResponse(saved);
+    }
+
+    @Transactional
+    public SujetProjetResponse declarerTerminaison(Long id) {
+        return declarerTerminaison(id, null);
     }
 }

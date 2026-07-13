@@ -42,7 +42,7 @@ class AuthControllerTest {
     @BeforeEach
     void setUp() {
         userResponse = new UserResponse(1L, "Test", "User", "test@esprit.tn",
-                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
+                Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
                 false, null, null);
         authResponse = AuthResponse.of("access-token", "refresh-token", userResponse);
     }
@@ -57,7 +57,7 @@ class AuthControllerTest {
 
     @Test
     void register_returns201_withUserBodyAndCookies() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "ETU-001", "password123");
+        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "password123");
         when(authService.register(request)).thenReturn(authResponse);
         stubAuthCookies();
         var response = new MockHttpServletResponse();

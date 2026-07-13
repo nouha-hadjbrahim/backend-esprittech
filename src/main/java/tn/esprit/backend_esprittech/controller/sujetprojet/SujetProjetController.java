@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.backend_esprittech.dto.sujetprojet.request.TerminaisonSujetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.ReferenceItemRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
@@ -64,10 +65,11 @@ public class SujetProjetController {
     @PostMapping("/{id}/terminer")
     @PreAuthorize("hasAnyRole('ENSEIGNANT', 'CHEF_EQUIPE')")
     @Operation(summary = "Déclarer la terminaison d'un projet",
-            description = "Passe un sujet en cours de réalisation à 'REALISATION_TERMINEE'")
+            description = "Passe un sujet en cours de réalisation à 'REALISATION_TERMINEE' et le publie dans le catalogue.")
     public ResponseEntity<SujetProjetResponse> declarerTerminaison(
-            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
-        return ResponseEntity.ok(sujetProjetService.declarerTerminaison(id));
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id,
+            @RequestBody(required = false) TerminaisonSujetRequest request) {
+        return ResponseEntity.ok(sujetProjetService.declarerTerminaison(id, request));
     }
     // ============================================================
 

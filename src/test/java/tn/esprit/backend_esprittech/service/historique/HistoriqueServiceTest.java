@@ -19,7 +19,10 @@ import tn.esprit.backend_esprittech.entity.historique.Historique;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.historique.HistoriqueRepository;
+import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
+import tn.esprit.backend_esprittech.service.UserService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,6 +38,9 @@ class HistoriqueServiceTest {
 
     @Mock private HistoriqueRepository repository;
     @Mock private ObjectMapper objectMapper;
+    @Mock private CandidatureRepository candidatureRepository;
+    @Mock private SujetProjetRepository sujetProjetRepository;
+    @Mock private UserService userService;
 
     @InjectMocks private HistoriqueService historiqueService;
 

@@ -945,4 +945,36 @@ class IndustrialisationServiceTest {
 
         assertEquals(candidature.getStatut().name(), result.get("statut"));
     }
+
+    // ---- getProjetTitreById ----
+
+    @Test
+    void getProjetTitreById_found_returnsTitre() {
+        when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
+
+        assertEquals("Plateforme IoT", industrialisationService.getProjetTitreById(42L));
+    }
+
+    @Test
+    void getProjetTitreById_notFound_returnsInconnu() {
+        when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", industrialisationService.getProjetTitreById(99L));
+    }
+
+    // ---- getProjetTitreByCandidatureId ----
+
+    @Test
+    void getProjetTitreByCandidatureId_found_returnsTitre() {
+        when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
+
+        assertEquals("Plateforme IoT", industrialisationService.getProjetTitreByCandidatureId(11L));
+    }
+
+    @Test
+    void getProjetTitreByCandidatureId_notFound_returnsInconnu() {
+        when(candidatureRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", industrialisationService.getProjetTitreByCandidatureId(99L));
+    }
 }

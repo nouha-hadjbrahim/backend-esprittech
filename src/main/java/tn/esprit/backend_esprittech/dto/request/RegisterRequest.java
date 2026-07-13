@@ -21,9 +21,6 @@ public record RegisterRequest(
         @Pattern(regexp = ".+@esprit\\.tn$", message = "L'email doit se terminer par @esprit.tn")
         String email,
 
-        @NotBlank(message = "L'identifiant est obligatoire")
-        String identifiant,
-
         @NotBlank(message = "Le mot de passe est obligatoire")
         @Size(min = 8, message = "Le mot de passe doit contenir au moins 8 caractères")
         @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$",

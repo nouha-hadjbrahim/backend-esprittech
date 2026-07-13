@@ -78,7 +78,7 @@ Au premier démarrage, un **compte admin** est créé :
    Un exemple est fourni : `src/main/resources/sample-referentiel.csv`.
    Format : `nom,prenom,email,identifiant,type,telephone`.
 2. **Utilisateur** s'inscrit (`POST /api/auth/register`) — accepté seulement si
-   l'email **ou** l'identifiant correspond à une ligne du référentiel.
+   l'email correspond à une ligne du référentiel.
    Le rôle (ETUDIANT/ENSEIGNANT) est déduit du type référentiel.
 3. **Admin** crée une équipe (`POST /api/admin/equipes`) en désignant un chef
    enseignant → promu `ROLE_CHEF_EQUIPE`. Réassignation : `PUT /api/admin/equipes/{id}/chef`.
@@ -115,7 +115,7 @@ curl -X POST http://localhost:8080/api/admin/import-referentiel \
 # (email en @esprit.tn ; mot de passe : 1 maj, 1 min, 1 chiffre, >= 8 car.)
 curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"nom":"Hadjbrahim","prenom":"Nouha","email":"nouha.hadjbrahim@esprit.tn","identifiant":"ET10011","password":"Passw0rd1"}'
+  -d '{"nom":"Hadjbrahim","prenom":"Nouha","email":"nouha.hadjbrahim@esprit.tn","password":"Passw0rd1"}'
 ```
 
 ## Sécurité — notes

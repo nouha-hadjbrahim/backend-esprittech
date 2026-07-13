@@ -17,6 +17,9 @@ public interface ProjetCatalogueRepository extends JpaRepository<ProjetCatalogue
 
     long countByStatut(StatutProjet statut);
 
+    /** Tous les projets du catalogue applicatif, quel que soit leur statut (vue admin). */
+    List<ProjetCatalogue> findAllByOrderByDateCreationDesc();
+
     @Query("SELECT FUNCTION('YEAR', p.dateCreation) as y, FUNCTION('MONTH', p.dateCreation) as m, COUNT(p) FROM ProjetCatalogue p GROUP BY y, m ORDER BY y, m")
     List<Object[]> countProjetsByMonth();
 
@@ -31,6 +34,10 @@ public interface ProjetCatalogueRepository extends JpaRepository<ProjetCatalogue
 
     /** Projets dont le statut figure dans la liste fournie (statuts publics du catalogue). */
     List<ProjetCatalogue> findByStatutInOrderByDateCreationDesc(List<StatutProjet> statuts);
+
+    boolean existsBySujetId(Long sujetId);
+
+    java.util.Optional<ProjetCatalogue> findBySujetId(Long sujetId);
 
     /**
      * Catalogue public filtré. Seuls les projets dont le statut est dans {@code statuts}

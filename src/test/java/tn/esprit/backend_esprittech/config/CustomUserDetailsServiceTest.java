@@ -27,7 +27,7 @@ class CustomUserDetailsServiceTest {
     void loadUserByUsername_found() {
         User user = User.builder()
                 .id(1L).nom("Test").prenom("User")
-                .email("test@esprit.tn").identifiant("ETU-001")
+                .email("test@esprit.tn")
                 .password("encoded")
                 .role(Role.ROLE_ETUDIANT).typeUtilisateur(TypeUtilisateur.ETUDIANT)
                 .enabled(true).build();

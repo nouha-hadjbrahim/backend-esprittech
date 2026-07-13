@@ -51,7 +51,6 @@ class AuthServiceTest {
                 .id(1L)
                 .nom("Test").prenom("User")
                 .email("test@esprit.tn")
-                .identifiant("ETU-001")
                 .password("encoded")
                 .role(Role.ROLE_ETUDIANT)
                 .typeUtilisateur(TypeUtilisateur.ETUDIANT)
@@ -59,7 +58,7 @@ class AuthServiceTest {
                 .build();
 
         userResponse = new UserResponse(1L, "Test", "User", "test@esprit.tn",
-                "ETU-001", Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
+                Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
                 false, null, null);
 
         reference = ReferentielUtilisateur.builder()
@@ -73,11 +72,10 @@ class AuthServiceTest {
 
     @Test
     void register_success() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "ETU-001", "Password123");
+        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
 
-        when(referentielService.trouverCorrespondance("test@esprit.tn", "ETU-001")).thenReturn(reference);
+        when(referentielService.trouverCorrespondance("test@esprit.tn")).thenReturn(reference);
         when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(false);
-        when(userRepository.existsByIdentifiant("ETU-001")).thenReturn(false);
         when(passwordEncoder.encode("Password123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(tokenProvider.generateAccessToken(user)).thenReturn("access-token");
@@ -96,8 +94,8 @@ class AuthServiceTest {
 
     @Test
     void register_notInReferentiel_throws() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "ETU-001", "Password123");
-        when(referentielService.trouverCorrespondance("test@esprit.tn", "ETU-001"))
+        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
+        when(referentielService.trouverCorrespondance("test@esprit.tn"))
                 .thenThrow(new ReferentielNotFoundException("absent"));
 
         assertThrows(ReferentielNotFoundException.class, () -> authService.register(request));
@@ -106,20 +104,9 @@ class AuthServiceTest {
 
     @Test
     void register_emailAlreadyExists_throws() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "ETU-001", "Password123");
-        when(referentielService.trouverCorrespondance("test@esprit.tn", "ETU-001")).thenReturn(reference);
+        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
+        when(referentielService.trouverCorrespondance("test@esprit.tn")).thenReturn(reference);
         when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(true);
-
-        assertThrows(EmailAlreadyExistsException.class, () -> authService.register(request));
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void register_identifiantAlreadyExists_throws() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "ETU-001", "Password123");
-        when(referentielService.trouverCorrespondance("test@esprit.tn", "ETU-001")).thenReturn(reference);
-        when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(false);
-        when(userRepository.existsByIdentifiant("ETU-001")).thenReturn(true);
 
         assertThrows(EmailAlreadyExistsException.class, () -> authService.register(request));
         verify(userRepository, never()).save(any());

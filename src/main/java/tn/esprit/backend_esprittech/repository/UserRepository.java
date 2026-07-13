@@ -24,23 +24,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 
-    Optional<User> findByIdentifiant(String identifiant);
-
     List<User> findAllByIdIn(List<Long> ids);
 
     List<User> findByEquipeRechercheId(Long equipeId);
 
     boolean existsByEmail(String email);
 
-    boolean existsByIdentifiant(String identifiant);
-
-    /** Recherche paginée par nom, prénom, email ou identifiant (insensible à la casse). */
+    /** Recherche paginée par nom, prénom ou email (insensible à la casse). */
     @Query("""
             SELECT u FROM User u
             WHERE LOWER(u.nom) LIKE LOWER(CONCAT('%', :q, '%'))
                OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :q, '%'))
                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
-               OR LOWER(u.identifiant) LIKE LOWER(CONCAT('%', :q, '%'))
             """)
     Page<User> search(@Param("q") String q, Pageable pageable);
 
@@ -54,8 +49,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             WHERE u.role IN :roles
               AND (LOWER(u.nom) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.identifiant) LIKE LOWER(CONCAT('%', :q, '%')))
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')))
               AND (u.equipeRecherche IS NULL OR u.equipeRecherche.id = :equipeId)
               AND NOT EXISTS (
                   SELECT 1 FROM EquipeRecherche e2
@@ -75,8 +69,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             WHERE u.role IN :roles
               AND (LOWER(u.nom) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.identifiant) LIKE LOWER(CONCAT('%', :q, '%')))
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')))
               AND u.equipeRecherche IS NULL
               AND NOT EXISTS (
                   SELECT 1 FROM EquipeRecherche e2
@@ -102,7 +95,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
                 OR LOWER(u.nom) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.identifiant) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(CONCAT(u.prenom, ' ', u.nom)) LIKE LOWER(CONCAT('%', :q, '%'))
               )
             """)

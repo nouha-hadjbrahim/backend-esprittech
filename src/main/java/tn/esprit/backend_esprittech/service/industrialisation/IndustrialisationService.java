@@ -78,7 +78,7 @@ public class IndustrialisationService {
     private final LivrableService livrableService;
     private final MinioStorageService storageService;
 
-    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#result.id()", newValuesExpression = "{'statut': #result.statut().name(), 'typeIndustrialisation': #result.typeIndustrialisation().name()}", metadataExpression = "{'typeIndustrialisation': #request.typeIndustrialisation().name()}", summaryExpression = "'Création demande industrialisation (projetId=' + #projetId + ')'")
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#result.id()", newValuesExpression = "{'statut': #result.statut().name(), 'typeIndustrialisation': #result.typeIndustrialisation().name()}", metadataExpression = "{'typeIndustrialisation': #request.typeIndustrialisation().name()}", summaryExpression = "'Création demande industrialisation projet ' + @industrialisationService.getProjetTitreById(#projetId)")
     public CandidatureIndustrialisationResponse create(Long projetId, CandidatureIndustrialisationRequest request) {
         User current = userService.getCurrentUser();
         SujetProjet projet = getProjet(projetId);
@@ -188,7 +188,7 @@ public class IndustrialisationService {
         return soumettre(candidatureId, null);
     }
 
-    @Historise(action = ActionType.SUBMIT, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#candidatureId", oldValuesExpression = "@industrialisationService.getOldValues(#candidatureId)", newValuesExpression = "{'statut': 'SOUMISE'}", summaryExpression = "'Soumission demande industrialisation (id=' + #candidatureId + ')'")
+    @Historise(action = ActionType.SUBMIT, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#candidatureId", oldValuesExpression = "@industrialisationService.getOldValues(#candidatureId)", newValuesExpression = "{'statut': 'SOUMISE'}", summaryExpression = "'Soumission demande industrialisation projet ' + @industrialisationService.getProjetTitreByCandidatureId(#candidatureId)")
     public CandidatureIndustrialisationResponse soumettre(Long candidatureId, SubmitIndustrialisationRequest request) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
@@ -263,6 +263,18 @@ public class IndustrialisationService {
         return toResponse(candidature, true);
     }
 
+    public String getProjetTitreById(Long projetId) {
+        return sujetProjetRepository.findById(projetId)
+                .map(SujetProjet::getTitre)
+                .orElse("Inconnu");
+    }
+
+    public String getProjetTitreByCandidatureId(Long candidatureId) {
+        return candidatureRepository.findById(candidatureId)
+                .map(c -> c.getSujetProjet().getTitre())
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long id) {
         CandidatureIndustrialisation c = getCandidature(id);
         Map<String, Object> map = new HashMap<>();
@@ -297,7 +309,7 @@ public class IndustrialisationService {
         return toResponse(saved, true);
     }
 
-    @Historise(action = ActionType.DECISION_NOGO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getOldValues(#id)", newValuesExpression = "{'statut': 'NO_GO'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Décision NO GO (id=' + #id + ')'")
+    @Historise(action = ActionType.DECISION_NOGO, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#id", oldValuesExpression = "@industrialisationService.getOldValues(#id)", newValuesExpression = "{'statut': 'NO_GO'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Décision NO GO projet ' + @industrialisationService.getProjetTitreByCandidatureId(#id)")
     public CandidatureIndustrialisationResponse decideNoGo(Long id, DecisionNoGoRequest request) {
         User current = userService.getCurrentUser();
         ensureCi(current);

@@ -84,7 +84,7 @@ class AffiliationEnseignantServiceTest {
         equipe.setChef(chef);
 
         enseignantResponse = new UserResponse(1L, "Doe", "John", "john@test.tn",
-                "JD001", Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
+                Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
                 "Informatique", true, Instant.now(), false, null, null);
 
         savedAffiliation = new AffiliationEnseignant();
@@ -453,5 +453,21 @@ class AffiliationEnseignantServiceTest {
         assertEquals(1L, result.get("enseignantId"));
         assertEquals(10L, result.get("equipeId"));
         assertEquals("Approuve", result.get("motifDecision"));
+    }
+
+    // ---- getLabelById ----
+
+    @Test
+    void getLabelById_found_returnsLabel() {
+        when(affiliationRepository.findById(100L)).thenReturn(Optional.of(savedAffiliation));
+
+        assertEquals("John Doe - équipe Équipe Alpha", service.getLabelById(100L));
+    }
+
+    @Test
+    void getLabelById_notFound_returnsInconnu() {
+        when(affiliationRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getLabelById(99L));
     }
 }

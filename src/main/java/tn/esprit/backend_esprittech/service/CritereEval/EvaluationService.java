@@ -51,6 +51,7 @@ import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -85,6 +86,7 @@ public class EvaluationService {
     private final DeliverableContentExtractionService contentExtractionService;
     private final MlEvaluationClient mlEvaluationClient;
     private final ObjectMapper objectMapper;
+    private final ProjetCatalogueService projetCatalogueService;
 
     @Value("${evaluation.ml.recalculation-cooldown-seconds:0}")
     private long recalculationCooldownSeconds;
@@ -101,7 +103,7 @@ public class EvaluationService {
         return persistEvaluation(projet, data, resolveActorName(userService.getCurrentUser()), null);
     }
 
-    @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse calculateAutomaticEvaluation(Long projetId, String recalculationReason) {
         SujetProjet projet = getProjetAndValidateTerminated(projetId);
         User currentUser = userService.getCurrentUser();
@@ -179,6 +181,12 @@ public class EvaluationService {
                 .toList();
     }
 
+    public String getProjetTitreById(Long projetId) {
+        return sujetProjetRepository.findById(projetId)
+                .map(SujetProjet::getTitre)
+                .orElse("Inconnu");
+    }
+
     public Map<String, Object> getOldValues(Long projetId) {
         Evaluation e = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId).orElse(null);
         if (e == null) return Map.of();
@@ -189,7 +197,7 @@ public class EvaluationService {
         return map;
     }
 
-    @Historise(action = ActionType.ACCEPT, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'VALIDATED', 'finalValidatedScore': #result.finalValidatedScore()}", summaryExpression = "'Validation évaluation projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.ACCEPT, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'VALIDATED', 'finalValidatedScore': #result.finalValidatedScore()}", summaryExpression = "'Validation évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse validateLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
         SujetProjet projet = getProjet(projetId);
         User current = userService.getCurrentUser();
@@ -207,7 +215,7 @@ public class EvaluationService {
         return toResponse(evaluationRepository.save(evaluation));
     }
 
-    @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse rejectLatestEvaluation(Long projetId, EvaluationValidationRequest request) {
         User current = userService.getCurrentUser();
         ensureCanValidate(current);
@@ -221,7 +229,7 @@ public class EvaluationService {
         return toResponse(evaluationRepository.save(evaluation));
     }
 
-    @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet (id=' + #projetId + ')'")
+    @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
     public EvaluationResponse overrideLatestEvaluation(Long projetId, EvaluationOverrideRequest request) {
         SujetProjet projet = getProjet(projetId);
         User current = userService.getCurrentUser();
@@ -531,6 +539,13 @@ public class EvaluationService {
         projet.setHasEliminatoryWarnings(data.hasEliminatoryWarnings());
         projet.setEliminatoryWarningsCount(data.eliminatoryWarnings().size());
         sujetProjetRepository.save(projet);
+
+        if (data.scoreFinal() != null) {
+            projetCatalogueService.mettreAJourScoreParSujetId(
+                    projet.getId(),
+                    (int) Math.round(data.scoreFinal())
+            );
+        }
 
         return toResponse(savedEvaluation);
     }
@@ -1306,7 +1321,8 @@ public class EvaluationService {
         if (current.getRole() == Role.ROLE_ADMIN) {
             return;
         }
-        if (current.getRole() == Role.ROLE_ENSEIGNANT && projet.getEncadrantId().equals(current.getId())) {
+        if ((current.getRole() == Role.ROLE_ENSEIGNANT || current.getRole() == Role.ROLE_CHEF_EQUIPE)
+                && projet.getEncadrantId().equals(current.getId())) {
             return;
         }
         throw new AccessDeniedException("Vous n'etes pas autorise a recalculer le score de ce projet.");

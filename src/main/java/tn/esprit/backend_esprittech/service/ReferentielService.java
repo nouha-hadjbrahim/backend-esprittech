@@ -75,15 +75,14 @@ public class ReferentielService {
     }
 
     /**
-     * Vérifie qu'une correspondance existe dans le référentiel par email OU identifiant.
+     * Vérifie qu'une correspondance existe dans le référentiel par email.
      *
      * @throws ReferentielNotFoundException si aucune correspondance n'est trouvée
      */
-    public ReferentielUtilisateur trouverCorrespondance(String email, String identifiant) {
-        return referentielRepository.findByEmailOrIdentifiant(email, identifiant)
+    public ReferentielUtilisateur trouverCorrespondance(String email) {
+        return referentielRepository.findByEmail(email)
                 .orElseThrow(() -> new ReferentielNotFoundException(
-                        "Utilisateur non trouvé dans le référentiel. "
-                                + "Vérifiez votre email et votre identifiant."));
+                        "Utilisateur non trouvé dans le référentiel. Vérifiez votre email."));
     }
 
     /** Transforme une ligne CSV en entité, ou renvoie null si la ligne est invalide. */

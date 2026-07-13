@@ -33,7 +33,9 @@ import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRe
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetDomaineRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.sujetprojet.SujetReferenceService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +58,8 @@ class ProjetCatalogueServiceTest {
     @Mock private SujetDomaineRepository domaineRepository;
     @Mock private SujetTechnologieRepository technologieRepository;
     @Mock private SujetPrerequisRepository prerequisRepository;
+    @Mock private LivrableCatalogueRepository livrableCatalogueRepository;
+    @Mock private SujetReferenceService sujetReferenceService;
 
     @InjectMocks private ProjetCatalogueService service;
 
@@ -70,7 +74,7 @@ class ProjetCatalogueServiceTest {
     void setUp() {
         chef = User.builder()
                 .id(10L).nom("Chef").prenom("Equipe")
-                .email("chef@esprit.tn").identifiant("ENS-010")
+                .email("chef@esprit.tn")
                 .role(Role.ROLE_CHEF_EQUIPE).enabled(true)
                 .build();
 
@@ -79,7 +83,7 @@ class ProjetCatalogueServiceTest {
 
         enseignant = User.builder()
                 .id(1L).nom("Test").prenom("Enseignant")
-                .email("test@esprit.tn").identifiant("ENS-001")
+                .email("test@esprit.tn")
                 .role(Role.ROLE_ENSEIGNANT).enabled(true)
                 .equipeRecherche(equipe)
                 .build();
@@ -653,6 +657,22 @@ class ProjetCatalogueServiceTest {
         var result = service.getOldValues(1L);
 
         assertEquals(projet.getStatut(), result.get("statut"));
+    }
+
+    // ---- getTitreById ----
+
+    @Test
+    void getTitreById_found_returnsTitre() {
+        when(projetRepository.findById(1L)).thenReturn(Optional.of(projet));
+
+        assertEquals("Projet Test", service.getTitreById(1L));
+    }
+
+    @Test
+    void getTitreById_notFound_returnsInconnu() {
+        when(projetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getTitreById(99L));
     }
 }
 }

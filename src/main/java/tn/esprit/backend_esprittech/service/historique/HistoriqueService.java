@@ -13,10 +13,21 @@ import tn.esprit.backend_esprittech.entity.historique.Historique;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.historique.HistoriqueRepository;
+import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
+import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.exception.ForbiddenException;
+import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
+import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class HistoriqueService {
@@ -35,10 +46,20 @@ public class HistoriqueService {
 
     private final HistoriqueRepository repository;
     private final ObjectMapper objectMapper;
+    private final CandidatureRepository candidatureRepository;
+    private final SujetProjetRepository sujetProjetRepository;
+    private final UserService userService;
 
-    public HistoriqueService(HistoriqueRepository repository, ObjectMapper objectMapper) {
+    public HistoriqueService(HistoriqueRepository repository,
+                             ObjectMapper objectMapper,
+                             CandidatureRepository candidatureRepository,
+                             SujetProjetRepository sujetProjetRepository,
+                             UserService userService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.candidatureRepository = candidatureRepository;
+        this.sujetProjetRepository = sujetProjetRepository;
+        this.userService = userService;
     }
 
     @Transactional
@@ -73,6 +94,69 @@ public class HistoriqueService {
     public PagedResponse<HistoriqueResponse> findByUser(Long userId, Pageable pageable) {
         Page<Historique> page = repository.findByActorIdOrderByCreatedAtDesc(userId, pageable);
         return PagedResponse.from(page, HistoriqueResponse::from);
+    }
+
+    /**
+     * Historique agrégé d'un sujet.
+     * Filtre :
+     * - TOUT : tous les événements
+     * - SUJET : tout sauf acceptation/refus candidature
+     * - CANDIDATURE : uniquement ACCEPT / REFUSE
+     */
+    @Transactional(readOnly = true)
+    public List<HistoriqueResponse> findBySujet(Long sujetId, String filter) {
+        ensureCanViewSujetHistorique(sujetId);
+
+        String normalized = filter == null || filter.isBlank() ? "TOUT" : filter.trim().toUpperCase();
+        List<Historique> events = new ArrayList<>();
+
+        if ("TOUT".equals(normalized) || "SUJET".equals(normalized)) {
+            events.addAll(repository.findAllBySujetProjetId(sujetId));
+        }
+
+        Set<Long> candidatureIds = candidatureRepository.findBySujetIdOrderByDateDepotAsc(sujetId)
+                .stream()
+                .map(c -> c.getId())
+                .collect(Collectors.toSet());
+
+        if (!candidatureIds.isEmpty()) {
+            List<Historique> candidatureEvents = repository.findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+                    EntityType.CANDIDATURE, candidatureIds);
+
+            if ("CANDIDATURE".equals(normalized)) {
+                candidatureEvents = candidatureEvents.stream()
+                        .filter(h -> h.getAction() == ActionType.ACCEPT || h.getAction() == ActionType.REFUSE)
+                        .toList();
+            } else if ("SUJET".equals(normalized)) {
+                candidatureEvents = candidatureEvents.stream()
+                        .filter(h -> h.getAction() != ActionType.ACCEPT && h.getAction() != ActionType.REFUSE)
+                        .toList();
+            }
+
+            if ("TOUT".equals(normalized) || "SUJET".equals(normalized) || "CANDIDATURE".equals(normalized)) {
+                events.addAll(candidatureEvents);
+            }
+        }
+
+        return events.stream()
+                .sorted(Comparator.comparing(Historique::getCreatedAt).reversed())
+                .map(HistoriqueResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    private void ensureCanViewSujetHistorique(Long sujetId) {
+        SujetProjet sujet = sujetProjetRepository.findById(sujetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sujet introuvable (id=" + sujetId + ")"));
+        User current = userService.getCurrentUser();
+        Role role = current.getRole();
+
+        if (role == Role.ROLE_ADMIN || role == Role.ROLE_CI || role == Role.ROLE_CHEF_EQUIPE) {
+            return;
+        }
+        if (role == Role.ROLE_ENSEIGNANT && sujet.getEncadrantId().equals(current.getId())) {
+            return;
+        }
+        throw new ForbiddenException("Vous n'avez pas accès à l'historique de ce sujet.");
     }
 
     private String toJson(Map<String, Object> map) {

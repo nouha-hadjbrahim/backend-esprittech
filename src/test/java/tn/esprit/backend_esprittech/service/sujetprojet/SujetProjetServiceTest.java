@@ -22,6 +22,7 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
@@ -42,6 +43,7 @@ class SujetProjetServiceTest {
     @Mock private SujetReferenceService referenceService;
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
     @Mock private AffectationRepository affectationRepository;
+    @Mock private ProjetCatalogueService projetCatalogueService;
 
     @InjectMocks private SujetProjetService service;
 
@@ -54,7 +56,7 @@ class SujetProjetServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         enseignant = User.builder().id(10L).nom("Ben Ali").prenom("Sami")
-                .email("sami@esprit.tn").identifiant("ENS-1")
+                .email("sami@esprit.tn")
                 .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT).build();
 
         request = new SujetProjetRequest("Sujet", CategorieSujet.PFE, "Desc", "Obj",
@@ -401,7 +403,9 @@ class SujetProjetServiceTest {
 
         assertEquals(response, service.declarerTerminaison(1L));
         assertEquals(StatutSujet.REALISATION_TERMINEE, entity.getStatut());
+        assertTrue(Boolean.TRUE.equals(entity.getCatalogue()));
         assertNotNull(entity.getDateTerminaison());
+        verify(projetCatalogueService).publierDepuisSujetTermine(entity, null, null);
     }
 
     @Test
@@ -439,5 +443,24 @@ class SujetProjetServiceTest {
         var result = service.getOldValues(99L);
 
         assertTrue(result.isEmpty());
+    }
+
+    // ---- getTitreById ----
+
+    @Test
+    void getTitreById_found_returnsTitre() {
+        SujetProjet entity = new SujetProjet();
+        entity.setId(1L);
+        entity.setTitre("Mon Super Projet");
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        assertEquals("Mon Super Projet", service.getTitreById(1L));
+    }
+
+    @Test
+    void getTitreById_notFound_returnsInconnu() {
+        when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertEquals("Inconnu", service.getTitreById(99L));
     }
 }
