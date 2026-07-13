@@ -15,10 +15,12 @@ import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.historique.HistoriqueRepository;
+import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.exception.ForbiddenException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 
 import java.time.LocalDateTime;
@@ -48,17 +50,20 @@ public class HistoriqueService {
     private final ObjectMapper objectMapper;
     private final CandidatureRepository candidatureRepository;
     private final SujetProjetRepository sujetProjetRepository;
+    private final ProjetCatalogueRepository projetCatalogueRepository;
     private final UserService userService;
 
     public HistoriqueService(HistoriqueRepository repository,
                              ObjectMapper objectMapper,
                              CandidatureRepository candidatureRepository,
                              SujetProjetRepository sujetProjetRepository,
+                             ProjetCatalogueRepository projetCatalogueRepository,
                              UserService userService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.candidatureRepository = candidatureRepository;
         this.sujetProjetRepository = sujetProjetRepository;
+        this.projetCatalogueRepository = projetCatalogueRepository;
         this.userService = userService;
     }
 
@@ -142,6 +147,35 @@ public class HistoriqueService {
                 .sorted(Comparator.comparing(Historique::getCreatedAt).reversed())
                 .map(HistoriqueResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Historique d'un projet du catalogue, accessible à l'encadrant du projet en plus
+     * des rôles de gouvernance (ADMIN, CI, CHEF_EQUIPE).
+     */
+    @Transactional(readOnly = true)
+    public List<HistoriqueResponse> findByProjetCatalogue(Long projetId) {
+        ensureCanViewProjetHistorique(projetId);
+        return repository
+                .findByEntityTypeAndEntityIdOrderByCreatedAtDesc(EntityType.PROJET_CATALOGUE, projetId, Pageable.unpaged())
+                .stream()
+                .map(HistoriqueResponse::from)
+                .toList();
+    }
+
+    private void ensureCanViewProjetHistorique(Long projetId) {
+        ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable (id=" + projetId + ")"));
+        User current = userService.getCurrentUser();
+        Role role = current.getRole();
+
+        if (role == Role.ROLE_ADMIN || role == Role.ROLE_CI || role == Role.ROLE_CHEF_EQUIPE) {
+            return;
+        }
+        if (role == Role.ROLE_ENSEIGNANT && projet.getEncadrant().getId().equals(current.getId())) {
+            return;
+        }
+        throw new ForbiddenException("Vous n'avez pas accès à l'historique de ce projet.");
     }
 
     private void ensureCanViewSujetHistorique(Long sujetId) {
