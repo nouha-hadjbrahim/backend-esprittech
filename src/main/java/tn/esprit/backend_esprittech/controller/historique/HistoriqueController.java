@@ -58,6 +58,14 @@ public class HistoriqueController {
         return ResponseEntity.ok(historiqueService.findByEntity(entityType, entityId, pageable));
     }
 
+    @GetMapping("/projet/{projetId}")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_CI', 'ROLE_CHEF_EQUIPE', 'ROLE_ENSEIGNANT')")
+    @Operation(summary = "Historique d'un projet du catalogue",
+            description = "Accessible aux rôles de gouvernance ainsi qu'à l'enseignant encadrant du projet.")
+    public ResponseEntity<List<HistoriqueResponse>> findByProjetCatalogue(@PathVariable Long projetId) {
+        return ResponseEntity.ok(historiqueService.findByProjetCatalogue(projetId));
+    }
+
     @GetMapping("/sujet/{sujetId}")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_CI', 'ROLE_CHEF_EQUIPE', 'ROLE_ENSEIGNANT')")
     @Operation(summary = "Historique d'un sujet",

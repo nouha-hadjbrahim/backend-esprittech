@@ -47,6 +47,8 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
 
     Page<Historique> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(EntityType entityType, Long entityId, Pageable pageable);
 
+    List<Historique> findTop15ByOrderByCreatedAtDesc();
+
     Page<Historique> findByActorIdOrderByCreatedAtDesc(Long actorId, Pageable pageable);
 
     @Query("""
