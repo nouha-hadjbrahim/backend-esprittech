@@ -44,7 +44,6 @@ class UserServiceTest {
                 .id(1L)
                 .nom("Test").prenom("User")
                 .email("test@esprit.tn")
-                .identifiant("ETU-001")
                 .password("encoded")
                 .role(Role.ROLE_ETUDIANT)
                 .typeUtilisateur(TypeUtilisateur.ETUDIANT)
@@ -152,9 +151,8 @@ class UserServiceTest {
     @Test
     void create_success_encodesPasswordAndDerivesType() {
         var request = new CreateUserRequest("Khaldi", "Ines", "ines@esprit.tn",
-                "ET-1", "Passw0rd1", Role.ROLE_ENSEIGNANT, true);
+                "Passw0rd1", Role.ROLE_ENSEIGNANT, true);
         when(userRepository.existsByEmail("ines@esprit.tn")).thenReturn(false);
-        when(userRepository.existsByIdentifiant("ET-1")).thenReturn(false);
         when(passwordEncoder.encode("Passw0rd1")).thenReturn("hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -169,9 +167,8 @@ class UserServiceTest {
     @Test
     void create_studentRole_derivesEtudiantType() {
         var request = new CreateUserRequest("Trabelsi", "Sarra", "sarra@esprit.tn",
-                "ET-2", "Passw0rd1", Role.ROLE_ETUDIANT, true);
+                "Passw0rd1", Role.ROLE_ETUDIANT, true);
         when(userRepository.existsByEmail("sarra@esprit.tn")).thenReturn(false);
-        when(userRepository.existsByIdentifiant("ET-2")).thenReturn(false);
         when(passwordEncoder.encode("Passw0rd1")).thenReturn("hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -183,19 +180,8 @@ class UserServiceTest {
     @Test
     void create_emailExists_throws() {
         var request = new CreateUserRequest("X", "Y", "dup@esprit.tn",
-                "ID", "Passw0rd1", Role.ROLE_ETUDIANT, true);
+                "Passw0rd1", Role.ROLE_ETUDIANT, true);
         when(userRepository.existsByEmail("dup@esprit.tn")).thenReturn(true);
-
-        assertThrows(EmailAlreadyExistsException.class, () -> userService.create(request));
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void create_identifiantExists_throws() {
-        var request = new CreateUserRequest("X", "Y", "new@esprit.tn",
-                "DUP", "Passw0rd1", Role.ROLE_ETUDIANT, true);
-        when(userRepository.existsByEmail("new@esprit.tn")).thenReturn(false);
-        when(userRepository.existsByIdentifiant("DUP")).thenReturn(true);
 
         assertThrows(EmailAlreadyExistsException.class, () -> userService.create(request));
         verify(userRepository, never()).save(any());
@@ -347,7 +333,7 @@ class UserServiceTest {
     @Test
     void delete_success() {
         User current = User.builder().id(2L).nom("Admin").prenom("A")
-                .email("admin@esprit.tn").identifiant("ADM").role(Role.ROLE_ADMIN)
+                .email("admin@esprit.tn").role(Role.ROLE_ADMIN)
                 .typeUtilisateur(TypeUtilisateur.ENSEIGNANT).enabled(true).build();
         Authentication auth = mock(Authentication.class);
         when(auth.isAuthenticated()).thenReturn(true);

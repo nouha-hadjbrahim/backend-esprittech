@@ -59,7 +59,7 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(409, pd.getStatus());
         assertEquals("Conflit", pd.getTitle());
-        assertEquals("Contrainte d'unicite ou d'integrite violee.", pd.getDetail());
+        assertEquals("Contrainte d'unicité ou d'intégrité violée.", pd.getDetail());
     }
 
     @Test
@@ -103,7 +103,7 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(500, pd.getStatus());
         assertEquals("Erreur interne", pd.getTitle());
-        assertEquals("boom", pd.getDetail());
+        assertEquals("Une erreur inattendue est survenue. Veuillez réessayer plus tard.", pd.getDetail());
     }
 
     @Test
@@ -212,7 +212,20 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(500, pd.getStatus());
         assertEquals("Erreur interne", pd.getTitle());
-        assertEquals("Database connection error", pd.getDetail());
+        assertEquals("Une erreur inattendue est survenue. Veuillez réessayer plus tard.", pd.getDetail());
+    }
+
+    @Test
+    void handleJpaSystemException_returns500WithSafeMessage() {
+        org.springframework.orm.jpa.JpaSystemException ex =
+                new org.springframework.orm.jpa.JpaSystemException(
+                        new RuntimeException("Field 'identifiant' doesn't have a default value"));
+
+        ProblemDetail pd = handler.handleJpaSystemException(ex);
+
+        assertEquals(500, pd.getStatus());
+        assertEquals("Erreur interne", pd.getTitle());
+        assertEquals("Une erreur technique est survenue. Veuillez réessayer plus tard.", pd.getDetail());
     }
 
     @Test

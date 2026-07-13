@@ -60,7 +60,7 @@ class SujetProjetIntegrationTest {
         User chef = userRepository.findByEmail("chef@esprit.tn").orElseGet(() ->
                 userRepository.save(User.builder()
                         .nom("Chef").prenom("Equipe").email("chef@esprit.tn")
-                        .identifiant("CHEF-1").password(passwordEncoder.encode("Password123"))
+                        .password(passwordEncoder.encode("Password123"))
                         .role(Role.ROLE_CHEF_EQUIPE).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
                         .departement("Informatique").enabled(true).build()));
 
@@ -79,7 +79,7 @@ class SujetProjetIntegrationTest {
         User enseignant = userRepository.findByEmail("enseignant@esprit.tn").orElseGet(() ->
                 userRepository.save(User.builder()
                         .nom("Ben Ali").prenom("Sami").email("enseignant@esprit.tn")
-                        .identifiant("ENS-100").password(passwordEncoder.encode("Password123"))
+                        .password(passwordEncoder.encode("Password123"))
                         .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
                         .departement("Informatique").enabled(true).build()));
 
@@ -113,7 +113,7 @@ class SujetProjetIntegrationTest {
     void creerSujet_asEnseignantWithoutEquipe_returns400() throws Exception {
         User sansEquipe = userRepository.save(User.builder()
                 .nom("Solo").prenom("Enseignant").email("solo@esprit.tn")
-                .identifiant("ENS-SOLO").password(passwordEncoder.encode("Password123"))
+                .password(passwordEncoder.encode("Password123"))
                 .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
                 .departement("Informatique").enabled(true).build());
         String soloToken = tokenProvider.generateAccessToken(sansEquipe);

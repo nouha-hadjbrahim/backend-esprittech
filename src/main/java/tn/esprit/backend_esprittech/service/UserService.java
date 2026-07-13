@@ -2,6 +2,7 @@ package tn.esprit.backend_esprittech.service;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -9,7 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import tn.esprit.backend_esprittech.annotation.Historise;
+import tn.esprit.backend_esprittech.dto.request.ChangePasswordRequest;
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
+import tn.esprit.backend_esprittech.dto.request.UpdateProfileRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.entity.User;
@@ -53,9 +56,6 @@ public class UserService {
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
         }
-        if (userRepository.existsByIdentifiant(request.identifiant())) {
-            throw new EmailAlreadyExistsException("Un compte existe déjà pour cet identifiant");
-        }
 
         // ROLE_ETUDIANT -> ETUDIANT ; tous les autres rôles sont des profils enseignant
         TypeUtilisateur type = (request.role() == Role.ROLE_ETUDIANT)
@@ -65,7 +65,6 @@ public class UserService {
                 .nom(request.nom())
                 .prenom(request.prenom())
                 .email(request.email())
-                .identifiant(request.identifiant())
                 .password(passwordEncoder.encode(request.password()))
                 .role(request.role())
                 .typeUtilisateur(type)
@@ -136,6 +135,28 @@ public class UserService {
         user.setEmail(request.email());
         user.setRole(request.role());
         user.setEnabled(request.enabled());
+        return userRepository.save(user);
+    }
+
+    /** Met à jour l'identité (nom, prénom) de l'utilisateur courant ; email et rôle restent inchangés. */
+    @Transactional
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#result.getId()", summaryExpression = "'Modification du profil ' + #result.getEmail()")
+    public User updateOwnProfile(UpdateProfileRequest request) {
+        User user = getCurrentUser();
+        user.setNom(request.nom());
+        user.setPrenom(request.prenom());
+        return userRepository.save(user);
+    }
+
+    /** Change le mot de passe de l'utilisateur courant après vérification de l'ancien. */
+    @Transactional
+    @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#result.getId()", summaryExpression = "'Changement de mot de passe ' + #result.getEmail()")
+    public User changePassword(ChangePasswordRequest request) {
+        User user = getCurrentUser();
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new BadCredentialsException("Mot de passe actuel incorrect");
+        }
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
         return userRepository.save(user);
     }
 

@@ -1,9 +1,12 @@
 package tn.esprit.backend_esprittech.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -18,6 +21,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ProblemDetail handleEmailExists(EmailAlreadyExistsException ex) {
@@ -56,7 +61,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        return build(HttpStatus.CONFLICT, "Conflit", "Contrainte d'unicite ou d'integrite violee.");
+        log.error("Violation d'intégrité de données", ex);
+        return build(HttpStatus.CONFLICT, "Conflit", "Contrainte d'unicité ou d'intégrité violée.");
+    }
+
+    @ExceptionHandler(JpaSystemException.class)
+    public ProblemDetail handleJpaSystemException(JpaSystemException ex) {
+        log.error("Erreur JPA/SQL inattendue", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne",
+                "Une erreur technique est survenue. Veuillez réessayer plus tard.");
     }
 
     @ExceptionHandler(EliminatoryWarningsConfirmationRequiredException.class)
@@ -112,7 +125,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne", ex.getMessage());
+        log.error("Erreur interne non gérée", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne",
+                "Une erreur inattendue est survenue. Veuillez réessayer plus tard.");
     }
 
     private ProblemDetail build(HttpStatus status, String title, String detail) {

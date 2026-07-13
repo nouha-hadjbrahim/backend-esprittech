@@ -12,8 +12,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.backend_esprittech.config.AuthCookieFactory;
+import tn.esprit.backend_esprittech.dto.request.ChangePasswordRequest;
 import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
+import tn.esprit.backend_esprittech.dto.request.UpdateProfileRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.service.AuthService;
@@ -89,6 +91,22 @@ public class AuthController {
     @Operation(summary = "Profil courant", description = "Retourne l'utilisateur authentifié, enrichi de son affiliation.")
     public ResponseEntity<UserResponse> me() {
         return ResponseEntity.ok(userService.getCurrentUserResponse());
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "Modifier mon profil",
+            description = "Met à jour le nom et le prénom de l'utilisateur authentifié (email et rôle non modifiables).")
+    public ResponseEntity<UserResponse> updateMe(@Valid @RequestBody UpdateProfileRequest request) {
+        userService.updateOwnProfile(request);
+        return ResponseEntity.ok(userService.getCurrentUserResponse());
+    }
+
+    @PutMapping("/me/password")
+    @Operation(summary = "Changer mon mot de passe",
+            description = "Change le mot de passe de l'utilisateur authentifié après vérification de l'ancien.")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(request);
+        return ResponseEntity.noContent().build();
     }
 
     /** Dépose l'access et le refresh token dans deux cookies HttpOnly distincts. */

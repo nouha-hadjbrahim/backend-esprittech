@@ -72,7 +72,7 @@ class HistorisationIntegrationTest {
         admin = userRepository.findByEmail("admin@test.tn").orElseGet(() ->
                 userRepository.save(User.builder()
                         .nom("Admin").prenom("Test").email("admin@test.tn")
-                        .identifiant("ADMIN-1").password(passwordEncoder.encode("Password123"))
+                        .password(passwordEncoder.encode("Password123"))
                         .role(Role.ROLE_ADMIN).typeUtilisateur(TypeUtilisateur.ENSEIGNANT)
                         .departement("IT").enabled(true).build()));
 

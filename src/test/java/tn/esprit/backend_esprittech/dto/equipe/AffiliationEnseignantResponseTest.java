@@ -16,7 +16,7 @@ class AffiliationEnseignantResponseTest {
     @Test
     void recordAccessors_returnValues() {
         UserResponse enseignant = new UserResponse(1L, "Doe", "John", "john@test.tn",
-                "JD001", Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
+                Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
                 "Informatique", true, Instant.now(), false, null, null);
         LocalDateTime dateDemande = LocalDateTime.now();
         LocalDateTime dateDecision = LocalDateTime.now().plusDays(1);
@@ -39,7 +39,7 @@ class AffiliationEnseignantResponseTest {
     @Test
     void record_toString_containsFields() {
         UserResponse enseignant = new UserResponse(1L, "Doe", "John", "john@test.tn",
-                "JD001", Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
+                Role.ROLE_ENSEIGNANT, TypeUtilisateur.ENSEIGNANT,
                 "Informatique", true, Instant.now(), false, null, null);
 
         AffiliationEnseignantResponse response = new AffiliationEnseignantResponse(

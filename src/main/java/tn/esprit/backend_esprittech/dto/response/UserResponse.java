@@ -10,7 +10,6 @@ public record UserResponse(
         String nom,
         String prenom,
         String email,
-        String identifiant,
         Role role,
         TypeUtilisateur typeUtilisateur,
         String departement,
