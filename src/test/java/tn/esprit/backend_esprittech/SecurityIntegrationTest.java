@@ -165,7 +165,7 @@ class SecurityIntegrationTest {
     void register_success_returns201_withUserBodyAndCookies() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nom\":\"New\",\"prenom\":\"User\",\"email\":\"new@esprit.tn\",\"identifiant\":\"ETU-999\",\"password\":\"Password123\"}"))
+                        .content("{\"nom\":\"New\",\"prenom\":\"User\",\"email\":\"new@esprit.tn\",\"password\":\"Password123\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value("new@esprit.tn"))
                 .andExpect(jsonPath("$.accessToken").doesNotExist())
@@ -176,7 +176,7 @@ class SecurityIntegrationTest {
     @Test
     void register_duplicateEmail_returns409() throws Exception {
         String body = "{\"nom\":\"Dup\",\"prenom\":\"User\",\"email\":\"dup@esprit.tn\","
-                + "\"identifiant\":\"ETU-DUP\",\"password\":\"Password123\"}";
+                + "\"password\":\"Password123\"}";
 
         // 1er enregistrement : le compte est créé
         mockMvc.perform(post("/api/auth/register")
@@ -195,7 +195,7 @@ class SecurityIntegrationTest {
     void register_invalidBody_returns400() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nom\":\"\",\"prenom\":\"\",\"email\":\"bad\",\"identifiant\":\"\",\"password\":\"short\"}"))
+                        .content("{\"nom\":\"\",\"prenom\":\"\",\"email\":\"bad\",\"password\":\"short\"}"))
                 .andExpect(status().isBadRequest());
     }
 

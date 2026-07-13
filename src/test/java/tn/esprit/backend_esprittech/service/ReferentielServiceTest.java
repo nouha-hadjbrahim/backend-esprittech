@@ -109,20 +109,20 @@ class ReferentielServiceTest {
         ReferentielUtilisateur ref = ReferentielUtilisateur.builder()
                 .id(1L).email("a@esprit.tn").identifiant("ID1")
                 .type(TypeUtilisateur.ENSEIGNANT).nom("A").prenom("B").build();
-        when(referentielRepository.findByEmailOrIdentifiant("a@esprit.tn", "ID1"))
+        when(referentielRepository.findByEmail("a@esprit.tn"))
                 .thenReturn(Optional.of(ref));
 
-        ReferentielUtilisateur result = referentielService.trouverCorrespondance("a@esprit.tn", "ID1");
+        ReferentielUtilisateur result = referentielService.trouverCorrespondance("a@esprit.tn");
 
         assertEquals(ref, result);
     }
 
     @Test
     void trouverCorrespondance_notFound_throws() {
-        when(referentielRepository.findByEmailOrIdentifiant("x@esprit.tn", "Z"))
+        when(referentielRepository.findByEmail("x@esprit.tn"))
                 .thenReturn(Optional.empty());
 
         assertThrows(ReferentielNotFoundException.class,
-                () -> referentielService.trouverCorrespondance("x@esprit.tn", "Z"));
+                () -> referentielService.trouverCorrespondance("x@esprit.tn"));
     }
 }

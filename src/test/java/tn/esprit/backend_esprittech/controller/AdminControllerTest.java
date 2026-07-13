@@ -139,7 +139,7 @@ class AdminControllerTest {
     void createUser_validRequest_returnsCreated() throws Exception {
         CreateUserRequest request = new CreateUserRequest(
                 "Raed", "Bettaher", "raed@esprit.tn",
-                "raed123", "Password1", Role.ROLE_ADMIN, true);
+                "Password1", Role.ROLE_ADMIN, true);
 
         User user = new User();
         UserResponse response = mock(UserResponse.class);
@@ -160,7 +160,7 @@ class AdminControllerTest {
     void createUser_serviceThrows_returns500() throws Exception {
         CreateUserRequest request = new CreateUserRequest(
                 "Raed", "Bettaher", "raed@esprit.tn",
-                "raed123", "Password1", Role.ROLE_ADMIN, true);
+                "Password1", Role.ROLE_ADMIN, true);
 
         when(userService.create(any()))
                 .thenThrow(new RuntimeException("Unexpected error"));

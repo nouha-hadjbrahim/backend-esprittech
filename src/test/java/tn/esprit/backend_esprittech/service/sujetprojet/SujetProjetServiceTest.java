@@ -54,7 +54,7 @@ class SujetProjetServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         enseignant = User.builder().id(10L).nom("Ben Ali").prenom("Sami")
-                .email("sami@esprit.tn").identifiant("ENS-1")
+                .email("sami@esprit.tn")
                 .role(Role.ROLE_ENSEIGNANT).typeUtilisateur(TypeUtilisateur.ENSEIGNANT).build();
 
         request = new SujetProjetRequest("Sujet", CategorieSujet.PFE, "Desc", "Obj",

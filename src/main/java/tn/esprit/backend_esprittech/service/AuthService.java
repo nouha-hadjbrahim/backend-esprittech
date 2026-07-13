@@ -43,16 +43,13 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        // 1. L'email/identifiant doit correspondre à une entrée du référentiel (source de vérité)
+        // 1. L'email doit correspondre à une entrée du référentiel (source de vérité)
         ReferentielUtilisateur reference =
-                referentielService.trouverCorrespondance(request.email(), request.identifiant());
+                referentielService.trouverCorrespondance(request.email());
 
         // 2. Unicité du compte applicatif
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
-        }
-        if (userRepository.existsByIdentifiant(request.identifiant())) {
-            throw new EmailAlreadyExistsException("Un compte existe déjà pour cet identifiant");
         }
 
         // 3. Le rôle découle du type déclaré dans le référentiel
@@ -63,7 +60,6 @@ public class AuthService {
                 .nom(request.nom())
                 .prenom(request.prenom())
                 .email(request.email())
-                .identifiant(request.identifiant())
                 .password(passwordEncoder.encode(request.password()))
                 .role(role)
                 .typeUtilisateur(type)

@@ -70,7 +70,7 @@ class ProjetCatalogueServiceTest {
     void setUp() {
         chef = User.builder()
                 .id(10L).nom("Chef").prenom("Equipe")
-                .email("chef@esprit.tn").identifiant("ENS-010")
+                .email("chef@esprit.tn")
                 .role(Role.ROLE_CHEF_EQUIPE).enabled(true)
                 .build();
 
@@ -79,7 +79,7 @@ class ProjetCatalogueServiceTest {
 
         enseignant = User.builder()
                 .id(1L).nom("Test").prenom("Enseignant")
-                .email("test@esprit.tn").identifiant("ENS-001")
+                .email("test@esprit.tn")
                 .role(Role.ROLE_ENSEIGNANT).enabled(true)
                 .equipeRecherche(equipe)
                 .build();
