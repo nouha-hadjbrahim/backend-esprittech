@@ -112,6 +112,13 @@ public class ProjetCatalogue {
     @Column(name = "date_validation")
     private LocalDateTime dateValidation;
 
+    /**
+     * Sujet d'origine lorsqu'un projet est publié automatiquement après terminaison.
+     * Null pour les projets déposés manuellement via le formulaire catalogue.
+     */
+    @Column(name = "sujet_id", unique = true)
+    private Long sujetId;
+
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

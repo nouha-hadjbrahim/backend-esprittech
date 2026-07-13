@@ -20,6 +20,7 @@ import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/historique")
@@ -55,6 +56,16 @@ public class HistoriqueController {
             @PathVariable Long entityId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(historiqueService.findByEntity(entityType, entityId, pageable));
+    }
+
+    @GetMapping("/sujet/{sujetId}")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_CI', 'ROLE_CHEF_EQUIPE', 'ROLE_ENSEIGNANT')")
+    @Operation(summary = "Historique d'un sujet",
+            description = "Agrège les événements du sujet et de ses candidatures. Filtre: TOUT | SUJET (hors accept/refus) | CANDIDATURE (ACCEPT/REFUSE uniquement)")
+    public ResponseEntity<List<HistoriqueResponse>> findBySujet(
+            @PathVariable Long sujetId,
+            @RequestParam(required = false, defaultValue = "TOUT") String filter) {
+        return ResponseEntity.ok(historiqueService.findBySujet(sujetId, filter));
     }
 
     @GetMapping("/user/{userId}")
