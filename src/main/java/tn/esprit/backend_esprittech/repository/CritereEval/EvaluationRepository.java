@@ -12,4 +12,8 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
     Optional<Evaluation> findTopBySujetProjetIdOrderByDateCalculDesc(Long sujetProjetId);
 
     List<Evaluation> findBySujetProjetIdOrderByDateCalculDesc(Long sujetProjetId);
+
+    Optional<Evaluation> findTopByProjetCatalogueIdOrderByDateCalculDesc(Long projetCatalogueId);
+
+    List<Evaluation> findByProjetCatalogueIdOrderByDateCalculDesc(Long projetCatalogueId);
 }

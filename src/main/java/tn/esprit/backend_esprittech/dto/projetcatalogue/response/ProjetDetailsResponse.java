@@ -15,6 +15,8 @@ import java.util.List;
  */
 public record ProjetDetailsResponse(
         Long id,
+        /** Identifiant du sujet d'origine si ce projet a été publié automatiquement après terminaison, sinon null. */
+        Long sujetId,
         TypeProjet typeProjet,
         String titre,
         String description,

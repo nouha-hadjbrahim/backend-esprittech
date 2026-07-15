@@ -75,6 +75,7 @@ public class ProjetCatalogueMapper {
         User encadrant = projet.getEncadrant();
         return new ProjetDetailsResponse(
                 projet.getId(),
+                projet.getSujetId(),
                 projet.getTypeProjet(),
                 projet.getTitre(),
                 projet.getDescription(),

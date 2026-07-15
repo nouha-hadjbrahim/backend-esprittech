@@ -53,7 +53,7 @@ class ProjetCatalogueControllerTest {
                 LocalDateTime.now(), List.of("IA"), List.of("Spring"), null);
 
         detailsResponse = new ProjetDetailsResponse(
-                1L, TypeProjet.RDI, "Projet IA", "Desc", "Obj",
+                1L, null, TypeProjet.RDI, "Projet IA", "Desc", "Obj",
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
                 StatutProjet.VALIDE, 0, 1L, "Enseignant Test", "test@esprit.tn",
                 100L, "Equipe RDI", "Chef Equipe", null, null, null,
