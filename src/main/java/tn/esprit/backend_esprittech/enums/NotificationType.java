@@ -23,6 +23,7 @@ public enum NotificationType {
     SUJET_REJETE,
 
     // Evaluation
+    EVALUATION_CALCULEE,
     EVALUATION_TERMINEE,
 
     // Industrialisation

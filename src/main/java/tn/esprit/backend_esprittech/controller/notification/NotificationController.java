@@ -1,5 +1,6 @@
 package tn.esprit.backend_esprittech.controller.notification;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -7,7 +8,6 @@ import tn.esprit.backend_esprittech.dto.notification.NotificationDTO;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -21,8 +21,10 @@ public class NotificationController {
     }
 
     @GetMapping
-    public List<NotificationDTO> getNotifications(@AuthenticationPrincipal User user) {
-        return notificationService.getParUtilisateur(user.getId());
+    public Page<NotificationDTO> getNotifications(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "0") int page) {
+        return notificationService.getParUtilisateur(user.getId(), page);
     }
 
     @GetMapping("/unread-count")

@@ -578,6 +578,15 @@ public class EvaluationService {
             );
         }
 
+        if (projet.getEncadrantId() != null && data.scoreFinal() != null) {
+            notificationService.creerNotification(
+                    projet.getEncadrantId(),
+                    NotificationType.EVALUATION_CALCULEE,
+                    "Evaluation calculee",
+                    "L'evaluation automatique du projet \"" + projet.getTitre() + "\" est terminee. Score : " + String.format("%.1f", data.scoreFinal()) + "/100.",
+                    "/frontoffice/mes-projets");
+        }
+
         return toResponse(savedEvaluation);
     }
 
