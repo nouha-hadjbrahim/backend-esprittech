@@ -17,12 +17,14 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.io.InputStream;
@@ -67,6 +69,7 @@ public class LivrableService {
     private final SujetProjetRepository sujetProjetRepository;
     private final UserService userService;
     private final MinioStorageService storageService;
+    private final NotificationService notificationService;
 
     @Historise(action = ActionType.UPLOAD, entityType = EntityType.LIVRABLE, entityIdExpression = "#result.id()", summaryExpression = "'Upload livrable ' + #result.nom()")
     public LivrableResponse upload(Long projetId,
@@ -95,7 +98,16 @@ public class LivrableService {
         livrable.setSize(storedObject.size());
         livrable.setDeposant(current);
 
-        return toResponse(livrableRepository.save(livrable));
+        LivrableResponse response = toResponse(livrableRepository.save(livrable));
+
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.LIVRABLE_TELECHARGE,
+                "Livrable telecharge",
+                "Un nouveau livrable \"" + nom + "\" a ete depose sur le projet \"" + projet.getTitre() + "\".",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Historise(action = ActionType.LINK, entityType = EntityType.LIVRABLE, entityIdExpression = "#result.id()", summaryExpression = "'Ajout lien livrable ' + #result.nom()")
@@ -114,7 +126,16 @@ public class LivrableService {
         livrable.setLienExterne(request.lienExterne().trim());
         livrable.setDeposant(current);
 
-        return toResponse(livrableRepository.save(livrable));
+        LivrableResponse response = toResponse(livrableRepository.save(livrable));
+
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.LIVRABLE_TELECHARGE,
+                "Lien livrable ajoute",
+                "Un nouveau lien livrable \"" + request.nom() + "\" a ete ajoute sur le projet \"" + projet.getTitre() + "\".",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Transactional(readOnly = true)

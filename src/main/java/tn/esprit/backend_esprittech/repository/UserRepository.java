@@ -19,6 +19,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     long countByRole(Role role);
 
+    List<User> findByRole(Role role);
+
     @Query(value = "SELECT YEAR(u.created_at) as y, MONTH(u.created_at) as m, COUNT(*) FROM users u GROUP BY y, m ORDER BY y, m", nativeQuery = true)
     List<Object[]> countUsersByMonth();
 

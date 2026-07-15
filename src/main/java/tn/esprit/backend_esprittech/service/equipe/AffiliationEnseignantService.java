@@ -10,6 +10,7 @@ import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
@@ -18,6 +19,7 @@ import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.repository.equipe.AffiliationEnseignantRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -31,15 +33,18 @@ public class AffiliationEnseignantService {
     private final EquipeRechercheRepository equipeRepository;
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final NotificationService notificationService;
 
     public AffiliationEnseignantService(AffiliationEnseignantRepository affiliationRepository,
                                         EquipeRechercheRepository equipeRepository,
                                         UserRepository userRepository,
-                                        UserMapper userMapper) {
+                                        UserMapper userMapper,
+                                        NotificationService notificationService) {
         this.affiliationRepository = affiliationRepository;
         this.equipeRepository = equipeRepository;
         this.userRepository = userRepository;
         this.userMapper = userMapper;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -68,7 +73,18 @@ public class AffiliationEnseignantService {
                 .statut(StatutAffiliation.EN_ATTENTE)
                 .build();
 
-        return toResponse(affiliationRepository.save(affiliation));
+        AffiliationEnseignantResponse response = toResponse(affiliationRepository.save(affiliation));
+
+        if (equipe.getChef() != null) {
+            notificationService.creerNotification(
+                    equipe.getChef().getId(),
+                    NotificationType.AFFILIATION_DEMANDE,
+                    "Demande d'affiliation",
+                    enseignant.getPrenom() + " " + enseignant.getNom() + " demande a rejoindre l'equipe \"" + equipe.getNom() + "\".",
+                    "/frontoffice/equipes-recherche/demandes");
+        }
+
+        return response;
     }
 
     
@@ -123,7 +139,7 @@ public class AffiliationEnseignantService {
             User enseignant = affiliation.getEnseignant();
             if (enseignant.getEquipeRecherche() != null
                     && !enseignant.getEquipeRecherche().getId().equals(equipeId)) {
-                throw new BusinessException("L'enseignant appartient déjà à une autre équipe");
+                throw new BusinessException("L'enseignant appartient deja a une autre equipe");
             }
             equipe.addMember(enseignant);
             equipeRepository.save(equipe);
@@ -134,9 +150,23 @@ public class AffiliationEnseignantService {
             for (AffiliationEnseignant autre : autresDemandes) {
                 autre.setStatut(StatutAffiliation.REFUSEE);
                 autre.setDateDecision(LocalDateTime.now());
-                autre.setMotifDecision("Déjà accepté dans une autre équipe");
+                autre.setMotifDecision("Deja accepte dans une autre equipe");
             }
             affiliationRepository.saveAll(autresDemandes);
+
+            notificationService.creerNotification(
+                    enseignant.getId(),
+                    NotificationType.AFFILIATION_ACCEPTEE,
+                    "Affiliation acceptee",
+                    "Votre demande de affiliation a l'equipe \"" + equipe.getNom() + "\" a ete acceptee.",
+                    "/frontoffice/equipes-recherche/mon-equipe");
+        } else {
+            notificationService.creerNotification(
+                    affiliation.getEnseignant().getId(),
+                    NotificationType.AFFILIATION_REJETEE,
+                    "Affiliation refusee",
+                    "Votre demande de affiliation a l'equipe \"" + equipe.getNom() + "\" a ete refusee." + (motifDecision != null ? " Motif : " + motifDecision : ""),
+                    "/frontoffice/equipes-recherche/mes-demandes");
         }
 
         return toResponse(affiliationRepository.save(affiliation));

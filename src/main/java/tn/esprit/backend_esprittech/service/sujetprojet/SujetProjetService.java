@@ -18,6 +18,7 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutAffectation;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
@@ -26,6 +27,7 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.TerminaisonSujetRequest;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
@@ -60,6 +62,7 @@ public class SujetProjetService {
     private final EquipeRechercheRepository equipeRechercheRepository;
     private final AffectationRepository affectationRepository;
     private final ProjetCatalogueService projetCatalogueService;
+    private final NotificationService notificationService;
 
     public SujetProjetService(SujetProjetRepository sujetProjetRepository,
                               SujetProjetMapper sujetProjetMapper,
@@ -68,7 +71,8 @@ public class SujetProjetService {
                               SujetReferenceService referenceService,
                               EquipeRechercheRepository equipeRechercheRepository,
                               AffectationRepository affectationRepository,
-                              ProjetCatalogueService projetCatalogueService) {
+                              ProjetCatalogueService projetCatalogueService,
+                              NotificationService notificationService) {
         this.sujetProjetRepository = sujetProjetRepository;
         this.sujetProjetMapper = sujetProjetMapper;
         this.userService = userService;
@@ -77,6 +81,7 @@ public class SujetProjetService {
         this.equipeRechercheRepository = equipeRechercheRepository;
         this.affectationRepository = affectationRepository;
         this.projetCatalogueService = projetCatalogueService;
+        this.notificationService = notificationService;
     }
 
     @Historise(
@@ -97,7 +102,22 @@ public class SujetProjetService {
             sujet.setDateValidation(now);
             sujet.setMotifInvalidation(null);
         }
-        return toResponse(sujetProjetRepository.save(sujet));
+
+        SujetProjetResponse response = toResponse(sujetProjetRepository.save(sujet));
+
+        if (encadrant.getRole() != Role.ROLE_CHEF_EQUIPE) {
+            User chef = resolveChefForEncadrant(encadrant);
+            if (chef != null) {
+                notificationService.creerNotification(
+                        chef.getId(),
+                        NotificationType.AFFILIATION_DEMANDE,
+                        "Nouveau sujet a valider",
+                        "L'enseignant " + encadrant.getPrenom() + " " + encadrant.getNom() + " a depose un nouveau sujet \"" + sujet.getTitre() + "\" a valider.",
+                        "/frontoffice/validation-sujets");
+            }
+        }
+
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -286,7 +306,16 @@ public class SujetProjetService {
         sujet.setDateValidation(LocalDateTime.now());
         sujet.setMotifInvalidation(null);
 
-        return toResponse(sujetProjetRepository.save(sujet));
+        SujetProjetResponse response = toResponse(sujetProjetRepository.save(sujet));
+
+        notificationService.creerNotification(
+                sujet.getEncadrantId(),
+                NotificationType.SUJET_VALIDE,
+                "Sujet valide",
+                "Votre sujet \"" + sujet.getTitre() + "\" a ete valide par le chef d'equipe.",
+                "/frontoffice/sujets/mes-sujets");
+
+        return response;
     }
 
     @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet ' + @sujetProjetService.getTitreById(#id)")
@@ -303,7 +332,16 @@ public class SujetProjetService {
         sujet.setMotifInvalidation(request.motif().trim());
         sujet.setDateValidation(LocalDateTime.now());
 
-        return toResponse(sujetProjetRepository.save(sujet));
+        SujetProjetResponse response = toResponse(sujetProjetRepository.save(sujet));
+
+        notificationService.creerNotification(
+                sujet.getEncadrantId(),
+                NotificationType.SUJET_REJETE,
+                "Sujet refuse",
+                "Votre sujet \"" + sujet.getTitre() + "\" a ete refuse. Motif : " + request.motif(),
+                "/frontoffice/sujets/mes-sujets");
+
+        return response;
     }
 
     @Historise(action = ActionType.UPDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", summaryExpression = "'Modification sujet ' + @sujetProjetService.getTitreById(#id)")
@@ -488,6 +526,14 @@ public class SujetProjetService {
                 .filter(Objects::nonNull);
     }
 
+    private User resolveChefForEncadrant(User encadrant) {
+        User managed = userRepository.findById(encadrant.getId()).orElse(encadrant);
+        if (managed.getEquipeRecherche() != null && managed.getEquipeRecherche().getChef() != null) {
+            return managed.getEquipeRecherche().getChef();
+        }
+        return null;
+    }
+
     private Set<Long> getVisibleEncadrantIds(Long chefId, Long equipeId) {
         Set<Long> ids = userRepository.findByEquipeRechercheId(equipeId).stream()
                 .map(User::getId)
@@ -563,7 +609,16 @@ public class SujetProjetService {
         sujet.setDateValidation(LocalDateTime.now());
         sujet.setMotifInvalidation(null);
 
-        return toResponse(sujetProjetRepository.save(sujet));
+        SujetProjetResponse response = toResponse(sujetProjetRepository.save(sujet));
+
+        notificationService.creerNotification(
+                sujet.getEncadrantId(),
+                NotificationType.SUJET_VALIDE,
+                "Sujet valide par admin",
+                "Votre sujet \"" + sujet.getTitre() + "\" a ete valide par un administrateur.",
+                "/frontoffice/sujets/mes-sujets");
+
+        return response;
     }
 
     @Historise(action = ActionType.INVALIDATE, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#id", oldValuesExpression = "@sujetProjetService.getOldValues(#id)", newValuesExpression = "{'statut': 'INVALIDE'}", metadataExpression = "{'motif': #request.motif()}", summaryExpression = "'Invalidation sujet par admin ' + @sujetProjetService.getTitreById(#id)")
@@ -581,7 +636,16 @@ public class SujetProjetService {
         sujet.setMotifInvalidation(request.motif().trim());
         sujet.setDateValidation(LocalDateTime.now());
 
-        return toResponse(sujetProjetRepository.save(sujet));
+        SujetProjetResponse response = toResponse(sujetProjetRepository.save(sujet));
+
+        notificationService.creerNotification(
+                sujet.getEncadrantId(),
+                NotificationType.SUJET_REJETE,
+                "Sujet refuse par admin",
+                "Votre sujet \"" + sujet.getTitre() + "\" a ete refuse par un administrateur. Motif : " + request.motif(),
+                "/frontoffice/sujets/mes-sujets");
+
+        return response;
     }
 
     @Transactional(readOnly = true)

@@ -89,7 +89,11 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(summary = "Profil courant", description = "Retourne l'utilisateur authentifié, enrichi de son affiliation.")
-    public ResponseEntity<UserResponse> me() {
+    public ResponseEntity<UserResponse> me(HttpServletRequest request, HttpServletResponse response) {
+        String accessToken = readCookie(request, AuthCookieFactory.ACCESS_TOKEN_COOKIE);
+        if (accessToken != null) {
+            response.setHeader(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        }
         return ResponseEntity.ok(userService.getCurrentUserResponse());
     }
 
