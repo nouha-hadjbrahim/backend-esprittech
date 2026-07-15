@@ -30,6 +30,16 @@ public class IndustrialisationController {
         return industrialisationService.create(projetId, request);
     }
 
+    /** Demande d'industrialisation sur un projet du catalogue applicatif (ProjetCatalogue), eligible des lors qu'il est au statut VALIDE. */
+    @PostMapping("/api/projets-catalogue/{projetId}/industrialisation")
+    @PreAuthorize("hasRole('ENSEIGNANT')")
+    public CandidatureIndustrialisationResponse createForCatalogue(
+            @PathVariable Long projetId,
+            @Valid @RequestBody CandidatureIndustrialisationRequest request
+    ) {
+        return industrialisationService.createForCatalogue(projetId, request);
+    }
+
     @GetMapping("/api/industrialisation/{id}/formulaire")
     @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CI')")
     public IndustrialisationFormResponse formulaire(@PathVariable Long id) {

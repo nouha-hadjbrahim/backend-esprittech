@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 
 import java.time.LocalDateTime;
@@ -26,9 +27,15 @@ public class CandidatureIndustrialisation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "sujet_projet_id", nullable = false)
+    /** Sujet d'origine, lorsque la demande porte sur un projet issu du pipeline SujetProjet. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sujet_projet_id")
     private SujetProjet sujetProjet;
+
+    /** Projet du catalogue applicatif, lorsque la demande porte directement sur un ProjetCatalogue (dépôt manuel ou issu d'un sujet). Exactement un des deux (sujetProjet, projetCatalogue) est renseigné. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "projet_catalogue_id")
+    private ProjetCatalogue projetCatalogue;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

@@ -15,17 +15,23 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.*;
+import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
+import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
@@ -77,6 +83,8 @@ public class IndustrialisationService {
     private final EvaluationService evaluationService;
     private final LivrableService livrableService;
     private final MinioStorageService storageService;
+    private final ProjetCatalogueRepository projetCatalogueRepository;
+    private final LivrableCatalogueRepository livrableCatalogueRepository;
 
     @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#result.id()", newValuesExpression = "{'statut': #result.statut().name(), 'typeIndustrialisation': #result.typeIndustrialisation().name()}", metadataExpression = "{'typeIndustrialisation': #request.typeIndustrialisation().name()}", summaryExpression = "'Création demande industrialisation projet ' + @industrialisationService.getProjetTitreById(#projetId)")
     public CandidatureIndustrialisationResponse create(Long projetId, CandidatureIndustrialisationRequest request) {
@@ -112,6 +120,41 @@ public class IndustrialisationService {
         return toResponse(saved, true);
     }
 
+    /**
+     * Demande d'industrialisation directement sur un projet du catalogue applicatif (ProjetCatalogue),
+     * qu'il provienne d'un sujet terminé ou d'un dépôt manuel. Contrairement au pipeline SujetProjet,
+     * il n'y a pas d'évaluation ML ici : l'éligibilité repose uniquement sur le statut VALIDE du projet.
+     */
+    @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#result.id()", newValuesExpression = "{'statut': #result.statut().name(), 'typeIndustrialisation': #result.typeIndustrialisation().name()}", metadataExpression = "{'typeIndustrialisation': #request.typeIndustrialisation().name()}", summaryExpression = "'Création demande industrialisation projet ' + @industrialisationService.getProjetCatalogueTitreById(#projetId)")
+    public CandidatureIndustrialisationResponse createForCatalogue(Long projetId, CandidatureIndustrialisationRequest request) {
+        User current = userService.getCurrentUser();
+        ProjetCatalogue projet = getProjetCatalogue(projetId);
+        ensureOwnerCatalogue(current, projet);
+        if (projet.getStatut() != StatutProjet.VALIDE) {
+            throw new BusinessException("Le projet doit etre valide avant une demande d'industrialisation.");
+        }
+        List<CandidatureIndustrialisation> existingRequests = candidatureRepository.findByProjetCatalogueIdOrderByDateDemandeDesc(projetId);
+        for (CandidatureIndustrialisation existing : existingRequests) {
+            if (!OPEN_STATUSES.contains(existing.getStatut())) {
+                continue;
+            }
+            if (existing.getStatut() == StatutIndustrialisation.BROUILLON
+                    || existing.getStatut() == StatutIndustrialisation.A_COMPLETER) {
+                return toResponse(existing, true);
+            }
+            throw new BusinessException("Une demande d'industrialisation est deja en cours pour ce projet.");
+        }
+
+        CandidatureIndustrialisation candidature = new CandidatureIndustrialisation();
+        candidature.setProjetCatalogue(projet);
+        candidature.setTypeIndustrialisation(request.typeIndustrialisation());
+        candidature.setDemandeur(current);
+        candidature.setCommentaire(trimToNull(request.commentaire()));
+
+        CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
+        return toResponse(saved, true);
+    }
+
     @Transactional(readOnly = true)
     public IndustrialisationFormResponse getFormulaire(Long candidatureId) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
@@ -130,7 +173,7 @@ public class IndustrialisationService {
     public CandidatureIndustrialisationResponse saveReponses(Long candidatureId, ReponsesIndustrialisationRequest request) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
-        ensureOwner(current, candidature.getSujetProjet());
+        ensureOwnerOfCandidature(current, candidature);
         ensureEditable(candidature);
 
         for (ReponseIndustrialisationRequest reponseRequest : request.reponses()) {
@@ -155,7 +198,7 @@ public class IndustrialisationService {
     public CandidatureIndustrialisationResponse uploadPreuve(Long candidatureId, Long questionId, MultipartFile file) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
-        ensureOwner(current, candidature.getSujetProjet());
+        ensureOwnerOfCandidature(current, candidature);
         ensureEditable(candidature);
         QuestionIndustrialisation question = questionRepository.findById(questionId)
                 .filter(q -> Boolean.TRUE.equals(q.getActif()))
@@ -192,27 +235,46 @@ public class IndustrialisationService {
     public CandidatureIndustrialisationResponse soumettre(Long candidatureId, SubmitIndustrialisationRequest request) {
         CandidatureIndustrialisation candidature = getCandidature(candidatureId);
         User current = userService.getCurrentUser();
-        ensureOwner(current, candidature.getSujetProjet());
+        ensureOwnerOfCandidature(current, candidature);
         ensureEditable(candidature);
 
-        SujetProjet projet = candidature.getSujetProjet();
-        if (projet.getScoreFinalEvaluation() == null) {
-            throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
+        boolean hasActiveLivrables;
+        if (candidature.getSujetProjet() != null) {
+            SujetProjet projet = candidature.getSujetProjet();
+            if (projet.getScoreFinalEvaluation() == null) {
+                throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
+            }
+            hasActiveLivrables = livrableService.hasActiveLivrables(projet.getId());
+
+            validateCompleteness(candidature);
+            List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
+            requireConfirmationIfNeeded(warnings, request != null && request.isConfirmed());
+            applyWarnings(candidature, warnings);
+
+            candidature.setStatut(StatutIndustrialisation.SOUMISE);
+            candidature.setDateSoumission(java.time.LocalDateTime.now());
+            candidature.setDateReceptionCI(java.time.LocalDateTime.now());
+            projet.setStatut(candidature.getTypeIndustrialisation() == TypeIndustrialisation.INTERNE
+                    ? StatutSujet.CANDIDAT_INDUSTRIALISATION_INTERNE
+                    : StatutSujet.CANDIDAT_INDUSTRIALISATION_EXTERNE);
+            sujetProjetRepository.save(projet);
+        } else {
+            ProjetCatalogue projet = candidature.getProjetCatalogue();
+            hasActiveLivrables = livrableCatalogueRepository.existsByProjetIdAndActifTrue(projet.getId());
+
+            validateCompleteness(candidature);
+            List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
+            requireConfirmationIfNeeded(warnings, request != null && request.isConfirmed());
+            applyWarnings(candidature, warnings);
+
+            candidature.setStatut(StatutIndustrialisation.SOUMISE);
+            candidature.setDateSoumission(java.time.LocalDateTime.now());
+            candidature.setDateReceptionCI(java.time.LocalDateTime.now());
+            projet.setStatut(candidature.getTypeIndustrialisation() == TypeIndustrialisation.INTERNE
+                    ? StatutProjet.CANDIDAT_INDUSTRIALISATION_INTERNE
+                    : StatutProjet.CANDIDAT_INDUSTRIALISATION_EXTERNE);
+            projetCatalogueRepository.save(projet);
         }
-        boolean hasActiveLivrables = livrableService.hasActiveLivrables(projet.getId());
-
-        validateCompleteness(candidature);
-        List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
-        requireConfirmationIfNeeded(warnings, request != null && request.isConfirmed());
-        applyWarnings(candidature, warnings);
-
-        candidature.setStatut(StatutIndustrialisation.SOUMISE);
-        candidature.setDateSoumission(java.time.LocalDateTime.now());
-        candidature.setDateReceptionCI(java.time.LocalDateTime.now());
-        projet.setStatut(candidature.getTypeIndustrialisation() == TypeIndustrialisation.INTERNE
-                ? StatutSujet.CANDIDAT_INDUSTRIALISATION_INTERNE
-                : StatutSujet.CANDIDAT_INDUSTRIALISATION_EXTERNE);
-        sujetProjetRepository.save(projet);
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
         return toResponse(saved, true, !hasActiveLivrables);
     }
@@ -269,9 +331,15 @@ public class IndustrialisationService {
                 .orElse("Inconnu");
     }
 
+    public String getProjetCatalogueTitreById(Long projetId) {
+        return projetCatalogueRepository.findById(projetId)
+                .map(ProjetCatalogue::getTitre)
+                .orElse("Inconnu");
+    }
+
     public String getProjetTitreByCandidatureId(Long candidatureId) {
         return candidatureRepository.findById(candidatureId)
-                .map(c -> c.getSujetProjet().getTitre())
+                .map(c -> c.getSujetProjet() != null ? c.getSujetProjet().getTitre() : c.getProjetCatalogue().getTitre())
                 .orElse("Inconnu");
     }
 
@@ -299,11 +367,19 @@ public class IndustrialisationService {
         candidature.setCiDecideur(current);
         candidature.setDateDecisionCI(java.time.LocalDateTime.now());
 
-        SujetProjet projet = candidature.getSujetProjet();
-        projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
-                ? StatutSujet.INDUSTRIALISE_DSI
-                : StatutSujet.INDUSTRIALISE_EXTERNE);
-        sujetProjetRepository.save(projet);
+        if (candidature.getSujetProjet() != null) {
+            SujetProjet projet = candidature.getSujetProjet();
+            projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
+                    ? StatutSujet.INDUSTRIALISE_DSI
+                    : StatutSujet.INDUSTRIALISE_EXTERNE);
+            sujetProjetRepository.save(projet);
+        } else {
+            ProjetCatalogue projet = candidature.getProjetCatalogue();
+            projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
+                    ? StatutProjet.INDUSTRIALISE_DSI
+                    : StatutProjet.INDUSTRIALISE_EXTERNE);
+            projetCatalogueRepository.save(projet);
+        }
 
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
         return toResponse(saved, true);
@@ -348,7 +424,11 @@ public class IndustrialisationService {
     }
 
     private List<BlocageEliminatoireDto> collectEliminatoryWarnings(CandidatureIndustrialisation candidature) {
-        List<BlocageEliminatoireDto> warnings = new java.util.ArrayList<>(collectProjectEvaluationWarnings(candidature.getSujetProjet()));
+        List<BlocageEliminatoireDto> warnings = new java.util.ArrayList<>(
+                candidature.getSujetProjet() != null
+                        ? collectProjectEvaluationWarnings(candidature.getSujetProjet())
+                        : List.of()
+        );
         Map<Long, ReponseIndustrialisation> reponsesByQuestion = reponseRepository
                 .findByCandidatureIndustrialisationId(candidature.getId())
                 .stream()
@@ -461,9 +541,31 @@ public class IndustrialisationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + id));
     }
 
+    private ProjetCatalogue getProjetCatalogue(Long id) {
+        return projetCatalogueRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + id));
+    }
+
     private void ensureOwner(User current, SujetProjet projet) {
         if (current.getRole() != Role.ROLE_ENSEIGNANT || !projet.getEncadrantId().equals(current.getId())) {
             throw new AccessDeniedException("Seul l'encadrant du projet peut gerer cette demande.");
+        }
+    }
+
+    private void ensureOwnerCatalogue(User current, ProjetCatalogue projet) {
+        if (current.getRole() != Role.ROLE_ENSEIGNANT
+                || projet.getEncadrant() == null
+                || !projet.getEncadrant().getId().equals(current.getId())) {
+            throw new AccessDeniedException("Seul l'encadrant du projet peut gerer cette demande.");
+        }
+    }
+
+    /** Verifie la propriete de la demande, quelle que soit la source (SujetProjet ou ProjetCatalogue). */
+    private void ensureOwnerOfCandidature(User current, CandidatureIndustrialisation candidature) {
+        if (candidature.getSujetProjet() != null) {
+            ensureOwner(current, candidature.getSujetProjet());
+        } else {
+            ensureOwnerCatalogue(current, candidature.getProjetCatalogue());
         }
     }
 
@@ -471,7 +573,13 @@ public class IndustrialisationService {
         if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CI) {
             return;
         }
-        if (candidature.getSujetProjet().getEncadrantId().equals(current.getId())) {
+        if (candidature.getSujetProjet() != null) {
+            if (candidature.getSujetProjet().getEncadrantId().equals(current.getId())) {
+                return;
+            }
+        } else if (candidature.getProjetCatalogue() != null
+                && candidature.getProjetCatalogue().getEncadrant() != null
+                && candidature.getProjetCatalogue().getEncadrant().getId().equals(current.getId())) {
             return;
         }
         throw new AccessDeniedException("Acces refuse a la demande industrialisation");
@@ -507,7 +615,8 @@ public class IndustrialisationService {
     private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature,
                                                             boolean includeDetails,
                                                             boolean forceMissingLivrablesWarning) {
-        SujetProjet projet = candidature.getSujetProjet();
+        SujetProjet sujetProjet = candidature.getSujetProjet();
+        ProjetCatalogue projetCatalogue = candidature.getProjetCatalogue();
         User demandeur = candidature.getDemandeur();
         User decideur = candidature.getCiDecideur();
         List<ReponseIndustrialisationResponse> reponses = includeDetails
@@ -517,34 +626,99 @@ public class IndustrialisationService {
                     .map(this::toReponseResponse)
                     .toList()
                 : List.of();
-        List<LivrableResponse> livrables = includeDetails ? livrableService.findByProjet(projet.getId()) : List.of();
         List<HistoriqueIndustrialisationResponse> historique = includeDetails
                 ? historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, candidature.getId(), org.springframework.data.domain.Pageable.unpaged()).content()
                     .stream()
                     .map(HistoriqueIndustrialisationResponse::from)
                     .toList()
                 : List.of();
-        EvaluationResponse latestEvaluation = includeDetails ? findLatestEvaluation(projet.getId()) : null;
+
+        Long projetId;
+        String projetTitre;
+        StatutSujet projetStatut;
+        CategorieSujet projetCategorie;
+        String projetDomaine;
+        String projetDescription;
+        String projetObjectifs;
+        String projetTechnologies;
+        String projetPrerequis;
+        java.time.LocalDateTime projetDateCreation;
+        java.time.LocalDateTime projetDateSoumission;
+        java.time.LocalDateTime projetDateValidation;
+        java.time.LocalDateTime projetDateTerminaison;
+        Double scoreEvaluationProjet;
+        Boolean eligibleIndustrialisation;
+        Boolean bloqueParEliminatoire;
+        List<LivrableResponse> livrables;
+        EvaluationResponse latestEvaluation;
+
+        if (sujetProjet != null) {
+            projetId = sujetProjet.getId();
+            projetTitre = sujetProjet.getTitre();
+            projetStatut = sujetProjet.getStatut();
+            projetCategorie = sujetProjet.getCategorie();
+            projetDomaine = sujetProjet.getDomaine();
+            projetDescription = sujetProjet.getDescription();
+            projetObjectifs = sujetProjet.getObjectifs();
+            projetTechnologies = sujetProjet.getTechnologies();
+            projetPrerequis = sujetProjet.getPrerequis();
+            projetDateCreation = sujetProjet.getDateCreation();
+            projetDateSoumission = sujetProjet.getDateSoumission();
+            projetDateValidation = sujetProjet.getDateValidation();
+            projetDateTerminaison = sujetProjet.getDateTerminaison();
+            scoreEvaluationProjet = sujetProjet.getScoreFinalEvaluation();
+            eligibleIndustrialisation = sujetProjet.getEligibleIndustrialisation();
+            bloqueParEliminatoire = sujetProjet.getBloqueParEliminatoire();
+            livrables = includeDetails ? livrableService.findByProjet(sujetProjet.getId()) : List.of();
+            latestEvaluation = includeDetails ? findLatestEvaluation(sujetProjet.getId()) : null;
+        } else {
+            projetId = projetCatalogue.getId();
+            projetTitre = projetCatalogue.getTitre();
+            // Les valeurs de StatutProjet/CategorieSujet portent les memes noms que StatutSujet/CategorieSujet :
+            // on reutilise ces enums cote reponse pour ne pas dupliquer le DTO pour les deux sources possibles.
+            projetStatut = StatutSujet.valueOf(projetCatalogue.getStatut().name());
+            projetCategorie = CategorieSujet.valueOf(projetCatalogue.getTypeProjet().name());
+            projetDomaine = joinNoms(projetCatalogue.getDomaines().stream().map(d -> d.getNom()));
+            projetDescription = projetCatalogue.getDescription();
+            projetObjectifs = projetCatalogue.getObjectifs();
+            projetTechnologies = joinNoms(projetCatalogue.getTechnologies().stream().map(t -> t.getNom()));
+            projetPrerequis = joinNoms(projetCatalogue.getPrerequis().stream().map(p -> p.getNom()));
+            projetDateCreation = projetCatalogue.getDateCreation();
+            projetDateSoumission = null;
+            projetDateValidation = projetCatalogue.getDateValidation();
+            projetDateTerminaison = null;
+            scoreEvaluationProjet = null;
+            eligibleIndustrialisation = null;
+            bloqueParEliminatoire = null;
+            livrables = includeDetails
+                    ? livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetCatalogue.getId())
+                        .stream()
+                        .map(this::toLivrableResponse)
+                        .toList()
+                    : List.of();
+            latestEvaluation = null;
+        }
+
         List<String> warnings = collectSubmissionWarnings(livrables, includeDetails, forceMissingLivrablesWarning);
 
         return new CandidatureIndustrialisationResponse(
                 candidature.getId(),
-                projet.getId(),
-                projet.getTitre(),
-                projet.getStatut(),
-                projet.getCategorie(),
-                projet.getDomaine(),
-                projet.getDescription(),
-                projet.getObjectifs(),
-                projet.getTechnologies(),
-                projet.getPrerequis(),
-                projet.getDateCreation(),
-                projet.getDateSoumission(),
-                projet.getDateValidation(),
-                projet.getDateTerminaison(),
-                projet.getScoreFinalEvaluation(),
-                projet.getEligibleIndustrialisation(),
-                projet.getBloqueParEliminatoire(),
+                projetId,
+                projetTitre,
+                projetStatut,
+                projetCategorie,
+                projetDomaine,
+                projetDescription,
+                projetObjectifs,
+                projetTechnologies,
+                projetPrerequis,
+                projetDateCreation,
+                projetDateSoumission,
+                projetDateValidation,
+                projetDateTerminaison,
+                scoreEvaluationProjet,
+                eligibleIndustrialisation,
+                bloqueParEliminatoire,
                 candidature.getHasEliminatoryWarnings(),
                 candidature.getEliminatoryWarningsCount(),
                 parseWarnings(candidature.getEliminatoryWarningsDetails()),
@@ -567,6 +741,31 @@ public class IndustrialisationService {
                 historique,
                 latestEvaluation,
                 warnings
+        );
+    }
+
+    private String joinNoms(java.util.stream.Stream<String> noms) {
+        return noms.sorted().collect(Collectors.joining(", "));
+    }
+
+    private LivrableResponse toLivrableResponse(LivrableCatalogue livrable) {
+        User deposant = livrable.getDeposant();
+        return new LivrableResponse(
+                livrable.getId(),
+                livrable.getProjet().getId(),
+                livrable.getProjet().getTitre(),
+                livrable.getTypeLivrable(),
+                livrable.getNom(),
+                livrable.getDescription(),
+                livrable.getOriginalFileName(),
+                livrable.getObjectName(),
+                livrable.getContentType(),
+                livrable.getSize(),
+                livrable.getLienExterne(),
+                deposant.getId(),
+                deposant.getPrenom() + " " + deposant.getNom(),
+                livrable.getDateDepot(),
+                livrable.getActif()
         );
     }
 

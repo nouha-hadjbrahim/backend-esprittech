@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import tn.esprit.backend_esprittech.dto.CritereEval.MlDeliverableContent;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
+import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.io.InputStream;
@@ -31,22 +32,72 @@ public class DeliverableContentExtractionService {
     @Value("${evaluation.limits.max-file-bytes:5242880}")
     private long maxFileBytes;
 
+    /**
+     * Vue commune sur un livrable, indépendante de l'entité source ({@link Livrable} rattaché à un
+     * sujet, ou {@link LivrableCatalogue} rattaché à un projet catalogue), pour partager la logique
+     * d'extraction de contenu vers le moteur ML.
+     */
+    private record DeliverableRef(
+            Long id,
+            String objectName,
+            Long size,
+            String typeLivrableName,
+            String contentType,
+            String nom,
+            String originalFileName
+    ) {
+        static DeliverableRef of(Livrable livrable) {
+            return new DeliverableRef(
+                    livrable.getId(),
+                    livrable.getObjectName(),
+                    livrable.getSize(),
+                    livrable.getTypeLivrable() == null ? null : livrable.getTypeLivrable().name(),
+                    livrable.getContentType(),
+                    livrable.getNom(),
+                    livrable.getOriginalFileName()
+            );
+        }
+
+        static DeliverableRef of(LivrableCatalogue livrable) {
+            return new DeliverableRef(
+                    livrable.getId(),
+                    livrable.getObjectName(),
+                    livrable.getSize(),
+                    livrable.getTypeLivrable() == null ? null : livrable.getTypeLivrable().name(),
+                    livrable.getContentType(),
+                    livrable.getNom(),
+                    livrable.getOriginalFileName()
+            );
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<MlDeliverableContent> extract(List<Livrable> livrables) {
         return livrables.stream()
-                .filter(livrable -> StringUtils.hasText(livrable.getObjectName()))
+                .map(DeliverableRef::of)
+                .filter(ref -> StringUtils.hasText(ref.objectName()))
                 .map(this::prepare)
                 .toList();
     }
 
-    private MlDeliverableContent prepare(Livrable livrable) {
-        if (!StringUtils.hasText(livrable.getObjectName())) {
+    /** Variante pour les livrables du catalogue applicatif ({@link LivrableCatalogue}). */
+    @Transactional(readOnly = true)
+    public List<MlDeliverableContent> extractCatalogue(List<LivrableCatalogue> livrables) {
+        return livrables.stream()
+                .map(DeliverableRef::of)
+                .filter(ref -> StringUtils.hasText(ref.objectName()))
+                .map(this::prepare)
+                .toList();
+    }
+
+    private MlDeliverableContent prepare(DeliverableRef livrable) {
+        if (!StringUtils.hasText(livrable.objectName())) {
             return unsupported(livrable, "EXTERNAL_LINK_NOT_A_MINIO_OBJECT");
         }
-        if (!validObjectName(livrable.getObjectName())) {
+        if (!validObjectName(livrable.objectName())) {
             return securityRejected(livrable, "INVALID_MINIO_OBJECT_NAME");
         }
-        if (livrable.getSize() != null && livrable.getSize() > maxFileBytes) {
+        if (livrable.size() != null && livrable.size() > maxFileBytes) {
             return securityRejected(livrable, "FILE_SIZE_LIMIT_EXCEEDED");
         }
         String extension = extensionOf(livrable);
@@ -55,7 +106,7 @@ public class DeliverableContentExtractionService {
         }
 
         try {
-            MinioStorageService.DownloadedObject downloaded = storageService.download(livrable.getObjectName());
+            MinioStorageService.DownloadedObject downloaded = storageService.download(livrable.objectName());
             if (downloaded.size() > maxFileBytes) {
                 return securityRejected(livrable, "MINIO_OBJECT_SIZE_LIMIT_EXCEEDED");
             }
@@ -66,15 +117,15 @@ public class DeliverableContentExtractionService {
                 String sourceType = sourceType(livrable, extension);
                 String content = inlineTextIfSafe(sourceType, bytes);
                 return new MlDeliverableContent(
-                        livrable.getId(),
-                        livrable.getTypeLivrable() == null ? null : livrable.getTypeLivrable().name(),
+                        livrable.id(),
+                        livrable.typeLivrableName(),
                         sourceType,
                         filename(livrable),
-                        livrable.getNom(),
+                        livrable.nom(),
                         downloaded.contentType(),
-                        livrable.getContentType(),
+                        livrable.contentType(),
                         downloaded.size(),
-                        livrable.getObjectName(),
+                        livrable.objectName(),
                         hash,
                         "RECEIVED",
                         null,
@@ -87,17 +138,17 @@ public class DeliverableContentExtractionService {
         }
     }
 
-    private MlDeliverableContent unsupported(Livrable livrable, String reason) {
+    private MlDeliverableContent unsupported(DeliverableRef livrable, String reason) {
         return new MlDeliverableContent(
-                livrable.getId(),
-                livrable.getTypeLivrable() == null ? null : livrable.getTypeLivrable().name(),
+                livrable.id(),
+                livrable.typeLivrableName(),
                 sourceType(livrable, extensionOf(livrable)),
                 filename(livrable),
-                livrable.getNom(),
-                livrable.getContentType(),
-                livrable.getContentType(),
-                livrable.getSize(),
-                livrable.getObjectName(),
+                livrable.nom(),
+                livrable.contentType(),
+                livrable.contentType(),
+                livrable.size(),
+                livrable.objectName(),
                 null,
                 "UNSUPPORTED_FORMAT",
                 reason,
@@ -106,17 +157,17 @@ public class DeliverableContentExtractionService {
         );
     }
 
-    private MlDeliverableContent securityRejected(Livrable livrable, String reason) {
+    private MlDeliverableContent securityRejected(DeliverableRef livrable, String reason) {
         return new MlDeliverableContent(
-                livrable.getId(),
-                livrable.getTypeLivrable() == null ? null : livrable.getTypeLivrable().name(),
+                livrable.id(),
+                livrable.typeLivrableName(),
                 sourceType(livrable, extensionOf(livrable)),
                 filename(livrable),
-                livrable.getNom(),
-                livrable.getContentType(),
-                livrable.getContentType(),
-                livrable.getSize(),
-                livrable.getObjectName(),
+                livrable.nom(),
+                livrable.contentType(),
+                livrable.contentType(),
+                livrable.size(),
+                livrable.objectName(),
                 null,
                 "SECURITY_REJECTED",
                 reason,
@@ -138,19 +189,19 @@ public class DeliverableContentExtractionService {
 
     private boolean validObjectName(String objectName) {
         return StringUtils.hasText(objectName)
-                && objectName.startsWith("livrables/")
+                && (objectName.startsWith("livrables/") || objectName.startsWith("livrables-catalogue/"))
                 && !objectName.contains("..")
                 && !objectName.contains("\\")
                 && !objectName.startsWith("/");
     }
 
-    private String filename(Livrable livrable) {
-        return StringUtils.hasText(livrable.getOriginalFileName())
-                ? livrable.getOriginalFileName()
-                : livrable.getNom();
+    private String filename(DeliverableRef livrable) {
+        return StringUtils.hasText(livrable.originalFileName())
+                ? livrable.originalFileName()
+                : livrable.nom();
     }
 
-    private String extensionOf(Livrable livrable) {
+    private String extensionOf(DeliverableRef livrable) {
         String name = filename(livrable);
         if (!StringUtils.hasText(name) || !name.contains(".")) {
             return "";
@@ -158,7 +209,7 @@ public class DeliverableContentExtractionService {
         return name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
     }
 
-    private String sourceType(Livrable livrable, String extension) {
+    private String sourceType(DeliverableRef livrable, String extension) {
         String name = filename(livrable).toLowerCase(Locale.ROOT);
         if ("pdf".equals(extension)) return "PDF";
         if ("docx".equals(extension)) return "DOCX";
@@ -169,7 +220,7 @@ public class DeliverableContentExtractionService {
         if ("jpg".equals(extension) || "jpeg".equals(extension)) return "JPEG";
         if ("json".equals(extension) && name.contains("sonar")) return "SONAR_REPORT";
         if (Set.of("json", "xml", "lcov").contains(extension)) return "COVERAGE_REPORT";
-        return livrable.getTypeLivrable() == null ? "UNKNOWN" : livrable.getTypeLivrable().name();
+        return livrable.typeLivrableName() == null ? "UNKNOWN" : livrable.typeLivrableName();
     }
 
     private String sha256(byte[] bytes) throws Exception {

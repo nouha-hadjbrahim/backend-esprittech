@@ -26,4 +26,6 @@ public interface CandidatureIndustrialisationRepository extends JpaRepository<Ca
     List<CandidatureIndustrialisation> findAllByOrderByDateDemandeDesc();
 
     List<CandidatureIndustrialisation> findBySujetProjetIdOrderByDateDemandeDesc(Long sujetProjetId);
+
+    List<CandidatureIndustrialisation> findByProjetCatalogueIdOrderByDateDemandeDesc(Long projetCatalogueId);
 }
