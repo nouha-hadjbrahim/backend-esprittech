@@ -15,8 +15,11 @@ import tn.esprit.backend_esprittech.config.AuthCookieFactory;
 import tn.esprit.backend_esprittech.dto.request.ChangePasswordRequest;
 import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
+import tn.esprit.backend_esprittech.dto.request.ResendCodeRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateProfileRequest;
+import tn.esprit.backend_esprittech.dto.request.VerifyEmailRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
+import tn.esprit.backend_esprittech.dto.response.MessageResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.service.AuthService;
 import tn.esprit.backend_esprittech.service.UserService;
@@ -42,14 +45,33 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    @Operation(summary = "Inscription",
-            description = "Crée un compte et dépose les tokens dans des cookies HttpOnly. "
-                    + "Le corps ne contient que les infos utilisateur.")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request,
-                                                  HttpServletResponse response) {
-        AuthResponse result = authService.register(request);
+    @Operation(summary = "Inscription — étape 1 : envoi du code",
+            description = "Vérifie l'appartenance à l'organisation ESPRIT (Azure) et envoie un code "
+                    + "de vérification à l'email. Aucun compte n'est créé à cette étape.")
+    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest request) {
+        authService.startRegistration(request);
+        return ResponseEntity.accepted().body(MessageResponse.of(
+                "Un code de vérification a été envoyé à votre adresse email."));
+    }
+
+    @PostMapping("/register/verify")
+    @Operation(summary = "Inscription — étape 2 : vérification du code",
+            description = "Valide le code OTP reçu par email, crée le compte et dépose les tokens "
+                    + "dans des cookies HttpOnly.")
+    public ResponseEntity<UserResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request,
+                                                     HttpServletResponse response) {
+        AuthResponse result = authService.verifyEmailAndCreate(request.email(), request.code());
         writeAuthCookies(response, result);
         return ResponseEntity.status(HttpStatus.CREATED).body(result.user());
+    }
+
+    @PostMapping("/register/resend")
+    @Operation(summary = "Inscription — renvoyer le code",
+            description = "Renvoie un nouveau code de vérification pour une inscription en attente.")
+    public ResponseEntity<MessageResponse> resendCode(@Valid @RequestBody ResendCodeRequest request) {
+        authService.resendVerificationCode(request.email());
+        return ResponseEntity.accepted().body(MessageResponse.of(
+                "Un nouveau code de vérification a été envoyé à votre adresse email."));
     }
 
     @PostMapping("/login")

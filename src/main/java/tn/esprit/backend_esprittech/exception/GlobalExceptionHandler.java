@@ -30,9 +30,20 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
     }
 
-    @ExceptionHandler(ReferentielNotFoundException.class)
-    public ProblemDetail handleReferentielNotFound(ReferentielNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, "Référentiel", ex.getMessage());
+    @ExceptionHandler(OrganizationMembershipException.class)
+    public ProblemDetail handleOrganizationMembership(OrganizationMembershipException ex) {
+        return build(HttpStatus.NOT_FOUND, "Organisation", ex.getMessage());
+    }
+
+    @ExceptionHandler(AzureGraphException.class)
+    public ProblemDetail handleAzureGraph(AzureGraphException ex) {
+        log.error("Erreur d'appel à Azure AD / Microsoft Graph", ex);
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "Service indisponible", ex.getMessage());
+    }
+
+    @ExceptionHandler(EmailVerificationException.class)
+    public ProblemDetail handleEmailVerification(EmailVerificationException ex) {
+        return build(HttpStatus.BAD_REQUEST, "Vérification email", ex.getMessage());
     }
 
     @ExceptionHandler(java.util.NoSuchElementException.class)

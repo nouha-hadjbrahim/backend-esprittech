@@ -69,6 +69,8 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(
                                 new AntPathRequestMatcher("/api/auth/login"),
                                 new AntPathRequestMatcher("/api/auth/register"),
+                                new AntPathRequestMatcher("/api/auth/register/verify"),
+                                new AntPathRequestMatcher("/api/auth/register/resend"),
                                 new AntPathRequestMatcher("/api/auth/refresh"),
                                 new AntPathRequestMatcher("/api/auth/logout")))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -80,6 +82,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/register",
+                                "/api/auth/register/verify",
+                                "/api/auth/register/resend",
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/auth/logout").permitAll()

@@ -36,12 +36,17 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ResultatCritere;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
+import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
+import tn.esprit.backend_esprittech.entity.sujetprojet.SujetDomaine;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
+import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
@@ -49,7 +54,9 @@ import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundExcept
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
+import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.notification.NotificationService;
@@ -90,6 +97,8 @@ public class EvaluationService {
     private final ObjectMapper objectMapper;
     private final ProjetCatalogueService projetCatalogueService;
     private final NotificationService notificationService;
+    private final ProjetCatalogueRepository projetCatalogueRepository;
+    private final LivrableCatalogueRepository livrableCatalogueRepository;
 
     @Value("${evaluation.ml.recalculation-cooldown-seconds:0}")
     private long recalculationCooldownSeconds;
@@ -188,6 +197,45 @@ public class EvaluationService {
         return sujetProjetRepository.findById(projetId)
                 .map(SujetProjet::getTitre)
                 .orElse("Inconnu");
+    }
+
+    public String getProjetCatalogueTitreById(Long projetId) {
+        return projetCatalogueRepository.findById(projetId)
+                .map(ProjetCatalogue::getTitre)
+                .orElse("Inconnu");
+    }
+
+    // ── Évaluation directe d'un projet du catalogue applicatif (ProjetCatalogue) ──────────────
+    // Le moteur ML est le même que pour les sujets : seule la source des données projet/livrables
+    // change. Permet d'évaluer un projet catalogue déposé manuellement (sans sujet d'origine).
+
+    @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet catalogue ' + @evaluationService.getProjetCatalogueTitreById(#projetId)")
+    public EvaluationResponse calculateAutomaticEvaluationForCatalogue(Long projetId, String recalculationReason) {
+        ProjetCatalogue projet = getProjetCatalogueAndValidateValide(projetId);
+        User currentUser = userService.getCurrentUser();
+        ensureCanCalculateCatalogue(currentUser, projet);
+        ensureNoDuplicateEvaluationCatalogue(projetId);
+        EvaluationTrigger trigger = currentUser.getRole() == Role.ROLE_ADMIN
+                ? EvaluationTrigger.ADMIN_RECALCULATION
+                : EvaluationTrigger.MANUAL_RECALCULATION;
+        String correlationId = UUID.randomUUID().toString();
+        EvaluationData data = buildAutomaticEvaluationFromMlCatalogue(projet, trigger, correlationId);
+        String effectiveReason = currentUser.getRole() == Role.ROLE_ENSEIGNANT
+                ? "Nouveaux livrables deposes"
+                : recalculationReason;
+        return persistEvaluationCatalogue(projet, data, resolveActorName(currentUser), effectiveReason);
+    }
+
+    @Transactional(readOnly = true)
+    public EvaluationResponse getLatestEvaluationByProjetCatalogue(Long projetId) {
+        ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+        ensureCanViewCatalogue(userService.getCurrentUser(), projet);
+
+        Evaluation evaluation = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDesc(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
+
+        return toResponse(evaluation);
     }
 
     public Map<String, Object> getOldValues(Long projetId) {
@@ -357,18 +405,67 @@ public class EvaluationService {
     private EvaluationData buildAutomaticEvaluationFromMl(SujetProjet projet,
                                                           EvaluationTrigger trigger,
                                                           String correlationId) {
+        List<Livrable> livrables = livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
+        List<MlDeliverableContent> extractedContent = contentExtractionService.extract(livrables);
+        List<MlExternalSourceRequest> externalSources = buildExternalSources(livrables);
+        return buildAutomaticEvaluationFromMl(
+                projet.getId(),
+                projet.getTitre(),
+                projet.getDomaine(),
+                projet.getTechnologies(),
+                projet.getCategorie() == null ? null : projet.getCategorie().name(),
+                extractedContent,
+                externalSources,
+                trigger,
+                correlationId
+        );
+    }
+
+    private EvaluationData buildAutomaticEvaluationFromMlCatalogue(ProjetCatalogue projet,
+                                                                   EvaluationTrigger trigger,
+                                                                   String correlationId) {
+        List<LivrableCatalogue> livrables = livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
+        List<MlDeliverableContent> extractedContent = contentExtractionService.extractCatalogue(livrables);
+        List<MlExternalSourceRequest> externalSources = buildExternalSourcesCatalogue(livrables);
+        return buildAutomaticEvaluationFromMl(
+                projet.getId(),
+                projet.getTitre(),
+                joinDomaineNoms(projet),
+                joinTechnologieNoms(projet),
+                projet.getTypeProjet() == null ? null : projet.getTypeProjet().name(),
+                extractedContent,
+                externalSources,
+                trigger,
+                correlationId
+        );
+    }
+
+    /**
+     * Cœur du calcul ML, commun aux sujets et aux projets catalogue : ne dépend que des champs
+     * projet (id, titre, domaine, technologies, catégorie) et des livrables déjà extraits.
+     */
+    private EvaluationData buildAutomaticEvaluationFromMl(Long projetId,
+                                                          String titre,
+                                                          String domaine,
+                                                          String technologies,
+                                                          String categorieName,
+                                                          List<MlDeliverableContent> extractedContent,
+                                                          List<MlExternalSourceRequest> externalSources,
+                                                          EvaluationTrigger trigger,
+                                                          String correlationId) {
         List<CritereEliminatoire> criteresEliminatoires = critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc();
         List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
         Set<Integer> activeNoteValues = activeNoteValuesFor(criteresNotes);
         int maxActiveNoteValue = maxActiveNoteValue(activeNoteValues);
-        List<Livrable> livrables = livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
-        List<MlDeliverableContent> extractedContent = contentExtractionService.extract(livrables);
-        List<MlExternalSourceRequest> externalSources = buildExternalSources(livrables);
-        String projectSnapshotHash = projectSnapshotHash(projet, criteresEliminatoires, criteresNotes);
+        String projectSnapshotHash = projectSnapshotHash(projetId, titre, domaine, technologies, categorieName, criteresEliminatoires, criteresNotes);
         String deliverableSnapshotHash = deliverableSnapshotHash(extractedContent, externalSources);
         String inputSnapshotHash = sha256(projectSnapshotHash + ":" + deliverableSnapshotHash + ":" + criteriaVersion + ":" + evaluationEngine);
         MlEvaluationRequest mlRequest = buildMlRequest(
-                projet,
+                projetId,
+                titre,
+                domaine,
+                technologies,
+                categorieName,
                 criteresEliminatoires,
                 criteresNotes,
                 extractedContent,
@@ -577,7 +674,6 @@ public class EvaluationService {
                     (int) Math.round(data.scoreFinal())
             );
         }
-
         if (projet.getEncadrantId() != null && data.scoreFinal() != null) {
             notificationService.creerNotification(
                     projet.getEncadrantId(),
@@ -590,6 +686,54 @@ public class EvaluationService {
         return toResponse(savedEvaluation);
     }
 
+    private EvaluationResponse persistEvaluationCatalogue(ProjetCatalogue projet,
+                                                         EvaluationData data,
+                                                         String calculatedBy,
+                                                         String recalculationReason) {
+        Evaluation evaluation = new Evaluation();
+        evaluation.setProjetCatalogue(projet);
+        evaluation.setScoreFinal(data.scoreFinal());
+        evaluation.setMlScore(data.mlScore());
+        evaluation.setMlStatus(data.mlStatus());
+        evaluation.setTrigger(data.trigger());
+        evaluation.setCorrelationId(data.correlationId());
+        evaluation.setEngineType(data.engineType());
+        evaluation.setModelName(data.modelName());
+        evaluation.setMlModelVersion(data.mlModelVersion());
+        evaluation.setPipelineVersion(data.pipelineVersion());
+        evaluation.setCriteriaVersion(data.criteriaVersion());
+        evaluation.setProjectSnapshotHash(data.projectSnapshotHash());
+        evaluation.setDeliverableSnapshotHash(data.deliverableSnapshotHash());
+        evaluation.setInputSnapshotHash(data.inputSnapshotHash());
+        evaluation.setProcessingStatus(data.processingStatus());
+        evaluation.setEligibilityStatus(data.eligibilityStatus());
+        evaluation.setMlGlobalConfidence(data.mlGlobalConfidence());
+        evaluation.setMlWarnings(joinLines(data.mlWarnings()));
+        evaluation.setStrengths(joinLines(data.strengths()));
+        evaluation.setWeaknesses(joinLines(data.weaknesses()));
+        evaluation.setRecommendations(joinLines(data.recommendations()));
+        evaluation.setFinalValidatedScore(null);
+        evaluation.setValidationStatus("PENDING");
+        evaluation.setErrorMessage(data.errorMessage());
+        evaluation.setEligibleIndustrialisation(data.eligibleIndustrialisation());
+        evaluation.setBloqueParEliminatoire(data.hasEliminatoryWarnings());
+        evaluation.setHasEliminatoryWarnings(data.hasEliminatoryWarnings());
+        evaluation.setEliminatoryWarningsCount(data.eliminatoryWarnings().size());
+        evaluation.setEliminatoryWarningsDetails(String.join("\n", data.eliminatoryWarnings()));
+        evaluation.setCommentaire(data.commentaire());
+        evaluation.setCalculatedBy(calculatedBy);
+        evaluation.setRecalculationReason(recalculationReason);
+        data.resultats().forEach(evaluation::addResultat);
+
+        Evaluation savedEvaluation = evaluationRepository.save(evaluation);
+
+        if (data.scoreFinal() != null) {
+            projet.setScore(Math.max(0, (int) Math.round(data.scoreFinal())));
+            projetCatalogueRepository.save(projet);
+        }
+
+        return toResponse(savedEvaluation);
+    }
     private void applyNoteResult(ResultatCritere resultat,
                                  Integer noteValue,
                                  Double poids,
@@ -611,7 +755,11 @@ public class EvaluationService {
         resultat.setEvidenceSummary(metadataUsed);
     }
 
-    private MlEvaluationRequest buildMlRequest(SujetProjet projet,
+    private MlEvaluationRequest buildMlRequest(Long projetId,
+                                               String titre,
+                                               String domaine,
+                                               String technologies,
+                                               String categorieName,
                                                List<CritereEliminatoire> criteresEliminatoires,
                                                List<CritereNote> criteresNotes,
                                                List<MlDeliverableContent> extractedContent,
@@ -647,7 +795,7 @@ public class EvaluationService {
         }
 
         return new MlEvaluationRequest(
-                projet.getId(),
+                projetId,
                 correlationId,
                 criteriaVersion,
                 evaluationEngine,
@@ -655,11 +803,11 @@ public class EvaluationService {
                 projectSnapshotHash,
                 deliverableSnapshotHash,
                 new MlProjectContext(
-                        projet.getId(),
-                        safeValue(projet.getTitre()),
-                        safeValue(projet.getDomaine()),
-                        safeValue(projet.getTechnologies()),
-                        projet.getCategorie() == null ? null : projet.getCategorie().name()
+                        projetId,
+                        safeValue(titre),
+                        safeValue(domaine),
+                        safeValue(technologies),
+                        categorieName
                 ),
                 criteria,
                 extractedContent,
@@ -751,6 +899,36 @@ public class EvaluationService {
                 .toList();
     }
 
+    private List<MlExternalSourceRequest> buildExternalSourcesCatalogue(List<LivrableCatalogue> livrables) {
+        return livrables.stream()
+                .filter(livrable -> livrable.getTypeLivrable() == tn.esprit.backend_esprittech.entity.livrable.TypeLivrable.LIEN_GIT)
+                .filter(livrable -> StringUtils.hasText(livrable.getLienExterne()))
+                .map(livrable -> new MlExternalSourceRequest(
+                        "GIT",
+                        livrable.getLienExterne().trim(),
+                        null,
+                        List.of(),
+                        null
+                ))
+                .toList();
+    }
+
+    private String joinDomaineNoms(ProjetCatalogue projet) {
+        return projet.getDomaines().stream()
+                .map(SujetDomaine::getNom)
+                .filter(StringUtils::hasText)
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
+    private String joinTechnologieNoms(ProjetCatalogue projet) {
+        return projet.getTechnologies().stream()
+                .map(SujetTechnologie::getNom)
+                .filter(StringUtils::hasText)
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
     private List<String> requiredEvidenceTypes(CritereEvaluation critere) {
         if (StringUtils.hasText(critere.getRequiredEvidenceTypes())) {
             return splitConfigurationValues(critere.getRequiredEvidenceTypes());
@@ -817,7 +995,11 @@ public class EvaluationService {
                 .toList();
     }
 
-    private String projectSnapshotHash(SujetProjet projet,
+    private String projectSnapshotHash(Long projetId,
+                                       String titre,
+                                       String domaine,
+                                       String technologies,
+                                       String categorieName,
                                        List<CritereEliminatoire> criteresEliminatoires,
                                        List<CritereNote> criteresNotes) {
         List<CritereEvaluation> allCriteria = new ArrayList<>();
@@ -838,9 +1020,9 @@ public class EvaluationService {
                         + "|" + safeValue(critere.getNegativeEvidenceExpectations())
                         + "|" + safeValue(critere.getSourceAuthorityRules()))
                 .collect(Collectors.joining(";"));
-        return sha256(projet.getId() + "|" + safeValue(projet.getTitre()) + "|"
-                + safeValue(projet.getDomaine()) + "|" + safeValue(projet.getTechnologies())
-                + "|" + (projet.getCategorie() == null ? "" : projet.getCategorie().name())
+        return sha256(projetId + "|" + safeValue(titre) + "|"
+                + safeValue(domaine) + "|" + safeValue(technologies)
+                + "|" + safeValue(categorieName)
                 + "|" + criteriaVersion + "|" + criteria);
     }
 
@@ -1378,6 +1560,64 @@ public class EvaluationService {
         throw new AccessDeniedException("Vous n'etes pas autorise a consulter cette evaluation.");
     }
 
+    private ProjetCatalogue getProjetCatalogueAndValidateValide(Long projetId) {
+        ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+        if (projet.getStatut() != StatutProjet.VALIDE) {
+            throw new BadRequestException("Le projet doit etre valide pour etre evalue.");
+        }
+        return projet;
+    }
+
+    private boolean isCatalogueEncadrant(User current, ProjetCatalogue projet) {
+        return projet.getEncadrant() != null && projet.getEncadrant().getId().equals(current.getId());
+    }
+
+    private boolean isCatalogueChefEquipe(User current, ProjetCatalogue projet) {
+        return projet.getEquipeRecherche() != null
+                && projet.getEquipeRecherche().getChef() != null
+                && projet.getEquipeRecherche().getChef().getId().equals(current.getId());
+    }
+
+    private void ensureCanCalculateCatalogue(User current, ProjetCatalogue projet) {
+        if (current.getRole() == Role.ROLE_ADMIN) {
+            return;
+        }
+        if ((current.getRole() == Role.ROLE_ENSEIGNANT || current.getRole() == Role.ROLE_CHEF_EQUIPE)
+                && (isCatalogueEncadrant(current, projet) || isCatalogueChefEquipe(current, projet))) {
+            return;
+        }
+        throw new AccessDeniedException("Vous n'etes pas autorise a recalculer le score de ce projet.");
+    }
+
+    private void ensureCanViewCatalogue(User current, ProjetCatalogue projet) {
+        if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CI) {
+            return;
+        }
+        if ((current.getRole() == Role.ROLE_ENSEIGNANT || current.getRole() == Role.ROLE_CHEF_EQUIPE)
+                && (isCatalogueEncadrant(current, projet) || isCatalogueChefEquipe(current, projet))) {
+            return;
+        }
+        throw new AccessDeniedException("Vous n'etes pas autorise a consulter cette evaluation.");
+    }
+
+    private void ensureNoDuplicateEvaluationCatalogue(Long projetId) {
+        if (recalculationCooldownSeconds <= 0) {
+            return;
+        }
+        Evaluation latest = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDesc(projetId).orElse(null);
+        if (latest == null || latest.getDateCalcul() == null) {
+            return;
+        }
+        LocalDateTime allowedAt = latest.getDateCalcul().plusSeconds(recalculationCooldownSeconds);
+        if (allowedAt.isAfter(LocalDateTime.now())) {
+            long retryAfterSeconds = Math.max(1, java.time.Duration.between(LocalDateTime.now(), allowedAt).toSeconds());
+            throw new BusinessConflictException(
+                    "Une evaluation vient deja d'etre calculee. Reessayez dans " + retryAfterSeconds + " seconde(s)."
+            );
+        }
+    }
+
     private void ensureCanValidate(User current) {
         if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CI) {
             return;
@@ -1532,9 +1772,13 @@ public class EvaluationService {
                 .toList();
         String coverageMessage = coverageMessage(evaluation, totalNotes, notesConfigures, incompleteCriteria.size());
 
+        Long projetIdForResponse = evaluation.getSujetProjet() != null
+                ? evaluation.getSujetProjet().getId()
+                : (evaluation.getProjetCatalogue() != null ? evaluation.getProjetCatalogue().getId() : null);
+
         return new EvaluationResponse(
                 evaluation.getId(),
-                evaluation.getSujetProjet().getId(),
+                projetIdForResponse,
                 evaluation.getScoreFinal(),
                 evaluation.getEligibleIndustrialisation(),
                 evaluation.getBloqueParEliminatoire(),

@@ -10,12 +10,12 @@ import tn.esprit.backend_esprittech.config.JwtTokenProvider;
 import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
-import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.EmailVerificationService.PendingData;
 
 @Service
 public class AuthService {
@@ -25,50 +25,84 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
-    private final ReferentielService referentielService;
+    private final AzureGraphService azureGraphService;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider,
                        AuthenticationManager authenticationManager,
                        UserService userService,
-                       ReferentielService referentielService) {
+                       AzureGraphService azureGraphService,
+                       EmailVerificationService emailVerificationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.authenticationManager = authenticationManager;
         this.userService = userService;
-        this.referentielService = referentielService;
+        this.azureGraphService = azureGraphService;
+        this.emailVerificationService = emailVerificationService;
     }
 
+    /**
+     * Étape 1 de l'inscription : valide l'appartenance à l'organisation, puis
+     * envoie un code de vérification à l'email. Aucun compte n'est encore créé.
+     */
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        // 1. L'email doit correspondre à une entrée du référentiel (source de vérité)
-        ReferentielUtilisateur reference =
-                referentielService.trouverCorrespondance(request.email());
-
-        // 2. Unicité du compte applicatif
+    public void startRegistration(RegisterRequest request) {
+        // 1. Unicité du compte applicatif (avant l'appel réseau à Azure)
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
         }
 
-        // 3. Le rôle découle du type déclaré dans le référentiel
-        TypeUtilisateur type = reference.getType();
-        Role role = (type == TypeUtilisateur.ENSEIGNANT) ? Role.ROLE_ENSEIGNANT : Role.ROLE_ETUDIANT;
+        // 2. L'email doit appartenir à l'organisation ESPRIT (Azure Entra ID) ;
+        //    le rôle découle de l'appartenance aux groupes enseignant / étudiant.
+        AzureGraphService.GraphMember member = azureGraphService.resolveMember(request.email());
+
+        // 3. Enregistre l'inscription en attente et envoie le code OTP par email.
+        emailVerificationService.startVerification(new PendingData(
+                request.email(),
+                request.nom(),
+                request.prenom(),
+                passwordEncoder.encode(request.password()),
+                member.type(),
+                member.departement()));
+    }
+
+    /**
+     * Étape 2 de l'inscription : valide le code OTP, crée le compte et connecte
+     * l'utilisateur (dépôt des tokens).
+     */
+    @Transactional
+    public AuthResponse verifyEmailAndCreate(String email, String code) {
+        PendingData data = emailVerificationService.consumeVerifiedRegistration(email, code);
+
+        // Garde-fou contre une inscription concurrente sur le même email.
+        if (userRepository.existsByEmail(data.email())) {
+            throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
+        }
+
+        Role role = (data.type() == TypeUtilisateur.ENSEIGNANT)
+                ? Role.ROLE_ENSEIGNANT : Role.ROLE_ETUDIANT;
 
         User user = User.builder()
-                .nom(request.nom())
-                .prenom(request.prenom())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
+                .nom(data.nom())
+                .prenom(data.prenom())
+                .email(data.email())
+                .password(data.encodedPassword())
                 .role(role)
-                .typeUtilisateur(type)
-                .departement(reference.getDepartement())
+                .typeUtilisateur(data.type())
+                .departement(data.departement())
                 .enabled(true)
                 .build();
 
         user = userRepository.save(user);
         return buildAuthResponse(user);
+    }
+
+    /** Renvoie un nouveau code de vérification pour une inscription en attente. */
+    public void resendVerificationCode(String email) {
+        emailVerificationService.resendCode(email);
     }
 
     public AuthResponse login(LoginRequest request) {

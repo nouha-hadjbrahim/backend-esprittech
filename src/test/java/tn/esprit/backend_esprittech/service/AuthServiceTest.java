@@ -15,18 +15,19 @@ import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
-import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.exception.EmailAlreadyExistsException;
-import tn.esprit.backend_esprittech.exception.ReferentielNotFoundException;
+import tn.esprit.backend_esprittech.exception.OrganizationMembershipException;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.EmailVerificationService.PendingData;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,13 +38,15 @@ class AuthServiceTest {
     @Mock private JwtTokenProvider tokenProvider;
     @Mock private AuthenticationManager authenticationManager;
     @Mock private UserService userService;
-    @Mock private ReferentielService referentielService;
+    @Mock private AzureGraphService azureGraphService;
+    @Mock private EmailVerificationService emailVerificationService;
 
     @InjectMocks private AuthService authService;
 
     private User user;
     private UserResponse userResponse;
-    private ReferentielUtilisateur reference;
+    private AzureGraphService.GraphMember member;
+    private PendingData pendingData;
 
     @BeforeEach
     void setUp() {
@@ -61,55 +64,87 @@ class AuthServiceTest {
                 Role.ROLE_ETUDIANT, TypeUtilisateur.ETUDIANT, null, true, null,
                 false, null, null);
 
-        reference = ReferentielUtilisateur.builder()
-                .id(1L).nom("Test").prenom("User")
-                .email("test@esprit.tn").identifiant("ETU-001")
-                .type(TypeUtilisateur.ETUDIANT)
-                .build();
+        member = new AzureGraphService.GraphMember(TypeUtilisateur.ETUDIANT, "GL");
+        pendingData = new PendingData("test@esprit.tn", "Test", "User",
+                "encoded", TypeUtilisateur.ETUDIANT, "GL");
     }
 
-    // ---- register ----
+    // ---- startRegistration (étape 1) ----
 
     @Test
-    void register_success() {
+    void startRegistration_success_sendsVerification() {
         var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
 
-        when(referentielService.trouverCorrespondance("test@esprit.tn")).thenReturn(reference);
         when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(false);
+        when(azureGraphService.resolveMember("test@esprit.tn")).thenReturn(member);
         when(passwordEncoder.encode("Password123")).thenReturn("encoded");
+
+        authService.startRegistration(request);
+
+        verify(emailVerificationService).startVerification(argThat(data ->
+                data.email().equals("test@esprit.tn")
+                        && data.encodedPassword().equals("encoded")
+                        && data.type() == TypeUtilisateur.ETUDIANT));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void startRegistration_emailNotInOrganization_throws() {
+        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
+        when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(false);
+        when(azureGraphService.resolveMember("test@esprit.tn"))
+                .thenThrow(new OrganizationMembershipException("absent"));
+
+        assertThrows(OrganizationMembershipException.class, () -> authService.startRegistration(request));
+        verify(emailVerificationService, never()).startVerification(any());
+    }
+
+    @Test
+    void startRegistration_emailAlreadyExists_throws() {
+        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
+        when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(true);
+
+        assertThrows(EmailAlreadyExistsException.class, () -> authService.startRegistration(request));
+        verify(azureGraphService, never()).resolveMember(any());
+        verify(emailVerificationService, never()).startVerification(any());
+    }
+
+    // ---- verifyEmailAndCreate (étape 2) ----
+
+    @Test
+    void verifyEmailAndCreate_success() {
+        when(emailVerificationService.consumeVerifiedRegistration("test@esprit.tn", "123456"))
+                .thenReturn(pendingData);
+        when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(false);
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(tokenProvider.generateAccessToken(user)).thenReturn("access-token");
         when(tokenProvider.generateRefreshToken(user)).thenReturn("refresh-token");
         when(userService.toEnrichedResponse(user)).thenReturn(userResponse);
 
-        AuthResponse response = authService.register(request);
+        AuthResponse response = authService.verifyEmailAndCreate("test@esprit.tn", "123456");
 
         assertNotNull(response);
         assertEquals("access-token", response.accessToken());
         assertEquals("refresh-token", response.refreshToken());
-        assertEquals("Bearer", response.tokenType());
         assertEquals(userResponse, response.user());
         verify(userRepository).save(any(User.class));
     }
 
     @Test
-    void register_notInReferentiel_throws() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
-        when(referentielService.trouverCorrespondance("test@esprit.tn"))
-                .thenThrow(new ReferentielNotFoundException("absent"));
+    void verifyEmailAndCreate_emailAlreadyExists_throws() {
+        when(emailVerificationService.consumeVerifiedRegistration("test@esprit.tn", "123456"))
+                .thenReturn(pendingData);
+        when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(true);
 
-        assertThrows(ReferentielNotFoundException.class, () -> authService.register(request));
+        assertThrows(EmailAlreadyExistsException.class,
+                () -> authService.verifyEmailAndCreate("test@esprit.tn", "123456"));
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    void register_emailAlreadyExists_throws() {
-        var request = new RegisterRequest("Test", "User", "test@esprit.tn", "Password123");
-        when(referentielService.trouverCorrespondance("test@esprit.tn")).thenReturn(reference);
-        when(userRepository.existsByEmail("test@esprit.tn")).thenReturn(true);
-
-        assertThrows(EmailAlreadyExistsException.class, () -> authService.register(request));
-        verify(userRepository, never()).save(any());
+    void resendVerificationCode_delegatesToService() {
+        authService.resendVerificationCode("test@esprit.tn");
+        verify(emailVerificationService).resendCode(eq("test@esprit.tn"));
     }
 
     // ---- login ----

@@ -4,6 +4,7 @@ package tn.esprit.backend_esprittech.entity.CritereEval;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 
 import java.time.LocalDateTime;
@@ -21,11 +22,20 @@ public class Evaluation {
     private Long id;
 
     /**
-     * Keep this relation with your existing SujetProjet entity.
+     * Sujet évalué lorsque l'évaluation porte sur le pipeline SujetProjet.
+     * Nullable : exactement un des deux (sujetProjet, projetCatalogue) est renseigné.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sujet_projet_id", nullable = false)
+    @JoinColumn(name = "sujet_projet_id")
     private SujetProjet sujetProjet;
+
+    /**
+     * Projet du catalogue applicatif évalué directement (dépôt manuel ou publié depuis un sujet).
+     * Nullable : exactement un des deux (sujetProjet, projetCatalogue) est renseigné.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "projet_catalogue_id")
+    private ProjetCatalogue projetCatalogue;
 
     private Double scoreFinal;
 

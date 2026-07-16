@@ -138,16 +138,41 @@ class GlobalExceptionHandlerTest {
         assertEquals("not found error", pd.getDetail());
     }
     @Test
-    void handleReferentielNotFound_returnsProblemDetail() {
-        ReferentielNotFoundException ex =
-                new ReferentielNotFoundException("Référentiel introuvable");
+    void handleOrganizationMembership_returns404() {
+        OrganizationMembershipException ex =
+                new OrganizationMembershipException("Email hors organisation");
 
-        ProblemDetail result = handler.handleReferentielNotFound(ex);
+        ProblemDetail result = handler.handleOrganizationMembership(ex);
 
         assertNotNull(result);
         assertEquals(HttpStatus.NOT_FOUND.value(), result.getStatus());
-        assertEquals("Référentiel", result.getTitle());
-        assertEquals("Référentiel introuvable", result.getDetail());
+        assertEquals("Organisation", result.getTitle());
+        assertEquals("Email hors organisation", result.getDetail());
+    }
+
+    @Test
+    void handleAzureGraph_returns503() {
+        AzureGraphException ex =
+                new AzureGraphException("Graph indisponible", new RuntimeException("timeout"));
+
+        ProblemDetail result = handler.handleAzureGraph(ex);
+
+        assertNotNull(result);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE.value(), result.getStatus());
+        assertEquals("Service indisponible", result.getTitle());
+        assertEquals("Graph indisponible", result.getDetail());
+    }
+
+    @Test
+    void handleEmailVerification_returns400() {
+        EmailVerificationException ex = new EmailVerificationException("Code invalide");
+
+        ProblemDetail result = handler.handleEmailVerification(ex);
+
+        assertNotNull(result);
+        assertEquals(HttpStatus.BAD_REQUEST.value(), result.getStatus());
+        assertEquals("Vérification email", result.getTitle());
+        assertEquals("Code invalide", result.getDetail());
     }
 
     @Test
@@ -249,13 +274,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleReferentielNotFound_differentMessage_returns404() {
-        ReferentielNotFoundException ex = new ReferentielNotFoundException("Fichier not found");
-        ProblemDetail pd = handler.handleReferentielNotFound(ex);
+    void handleOrganizationMembership_differentMessage_returns404() {
+        OrganizationMembershipException ex = new OrganizationMembershipException("Introuvable dans Azure");
+        ProblemDetail pd = handler.handleOrganizationMembership(ex);
 
         assertEquals(404, pd.getStatus());
-        assertEquals("Référentiel", pd.getTitle());
-        assertEquals("Fichier not found", pd.getDetail());
+        assertEquals("Organisation", pd.getTitle());
+        assertEquals("Introuvable dans Azure", pd.getDetail());
     }
 
     @Test
