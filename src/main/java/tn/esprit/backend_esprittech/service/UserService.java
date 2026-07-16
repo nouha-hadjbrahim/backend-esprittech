@@ -51,7 +51,7 @@ public class UserService {
 
     /** Création directe d'un compte par l'admin (sans validation contre le référentiel). */
     @Transactional
-    @Historise(action = ActionType.CREATE, entityType = EntityType.USER, entityIdExpression = "#result.id()", summaryExpression = "'Création utilisateur ' + #result.getEmail()")
+    @Historise(action = ActionType.CREATE, entityType = EntityType.USER, entityIdExpression = "#result.getId()", summaryExpression = "'Création utilisateur ' + #result.getEmail()")
     public User create(CreateUserRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");

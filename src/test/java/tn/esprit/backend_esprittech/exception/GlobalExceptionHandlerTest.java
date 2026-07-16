@@ -6,6 +6,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -68,6 +69,15 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(403, pd.getStatus());
         assertEquals("Accès refusé", pd.getTitle());
+    }
+
+    @Test
+    void handleAuthorizationDenied_returns403() {
+        ProblemDetail pd = handler.handleAuthorizationDenied(new AuthorizationDeniedException("denied"));
+
+        assertEquals(403, pd.getStatus());
+        assertEquals("Accès refusé", pd.getTitle());
+        assertEquals("Vous n'avez pas les droits requis", pd.getDetail());
     }
 
     @Test

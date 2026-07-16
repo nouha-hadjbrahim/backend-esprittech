@@ -25,6 +25,7 @@ import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,6 +44,7 @@ class SujetProjetAdminServiceTest {
     @Mock private SujetReferenceService referenceService;
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
     @Mock private AffectationRepository affectationRepository;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks private SujetProjetService service;
 

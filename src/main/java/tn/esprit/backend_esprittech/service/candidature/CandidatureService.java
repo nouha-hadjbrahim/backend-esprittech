@@ -27,7 +27,9 @@ import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
 import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 import java.time.Instant;
@@ -52,6 +54,7 @@ public class CandidatureService {
     private final AffectationMapper affectationMapper;
     private final UserService userService;
     private final SujetProjetService sujetProjetService;
+    private final NotificationService notificationService;
 
     @Transactional
     @Historise(action = ActionType.OUVRIR_CANDIDATURES, entityType = EntityType.SUJET_PROJET, entityIdExpression = "#sujetId", newValuesExpression = "{'statut': 'CANDIDATURE_OUVERTE'}", summaryExpression = "'Ouverture candidatures sujet ' + @sujetProjetService.getTitreById(#sujetId)")
@@ -99,7 +102,16 @@ public class CandidatureService {
                 .etudiant(etudiant)
                 .messageEtudiant(request.messageEtudiant())
                 .build();
-        return candidatureMapper.toResponse(candidatureRepository.save(candidature));
+        CandidatureResponse response = candidatureMapper.toResponse(candidatureRepository.save(candidature));
+
+        notificationService.creerNotification(
+                sujet.getEncadrantId(),
+                NotificationType.CANDIDATURE_RECUE,
+                "Nouvelle candidature",
+                etudiant.getPrenom() + " " + etudiant.getNom() + " a depose une candidature sur votre sujet \"" + sujet.getTitre() + "\".",
+                "/frontoffice/validation-sujets");
+
+        return response;
     }
 
     public String getCandidatureLabel(Long id) {
@@ -182,6 +194,13 @@ public class CandidatureService {
                 c.setDateDecision(Instant.now());
             });
             candidatureRepository.saveAll(autresEnAttente);
+
+            notificationService.creerNotification(
+                    candidature.getEtudiant().getId(),
+                    NotificationType.CANDIDATURE_ACCEPTEE,
+                    "Candidature acceptee",
+                    "Votre candidature sur le sujet \"" + getSujetOrThrow(candidature.getSujetId()).getTitre() + "\" a ete acceptee.",
+                    "/frontoffice/mes-candidatures");
         } else {
             if (request.motifRefus() == null || request.motifRefus().isBlank()) {
                 throw new IllegalArgumentException("Le motif de refus est obligatoire.");
@@ -189,6 +208,13 @@ public class CandidatureService {
             candidature.setStatut(StatutCandidature.REFUSEE);
             candidature.setMotifRefus(request.motifRefus());
             candidature.setDateDecision(Instant.now());
+
+            notificationService.creerNotification(
+                    candidature.getEtudiant().getId(),
+                    NotificationType.CANDIDATURE_REJETEE,
+                    "Candidature refusee",
+                    "Votre candidature sur le sujet \"" + getSujetOrThrow(candidature.getSujetId()).getTitre() + "\" a ete refusee. Motif : " + request.motifRefus(),
+                    "/frontoffice/mes-candidatures");
         }
         return candidatureMapper.toResponse(candidatureRepository.save(candidature));
     }
@@ -210,6 +236,15 @@ public class CandidatureService {
                 .findBySujetIdAndStatut(sujetId, StatutCandidature.DEPOSEE);
         enAttente.forEach(c -> c.setStatut(StatutCandidature.ARCHIVEE));
         candidatureRepository.saveAll(enAttente);
+
+        for (Candidature c : enAttente) {
+            notificationService.creerNotification(
+                    c.getEtudiant().getId(),
+                    NotificationType.CANDIDATURE_REJETEE,
+                    "Candidature archivee",
+                    "Les candidatures pour le sujet \"" + sujet.getTitre() + "\" ont ete fermees. Votre candidature a ete archivee.",
+                    "/frontoffice/mes-candidatures");
+        }
 
         sujetProjetRepository.save(sujet);
     }
@@ -237,6 +272,13 @@ public class CandidatureService {
         candidature.setStatut(StatutCandidature.RETIREE);
         candidature.setDateDecision(Instant.now());
         candidatureRepository.save(candidature);
+
+        notificationService.creerNotification(
+                affectation.getEtudiant().getId(),
+                NotificationType.CANDIDATURE_REJETEE,
+                "Retrait du projet",
+                "Vous avez ete retire du projet \"" + sujet.getTitre() + "\". Motif : " + request.motifRetrait(),
+                "/frontoffice/mes-candidatures");
 
         return affectationMapper.toResponse(affectationRepository.save(affectation));
     }

@@ -28,6 +28,7 @@ import tn.esprit.backend_esprittech.entity.livrable.Livrable;
 import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
@@ -37,6 +38,7 @@ import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
@@ -51,6 +53,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -69,6 +73,7 @@ class EvaluationServiceTest {
     @Mock private DeliverableContentExtractionService contentExtractionService;
     @Mock private MlEvaluationClient mlEvaluationClient;
     @Mock private ProjetCatalogueService projetCatalogueService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private EvaluationService evaluationService;
@@ -141,6 +146,9 @@ class EvaluationServiceTest {
         assertEquals(TypeCritere.NOTE, response.resultats().get(1).typeCritere());
         assertEquals(4, response.resultats().get(1).noteValue());
         verify(sujetProjetRepository).save(projet);
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -174,6 +182,9 @@ class EvaluationServiceTest {
         assertEquals(List.of(100L), response.resultats().get(1).evidenceLivrableIds());
         verify(contentExtractionService).extract(List.of(livrable));
         verify(mlEvaluationClient).evaluate(any());
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -388,6 +399,9 @@ class EvaluationServiceTest {
 
         assertEquals(80.0, response.scoreFinal());
         assertEquals("COMPLETED", response.mlStatus());
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -454,6 +468,16 @@ class EvaluationServiceTest {
         assertEquals(91.5, overridden.finalValidatedScore());
         assertEquals("Avis admin", overridden.overrideReason());
         assertEquals(91.5, projet.getScoreFinalEvaluation());
+
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation terminee"), anyString(), eq("/frontoffice/mes-projets"));
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation refusee"), anyString(), eq("/frontoffice/mes-projets"));
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation surchargee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test

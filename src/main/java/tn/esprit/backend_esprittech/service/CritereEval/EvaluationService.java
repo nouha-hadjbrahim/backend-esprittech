@@ -44,6 +44,7 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
@@ -58,6 +59,7 @@ import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
@@ -94,6 +96,7 @@ public class EvaluationService {
     private final MlEvaluationClient mlEvaluationClient;
     private final ObjectMapper objectMapper;
     private final ProjetCatalogueService projetCatalogueService;
+    private final NotificationService notificationService;
     private final ProjetCatalogueRepository projetCatalogueRepository;
     private final LivrableCatalogueRepository livrableCatalogueRepository;
 
@@ -260,7 +263,16 @@ public class EvaluationService {
         }
         projet.setScoreFinalEvaluation(evaluation.getScoreFinal());
         sujetProjetRepository.save(projet);
-        return toResponse(evaluationRepository.save(evaluation));
+        EvaluationResponse response = toResponse(evaluationRepository.save(evaluation));
+
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.EVALUATION_TERMINEE,
+                "Evaluation terminee",
+                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete validee avec un score de " + evaluation.getScoreFinal() + "/100.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
@@ -274,7 +286,17 @@ public class EvaluationService {
         if (request != null && StringUtils.hasText(request.commentaire())) {
             evaluation.setCommentaire(request.commentaire().trim());
         }
-        return toResponse(evaluationRepository.save(evaluation));
+        EvaluationResponse response = toResponse(evaluationRepository.save(evaluation));
+
+        SujetProjet projet = getProjet(projetId);
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.EVALUATION_TERMINEE,
+                "Evaluation refusee",
+                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete refusee.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
@@ -290,7 +312,16 @@ public class EvaluationService {
         evaluation.setValidatedAt(LocalDateTime.now());
         projet.setScoreFinalEvaluation(evaluation.getFinalValidatedScore());
         sujetProjetRepository.save(projet);
-        return toResponse(evaluationRepository.save(evaluation));
+        EvaluationResponse response = toResponse(evaluationRepository.save(evaluation));
+
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.EVALUATION_TERMINEE,
+                "Evaluation surchargee",
+                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete surchargee avec le score " + evaluation.getFinalValidatedScore() + "/100.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     private SujetProjet getProjetAndValidateTerminated(Long projetId) {
@@ -580,7 +611,7 @@ public class EvaluationService {
                 mlResponse == null ? "MANUAL" : mlResponse.effectiveStatus(),
                 eligibilityStatus,
                 mlResponse == null ? null : mlResponse.globalConfidence(),
-                mlResponse == null ? scoreFinal : scoreFinal,
+                scoreFinal,
                 mlResponse == null ? List.of() : safeList(mlResponse.warnings()),
                 mlResponse == null ? List.of() : safeList(mlResponse.strengths()),
                 mlResponse == null ? List.of() : safeList(mlResponse.weaknesses()),
@@ -643,6 +674,14 @@ public class EvaluationService {
                     (int) Math.round(data.scoreFinal())
             );
         }
+        if (projet.getEncadrantId() != null && data.scoreFinal() != null) {
+            notificationService.creerNotification(
+                    projet.getEncadrantId(),
+                    NotificationType.EVALUATION_CALCULEE,
+                    "Evaluation calculee",
+                    "L'evaluation automatique du projet \"" + projet.getTitre() + "\" est terminee. Score : " + String.format("%.1f", data.scoreFinal()) + "/100.",
+                    "/frontoffice/mes-projets");
+        }
 
         return toResponse(savedEvaluation);
     }
@@ -695,7 +734,6 @@ public class EvaluationService {
 
         return toResponse(savedEvaluation);
     }
-
     private void applyNoteResult(ResultatCritere resultat,
                                  Integer noteValue,
                                  Double poids,

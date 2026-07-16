@@ -22,11 +22,13 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
+import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
@@ -37,6 +39,7 @@ import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.util.Comparator;
@@ -83,6 +86,8 @@ public class IndustrialisationService {
     private final EvaluationService evaluationService;
     private final LivrableService livrableService;
     private final MinioStorageService storageService;
+    private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final ProjetCatalogueRepository projetCatalogueRepository;
     private final LivrableCatalogueRepository livrableCatalogueRepository;
 
@@ -239,8 +244,10 @@ public class IndustrialisationService {
         ensureEditable(candidature);
 
         boolean hasActiveLivrables;
+        String projetTitre;
         if (candidature.getSujetProjet() != null) {
             SujetProjet projet = candidature.getSujetProjet();
+            projetTitre = projet.getTitre();
             if (projet.getScoreFinalEvaluation() == null) {
                 throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
             }
@@ -260,6 +267,7 @@ public class IndustrialisationService {
             sujetProjetRepository.save(projet);
         } else {
             ProjetCatalogue projet = candidature.getProjetCatalogue();
+            projetTitre = projet.getTitre();
             hasActiveLivrables = livrableCatalogueRepository.existsByProjetIdAndActifTrue(projet.getId());
 
             validateCompleteness(candidature);
@@ -276,6 +284,17 @@ public class IndustrialisationService {
             projetCatalogueRepository.save(projet);
         }
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
+
+        List<User> ciMembers = userRepository.findByRole(Role.ROLE_CI);
+        for (User ciMember : ciMembers) {
+            notificationService.creerNotification(
+                    ciMember.getId(),
+                    NotificationType.CI_DEMANDE_SOUMISE,
+                    "Demande d'industrialisation",
+                    "Nouvelle demande d'industrialisation soumise pour le projet \"" + projetTitre + "\".",
+                    "/ci/industrialisation");
+        }
+
         return toResponse(saved, true, !hasActiveLivrables);
     }
 
@@ -367,14 +386,17 @@ public class IndustrialisationService {
         candidature.setCiDecideur(current);
         candidature.setDateDecisionCI(java.time.LocalDateTime.now());
 
+        String projetTitre;
         if (candidature.getSujetProjet() != null) {
             SujetProjet projet = candidature.getSujetProjet();
+            projetTitre = projet.getTitre();
             projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
                     ? StatutSujet.INDUSTRIALISE_DSI
                     : StatutSujet.INDUSTRIALISE_EXTERNE);
             sujetProjetRepository.save(projet);
         } else {
             ProjetCatalogue projet = candidature.getProjetCatalogue();
+            projetTitre = projet.getTitre();
             projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
                     ? StatutProjet.INDUSTRIALISE_DSI
                     : StatutProjet.INDUSTRIALISE_EXTERNE);
@@ -382,6 +404,14 @@ public class IndustrialisationService {
         }
 
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
+
+        notificationService.creerNotification(
+                candidature.getDemandeur().getId(),
+                NotificationType.CI_DEMANDE_APPOUVEE,
+                "Demande industrialisation approuvee",
+                "Votre demande d'industrialisation pour le projet \"" + projetTitre + "\" a ete approuvee (GO - " + request.orientation() + ").",
+                "/frontoffice/demandes-industrialisation");
+
         return toResponse(saved, true);
     }
 
@@ -401,6 +431,14 @@ public class IndustrialisationService {
         candidature.setCiDecideur(current);
         candidature.setDateDecisionCI(java.time.LocalDateTime.now());
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
+
+        notificationService.creerNotification(
+                candidature.getDemandeur().getId(),
+                NotificationType.CI_DEMANDE_REJETEE,
+                "Demande industrialisation refusee",
+                "Votre demande d'industrialisation pour le projet \"" + candidature.getSujetProjet().getTitre() + "\" a ete refusee. Motif : " + request.motif(),
+                "/frontoffice/demandes-industrialisation");
+
         return toResponse(saved, true);
     }
 

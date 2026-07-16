@@ -24,6 +24,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
+
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -99,7 +101,7 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public ExtendedDashboardResponse getExtendedDashboard() {
+    public ExtendedDashboardResponse getExtendedDashboard(int recentActivityLimit) {
         AdminKpiResponse kpis = buildKpis();
         List<TrendItem> trendsSujets = buildTrendItems(sujetProjetRepository.countSujetsByMonth(), 12);
         List<TrendItem> trendsCandidatures = buildTrendItems(candidatureRepository.countCandidaturesByMonth(), 7);
@@ -107,7 +109,7 @@ public class DashboardService {
         List<SujetByStatutItem> sujetsByStatut = buildSujetsByStatut();
         List<UsersByRoleItem> usersByRole = buildUsersByRole();
         List<CatalogueByDomainItem> catalogueByDomain = buildCatalogueByDomain();
-        List<RecentActivityItem> recentActivity = buildRecentActivity();
+        List<RecentActivityItem> recentActivity = buildRecentActivity(recentActivityLimit);
 
         return new ExtendedDashboardResponse(
                 kpis, trendsSujets, trendsCandidatures, trendsEquipes,
@@ -206,8 +208,10 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    private List<RecentActivityItem> buildRecentActivity() {
-        List<Historique> history = historiqueRepository.findTop15ByOrderByCreatedAtDesc();
+    public List<RecentActivityItem> buildRecentActivity(int limit) {
+        List<Historique> history = historiqueRepository
+                .findByOrderByCreatedAtDesc(PageRequest.of(0, limit))
+                .getContent();
         return history.stream().map(h -> {
             String actorName = h.getActor().getPrenom() + " " + h.getActor().getNom();
             String message = h.getSummary() != null && !h.getSummary().isBlank()
