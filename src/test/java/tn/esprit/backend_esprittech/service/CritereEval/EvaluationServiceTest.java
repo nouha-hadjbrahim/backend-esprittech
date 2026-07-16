@@ -32,6 +32,7 @@ import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
@@ -46,6 +47,7 @@ import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
@@ -177,6 +179,9 @@ class EvaluationServiceTest {
         assertEquals(TypeCritere.NOTE, response.resultats().get(1).typeCritere());
         assertEquals(4, response.resultats().get(1).noteValue());
         verify(sujetProjetRepository).save(projet);
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -217,6 +222,9 @@ class EvaluationServiceTest {
         assertNull(saved.getProjetCatalogue());
         verify(contentExtractionService).extract(List.of(livrable));
         verify(mlEvaluationClient).evaluate(any());
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -545,6 +553,9 @@ class EvaluationServiceTest {
 
         assertEquals(80.0, response.scoreFinal());
         assertEquals("COMPLETED", response.mlStatus());
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -611,6 +622,16 @@ class EvaluationServiceTest {
         assertEquals(91.5, overridden.finalValidatedScore());
         assertEquals("Avis admin", overridden.overrideReason());
         assertEquals(91.5, projet.getScoreFinalEvaluation());
+
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation terminee"), anyString(), eq("/frontoffice/mes-projets"));
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation refusee"), anyString(), eq("/frontoffice/mes-projets"));
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation surchargee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test

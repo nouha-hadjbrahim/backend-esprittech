@@ -57,7 +57,7 @@ class AdminDashboardControllerTest {
                 List.of(new CatalogueByDomainItem("Informatique", 4)),
                 List.of(new RecentActivityItem(1L, "Sujet validé", "Alice Dupont", "À l'instant", "validation"))
         );
-        when(dashboardService.getExtendedDashboard()).thenReturn(response);
+        when(dashboardService.getExtendedDashboard(15)).thenReturn(response);
 
         mockMvc.perform(get("/api/admin/dashboard/extended"))
                 .andExpect(status().isOk())
@@ -69,12 +69,12 @@ class AdminDashboardControllerTest {
                 .andExpect(jsonPath("$.usersByRole.length()").value(1))
                 .andExpect(jsonPath("$.recentActivity.length()").value(1));
 
-        verify(dashboardService).getExtendedDashboard();
+        verify(dashboardService).getExtendedDashboard(15);
     }
 
     @Test
     void getExtendedDashboard_serviceThrows_returns500() throws Exception {
-        when(dashboardService.getExtendedDashboard())
+        when(dashboardService.getExtendedDashboard(15))
                 .thenThrow(new RuntimeException("DB error"));
 
         mockMvc.perform(get("/api/admin/dashboard/extended"))
@@ -99,7 +99,7 @@ class AdminDashboardControllerTest {
                 Collections.emptyList(),
                 Collections.emptyList()
         );
-        when(dashboardService.getExtendedDashboard()).thenReturn(response);
+        when(dashboardService.getExtendedDashboard(15)).thenReturn(response);
 
         mockMvc.perform(get("/api/admin/dashboard/extended"))
                 .andExpect(status().isOk())

@@ -126,6 +126,7 @@ class UserServiceTest {
         when(auth.isAuthenticated()).thenReturn(true);
         when(auth.getPrincipal()).thenReturn(user);
         SecurityContextHolder.getContext().setAuthentication(auth);
+        when(userRepository.findByEmail("test@esprit.tn")).thenReturn(Optional.of(user));
 
         User result = userService.getCurrentUser();
 
@@ -340,6 +341,7 @@ class UserServiceTest {
         when(auth.getPrincipal()).thenReturn(current);
         SecurityContextHolder.getContext().setAuthentication(auth);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByEmail("admin@esprit.tn")).thenReturn(Optional.of(current));
 
         userService.delete(1L);
 
@@ -353,6 +355,7 @@ class UserServiceTest {
         when(auth.getPrincipal()).thenReturn(user);
         SecurityContextHolder.getContext().setAuthentication(auth);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByEmail("test@esprit.tn")).thenReturn(Optional.of(user));
 
         assertThrows(IllegalArgumentException.class, () -> userService.delete(1L));
         verify(userRepository, never()).delete(any());

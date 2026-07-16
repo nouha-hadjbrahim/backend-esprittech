@@ -12,6 +12,7 @@ import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
@@ -19,6 +20,7 @@ import tn.esprit.backend_esprittech.mapper.UserMapper;
 import tn.esprit.backend_esprittech.repository.equipe.AffiliationEnseignantRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -39,6 +41,8 @@ class AffiliationEnseignantServiceTest {
     private UserRepository userRepository;
     @Mock
     private UserMapper userMapper;
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private AffiliationEnseignantService service;
@@ -115,6 +119,10 @@ class AffiliationEnseignantServiceTest {
         assertEquals("Équipe Alpha", response.equipeNom());
         assertEquals(StatutAffiliation.EN_ATTENTE, response.statut());
         verify(affiliationRepository).save(any());
+        verify(notificationService).creerNotification(
+                eq(chef.getId()), eq(NotificationType.AFFILIATION_DEMANDE),
+                eq("Demande d'affiliation"), anyString(),
+                eq("/frontoffice/equipes-recherche/demandes"));
     }
 
     @Test
@@ -194,6 +202,10 @@ class AffiliationEnseignantServiceTest {
         assertEquals("Bienvenue dans l'équipe", savedAffiliation.getMotifDecision());
         verify(equipeRepository).save(equipe);
         verify(userRepository).save(enseignant);
+        verify(notificationService).creerNotification(
+                eq(enseignant.getId()), eq(NotificationType.AFFILIATION_ACCEPTEE),
+                eq("Affiliation acceptee"), anyString(),
+                eq("/frontoffice/equipes-recherche/mon-equipe"));
     }
 
     @Test
@@ -212,6 +224,10 @@ class AffiliationEnseignantServiceTest {
         assertEquals("Motif de refus", savedAffiliation.getMotifDecision());
         verify(equipeRepository, never()).save(any());
         verify(userRepository, never()).save(any());
+        verify(notificationService).creerNotification(
+                eq(enseignant.getId()), eq(NotificationType.AFFILIATION_REJETEE),
+                eq("Affiliation refusee"), anyString(),
+                eq("/frontoffice/equipes-recherche/mes-demandes"));
     }
 
     @Test
@@ -337,7 +353,7 @@ class AffiliationEnseignantServiceTest {
 
         assertEquals(StatutAffiliation.REFUSEE, otherPending.getStatut());
         assertNotNull(otherPending.getDateDecision());
-        assertEquals("Déjà accepté dans une autre équipe", otherPending.getMotifDecision());
+        assertEquals("Deja accepte dans une autre equipe", otherPending.getMotifDecision());
         verify(affiliationRepository).saveAll(List.of(otherPending));
     }
 

@@ -19,6 +19,7 @@ import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetDomaine;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetPrerequis;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
@@ -35,6 +36,7 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisReposit
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetReferenceService;
 
 import java.time.LocalDate;
@@ -60,6 +62,7 @@ class ProjetCatalogueServiceTest {
     @Mock private SujetPrerequisRepository prerequisRepository;
     @Mock private LivrableCatalogueRepository livrableCatalogueRepository;
     @Mock private SujetReferenceService sujetReferenceService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks private ProjetCatalogueService service;
 
@@ -348,6 +351,7 @@ class ProjetCatalogueServiceTest {
             assertNotNull(result);
             verify(projetRepository).save(argThat(p ->
                     p.getStatut() == StatutProjet.VALIDE && p.getChefValidateur() != null));
+            verify(notificationService).creerNotification(eq(enseignant.getId()), eq(NotificationType.PROJET_VALIDE), eq("Projet valide"), anyString(), eq("/frontoffice/mes-projets"));
         }
 
         @Test
@@ -409,6 +413,7 @@ class ProjetCatalogueServiceTest {
             verify(projetRepository).save(argThat(p ->
                     p.getStatut() == StatutProjet.INVALIDE
                             && "Projet incomplet".equals(p.getMotifRefus())));
+            verify(notificationService).creerNotification(eq(enseignant.getId()), eq(NotificationType.PROJET_REJETE), eq("Projet refuse"), anyString(), eq("/frontoffice/mes-projets"));
         }
 
         @Test

@@ -3,20 +3,28 @@ package tn.esprit.backend_esprittech;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.backend_esprittech.config.JwtTokenProvider;
-import tn.esprit.backend_esprittech.entity.ReferentielUtilisateur;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
-import tn.esprit.backend_esprittech.repository.ReferentielUtilisateurRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.AzureGraphService;
+import tn.esprit.backend_esprittech.service.GraphMailService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -48,25 +56,20 @@ class SecurityIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtTokenProvider tokenProvider;
     @Autowired private UserRepository userRepository;
-    @Autowired private ReferentielUtilisateurRepository referentielRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
     @MockitoBean private MinioStorageService minioStorageService;
+    @MockitoBean private AzureGraphService azureGraphService;
+    @MockitoBean private GraphMailService graphMailService;
 
-    /** Alimente le référentiel (source de vérité) de façon idempotente avant chaque test. */
+    /**
+     * Simule la vérification Azure : tout email est considéré membre de
+     * l'organisation avec le rôle étudiant. L'envoi d'email (Graph) est mocké,
+     * donc aucun appel réseau réel n'est effectué pendant les tests.
+     */
     @BeforeEach
-    void seedReferentiel() {
-        // L'email doit se terminer par @esprit.tn (contrainte du RegisterRequest)
-        seed("new@esprit.tn", "ETU-999", TypeUtilisateur.ETUDIANT);
-        seed("dup@esprit.tn", "ETU-DUP", TypeUtilisateur.ETUDIANT);
-    }
-
-    private void seed(String email, String identifiant, TypeUtilisateur type) {
-        if (!referentielRepository.existsByEmail(email)) {
-            referentielRepository.save(ReferentielUtilisateur.builder()
-                    .nom("Seed").prenom("User")
-                    .email(email).identifiant(identifiant)
-                    .type(type)
-                    .build());
-        }
+    void stubAzureGraph() {
+        when(azureGraphService.resolveMember(anyString()))
+                .thenReturn(new AzureGraphService.GraphMember(TypeUtilisateur.ETUDIANT, "GL"));
     }
 
     @Test
@@ -162,10 +165,23 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void register_success_returns201_withUserBodyAndCookies() throws Exception {
+    void register_startThenVerify_createsAccountAndSetsCookies() throws Exception {
+        // Étape 1 : envoi du code (202, aucun compte encore créé, aucun cookie)
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nom\":\"New\",\"prenom\":\"User\",\"email\":\"new@esprit.tn\",\"password\":\"Password123\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(cookie().doesNotExist("access_token"));
+
+        // Le code OTP est capturé depuis l'appel (mocké) au service d'email.
+        ArgumentCaptor<String> codeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(graphMailService).sendVerificationCode(eq("new@esprit.tn"), any(), codeCaptor.capture());
+        String code = codeCaptor.getValue();
+
+        // Étape 2 : vérification du code → compte créé + cookies
+        mockMvc.perform(post("/api/auth/register/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"new@esprit.tn\",\"code\":\"" + code + "\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value("new@esprit.tn"))
                 .andExpect(jsonPath("$.accessToken").doesNotExist())
@@ -174,20 +190,30 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void register_duplicateEmail_returns409() throws Exception {
-        String body = "{\"nom\":\"Dup\",\"prenom\":\"User\",\"email\":\"dup@esprit.tn\","
-                + "\"password\":\"Password123\"}";
-
-        // 1er enregistrement : le compte est créé
+    void register_verifyWrongCode_returns400() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isCreated());
+                        .content("{\"nom\":\"Bad\",\"prenom\":\"Code\",\"email\":\"badcode@esprit.tn\",\"password\":\"Password123\"}"))
+                .andExpect(status().isAccepted());
 
-        // 2e enregistrement avec le même email : conflit
+        mockMvc.perform(post("/api/auth/register/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"badcode@esprit.tn\",\"code\":\"000000\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void register_existingEmail_returns409() throws Exception {
+        // Un compte existe déjà → l'étape 1 est refusée.
+        userRepository.save(User.builder()
+                .nom("Dup").prenom("User").email("dup@esprit.tn")
+                .password(passwordEncoder.encode("Password123"))
+                .role(Role.ROLE_ETUDIANT).typeUtilisateur(TypeUtilisateur.ETUDIANT)
+                .enabled(true).build());
+
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content("{\"nom\":\"Dup\",\"prenom\":\"User\",\"email\":\"dup@esprit.tn\",\"password\":\"Password123\"}"))
                 .andExpect(status().isConflict());
     }
 
