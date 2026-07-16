@@ -18,6 +18,7 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.SujetPrerequis;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
@@ -34,6 +35,7 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetDomaineRepositor
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetPrerequisRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetTechnologieRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
@@ -70,6 +72,7 @@ public class ProjetCatalogueService {
     private final SujetPrerequisRepository prerequisRepository;
     private final LivrableCatalogueRepository livrableCatalogueRepository;
     private final SujetReferenceService sujetReferenceService;
+    private final NotificationService notificationService;
 
     public ProjetCatalogueService(ProjetCatalogueRepository projetRepository,
                                   ProjetCatalogueMapper mapper,
@@ -80,7 +83,8 @@ public class ProjetCatalogueService {
                                   SujetTechnologieRepository technologieRepository,
                                   SujetPrerequisRepository prerequisRepository,
                                   LivrableCatalogueRepository livrableCatalogueRepository,
-                                  SujetReferenceService sujetReferenceService) {
+                                  SujetReferenceService sujetReferenceService,
+                                  NotificationService notificationService) {
         this.projetRepository = projetRepository;
         this.mapper = mapper;
         this.userService = userService;
@@ -91,6 +95,7 @@ public class ProjetCatalogueService {
         this.prerequisRepository = prerequisRepository;
         this.livrableCatalogueRepository = livrableCatalogueRepository;
         this.sujetReferenceService = sujetReferenceService;
+        this.notificationService = notificationService;
     }
 
     // -------------------------------------------------------------------------
@@ -329,7 +334,16 @@ public class ProjetCatalogueService {
         projet.setChefValidateur(chef);
         projet.setDateValidation(LocalDateTime.now());
         projet.setMotifRefus(null);
-        return mapper.toResponse(projetRepository.save(projet));
+        ProjetCatalogueResponse response = mapper.toResponse(projetRepository.save(projet));
+
+        notificationService.creerNotification(
+                projet.getEncadrant().getId(),
+                NotificationType.PROJET_VALIDE,
+                "Projet valide",
+                "Votre projet \"" + projet.getTitre() + "\" a ete valide par le chef d'equipe.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Historise(action = ActionType.REFUSE, entityType = EntityType.PROJET_CATALOGUE, entityIdExpression = "#id", oldValuesExpression = "@projetCatalogueService.getOldValues(#id)", metadataExpression = "{'motifRefus': #request.motifRefus()}", summaryExpression = "'Refus projet catalogue ' + @projetCatalogueService.getTitreById(#id)")
@@ -343,7 +357,16 @@ public class ProjetCatalogueService {
         projet.setMotifRefus(request.motifRefus().trim());
         projet.setChefValidateur(chef);
         projet.setDateValidation(LocalDateTime.now());
-        return mapper.toResponse(projetRepository.save(projet));
+        ProjetCatalogueResponse response = mapper.toResponse(projetRepository.save(projet));
+
+        notificationService.creerNotification(
+                projet.getEncadrant().getId(),
+                NotificationType.PROJET_REJETE,
+                "Projet refuse",
+                "Votre projet \"" + projet.getTitre() + "\" a ete refuse. Motif : " + request.motifRefus(),
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     // -------------------------------------------------------------------------

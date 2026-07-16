@@ -12,6 +12,7 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.equipe.AffiliationEnseignant;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
 import tn.esprit.backend_esprittech.exception.BusinessException;
@@ -20,6 +21,7 @@ import tn.esprit.backend_esprittech.mapper.equipe.EquipeMapper;
 import tn.esprit.backend_esprittech.repository.equipe.AffiliationEnseignantRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,17 +44,20 @@ public class EquipeRechercheService {
     private final EquipeMapper equipeMapper;
     private final EquipeDomaineService domaineService;
     private final AffiliationEnseignantRepository affiliationRepository;
+    private final NotificationService notificationService;
 
     public EquipeRechercheService(EquipeRechercheRepository equipeRepository,
                                   UserRepository userRepository,
                                   EquipeMapper equipeMapper,
                                   EquipeDomaineService domaineService,
-                                  AffiliationEnseignantRepository affiliationRepository) {
+                                  AffiliationEnseignantRepository affiliationRepository,
+                                  NotificationService notificationService) {
         this.equipeRepository = equipeRepository;
         this.userRepository = userRepository;
         this.equipeMapper = equipeMapper;
         this.domaineService = domaineService;
         this.affiliationRepository = affiliationRepository;
+        this.notificationService = notificationService;
     }
 
     // -------------------------------------------------------------------------
@@ -146,6 +151,14 @@ public class EquipeRechercheService {
             equipe.removeMember(chef);
         }
         equipe = equipeRepository.save(equipe);
+
+        notificationService.creerNotification(
+                chef.getId(),
+                NotificationType.EQUIPE_INVITATION,
+                "Chef d'equipe designé",
+                "Vous etes maintenant chef de l'equipe \"" + equipe.getNom() + "\".",
+                "/frontoffice/equipes-recherche/" + equipeId);
+
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
 
@@ -154,8 +167,22 @@ public class EquipeRechercheService {
     @Historise(action = ActionType.AJOUTER_MEMBRE, entityType = EntityType.EQUIPE_RECHERCHE, entityIdExpression = "#equipeId", oldValuesExpression = "@equipeRechercheService.getOldValues(#equipeId)", summaryExpression = "'Ajout de membres à l''équipe ' + #result.nom()", metadataExpression = "{'memberIds': #memberIds}")
     public EquipeResponse ajouterMembres(Long equipeId, List<Long> memberIds) {
         EquipeRecherche equipe = getEntite(equipeId);
+        List<User> oldMembers = new ArrayList<>(equipe.getMembers() != null ? equipe.getMembers() : List.of());
         assignerMembres(equipe, memberIds, equipe.getChef());
-        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+        EquipeRecherche saved = equipeRepository.save(equipe);
+
+        for (Long memberId : memberIds) {
+            if (oldMembers.stream().noneMatch(u -> u.getId().equals(memberId))) {
+                notificationService.creerNotification(
+                        memberId,
+                        NotificationType.EQUIPE_REJOINTE,
+                        "Ajout dans une equipe",
+                        "Vous avez ete ajoute a l'equipe \"" + equipe.getNom() + "\".",
+                        "/frontoffice/equipes-recherche/" + equipeId);
+            }
+        }
+
+        return equipeMapper.toResponse(saved, compterMembres(equipe));
     }
 
     /** Retire un membre d'une équipe. */
@@ -174,7 +201,28 @@ public class EquipeRechercheService {
         }
 
         equipe.removeMember(user);
-        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+        EquipeRecherche saved = equipeRepository.save(equipe);
+
+        List<AffiliationEnseignant> toReset = affiliationRepository
+                .findByEnseignantIdAndStatut(userId, StatutAffiliation.ACCEPTEE)
+                .stream()
+                .filter(a -> a.getEquipe().getId().equals(equipeId))
+                .toList();
+        for (AffiliationEnseignant a : toReset) {
+            a.setStatut(StatutAffiliation.REFUSEE);
+            a.setDateDecision(LocalDateTime.now());
+            a.setMotifDecision("Retiré de l'équipe");
+        }
+        affiliationRepository.saveAll(toReset);
+
+        notificationService.creerNotification(
+                userId,
+                NotificationType.EQUIPE_INVITATION,
+                "Retrait de l'equipe",
+                "Vous avez ete retire de l'equipe \"" + equipe.getNom() + "\".",
+                "/frontoffice/equipes-recherche/" + equipeId);
+
+        return equipeMapper.toResponse(saved, compterMembres(equipe));
     }
 
     /** Retire le chef d'une équipe et le rétrograde au rôle ENSEIGNANT. */
@@ -184,11 +232,19 @@ public class EquipeRechercheService {
         EquipeRecherche equipe = getEntite(equipeId);
         User chef = equipe.getChef();
         equipe.setChef(null);
+        EquipeRecherche saved = equipeRepository.save(equipe);
         if (chef != null) {
             chef.setRole(Role.ROLE_ENSEIGNANT);
             userRepository.save(chef);
+
+            notificationService.creerNotification(
+                    chef.getId(),
+                    NotificationType.EQUIPE_INVITATION,
+                    "Retrait du role de chef",
+                    "Vous n'etes plus chef de l'equipe \"" + equipe.getNom() + "\".",
+                    "/frontoffice/equipes-recherche/" + equipeId);
         }
-        return equipeMapper.toResponse(equipeRepository.save(equipe), compterMembres(equipe));
+        return equipeMapper.toResponse(saved, compterMembres(equipe));
     }
 
     /** Supprime une équipe (uniquement si elle ne contient aucun membre). */

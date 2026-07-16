@@ -1,8 +1,10 @@
 package tn.esprit.backend_esprittech.service.CritereEval;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,21 +27,31 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ResultatCritere;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
+import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
 import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.StatutProjet;
+import tn.esprit.backend_esprittech.enums.TypeProjet;
 import tn.esprit.backend_esprittech.exception.BusinessException;
+import tn.esprit.backend_esprittech.exception.EvaluationPersistenceException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
 import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
+import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,12 +60,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -64,11 +81,15 @@ class EvaluationServiceTest {
     @Mock private CritereNoteRepository critereNoteRepository;
     @Mock private EvaluationRepository evaluationRepository;
     @Mock private LivrableRepository livrableRepository;
+    @Mock private LivrableCatalogueRepository livrableCatalogueRepository;
     @Mock private NoteLevelService noteLevelService;
     @Mock private UserService userService;
     @Mock private DeliverableContentExtractionService contentExtractionService;
     @Mock private MlEvaluationClient mlEvaluationClient;
+    @Mock private ObjectMapper objectMapper;
     @Mock private ProjetCatalogueService projetCatalogueService;
+    @Mock private NotificationService notificationService;
+    @Mock private ProjetCatalogueRepository projetCatalogueRepository;
 
     @InjectMocks
     private EvaluationService evaluationService;
@@ -76,6 +97,8 @@ class EvaluationServiceTest {
     private SujetProjet projet;
     private CritereEliminatoire eliminatoire;
     private CritereNote note;
+    private ProjetCatalogue catalogueProjet;
+    private LivrableCatalogue catalogueGitLivrable;
     private User admin;
     private User ci;
     private User encadrant;
@@ -111,6 +134,24 @@ class EvaluationServiceTest {
         note.setSeuil(3.0);
         note.setDefaultNoteValue(3);
 
+        catalogueProjet = new ProjetCatalogue();
+        catalogueProjet.setId(7L);
+        catalogueProjet.setTitre("Projet catalogue IA");
+        catalogueProjet.setTypeProjet(TypeProjet.RDI);
+        catalogueProjet.setStatut(StatutProjet.VALIDE);
+        catalogueProjet.setScore(0);
+        catalogueProjet.setDomaines(new LinkedHashSet<>());
+        catalogueProjet.setTechnologies(new LinkedHashSet<>());
+        catalogueProjet.setPrerequis(new LinkedHashSet<>());
+
+        catalogueGitLivrable = new LivrableCatalogue();
+        catalogueGitLivrable.setId(700L);
+        catalogueGitLivrable.setProjet(catalogueProjet);
+        catalogueGitLivrable.setTypeLivrable(TypeLivrable.LIEN_GIT);
+        catalogueGitLivrable.setNom("Depot Git");
+        catalogueGitLivrable.setLienExterne("https://github.com/esprit/projet-catalogue.git");
+        catalogueGitLivrable.setActif(true);
+
         admin = user(99L, Role.ROLE_ADMIN);
         ci = user(77L, Role.ROLE_CI);
         encadrant = user(11L, Role.ROLE_ENSEIGNANT);
@@ -129,7 +170,7 @@ class EvaluationServiceTest {
         when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(eliminatoire));
         when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
         when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
-        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(evaluationRepository.saveAndFlush(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = evaluationService.calculerEvaluation(1L, new EvaluationRequest(
                 List.of(new ResultatEliminatoireRequest(10L, ReponseEliminatoire.OK, "OK")),
@@ -141,6 +182,9 @@ class EvaluationServiceTest {
         assertEquals(TypeCritere.NOTE, response.resultats().get(1).typeCritere());
         assertEquals(4, response.resultats().get(1).noteValue());
         verify(sujetProjetRepository).save(projet);
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -159,11 +203,15 @@ class EvaluationServiceTest {
         when(livrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(1L)).thenReturn(List.of(livrable));
         when(contentExtractionService.extract(List.of(livrable))).thenReturn(List.of(content));
         when(mlEvaluationClient.evaluate(any())).thenReturn(mlResponse(0.8, true));
-        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        ArgumentCaptor<Evaluation> evaluationCaptor = ArgumentCaptor.forClass(Evaluation.class);
+        when(evaluationRepository.saveAndFlush(evaluationCaptor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "Recalcul manuel");
 
         assertEquals(80.0, response.scoreFinal());
+        assertEquals(1L, response.sujetProjetId());
+        assertNull(response.projetCatalogueId());
+        assertEquals("SUJET_PROJET", response.evaluationContext());
         assertEquals("COMPLETED", response.mlStatus());
         assertEquals("2.0.0", response.mlModelVersion());
         assertEquals("multimodal-semantic-v2", response.pipelineVersion());
@@ -172,8 +220,128 @@ class EvaluationServiceTest {
         assertNull(response.resultats().get(1).metadataUsed());
         assertEquals(0.8, response.resultats().get(1).normalizedScore());
         assertEquals(List.of(100L), response.resultats().get(1).evidenceLivrableIds());
+        Evaluation saved = evaluationCaptor.getValue();
+        assertSame(projet, saved.getSujetProjet());
+        assertNull(saved.getProjetCatalogue());
         verify(contentExtractionService).extract(List.of(livrable));
         verify(mlEvaluationClient).evaluate(any());
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
+    }
+
+    @Test
+    void calculateAutomaticEvaluationForCatalogue_shouldPersistCatalogueParentOnly() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L)).thenReturn(Optional.empty());
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(eliminatoire));
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(7L))
+                .thenReturn(List.of(catalogueGitLivrable));
+        when(contentExtractionService.extractCatalogue(List.of(catalogueGitLivrable))).thenReturn(List.of());
+        when(mlEvaluationClient.evaluate(any())).thenReturn(mlResponse(0.9, true));
+        ArgumentCaptor<Evaluation> evaluationCaptor = ArgumentCaptor.forClass(Evaluation.class);
+        when(evaluationRepository.saveAndFlush(evaluationCaptor.capture())).thenAnswer(invocation -> {
+            Evaluation evaluation = invocation.getArgument(0);
+            evaluation.setId(70L);
+            evaluation.setDateCalcul(LocalDateTime.now());
+            return evaluation;
+        });
+        when(projetCatalogueRepository.save(catalogueProjet)).thenReturn(catalogueProjet);
+
+        var response = evaluationService.calculateAutomaticEvaluationForCatalogue(7L, "Recalcul catalogue");
+
+        Evaluation saved = evaluationCaptor.getValue();
+        assertSame(catalogueProjet, saved.getProjetCatalogue());
+        assertNull(saved.getSujetProjet());
+        assertEquals(7L, response.projetCatalogueId());
+        assertNull(response.sujetProjetId());
+        assertEquals("PROJET_CATALOGUE", response.evaluationContext());
+        assertEquals(90.0, response.scoreFinal());
+        assertEquals("COMPLETED", response.mlStatus());
+        assertEquals("multimodal-semantic-v2", response.pipelineVersion());
+        assertEquals(2, saved.getResultats().size());
+        assertEquals(90, catalogueProjet.getScore());
+        verify(contentExtractionService).extractCatalogue(List.of(catalogueGitLivrable));
+        verify(mlEvaluationClient).evaluate(any());
+        verify(projetCatalogueRepository).save(catalogueProjet);
+        verify(sujetProjetRepository, never()).save(any());
+    }
+
+    @Test
+    void validateEvaluationParent_withoutParent_shouldRejectExplicitly() {
+        Evaluation evaluation = new Evaluation();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> evaluationService.validateEvaluationParent(evaluation));
+
+        assertEquals("Une evaluation doit etre rattachee exactement a un SujetProjet ou a un ProjetCatalogue.",
+                ex.getMessage());
+    }
+
+    @Test
+    void validateEvaluationParent_withTwoParents_shouldRejectExplicitly() {
+        Evaluation evaluation = new Evaluation();
+        evaluation.setSujetProjet(projet);
+        evaluation.setProjetCatalogue(catalogueProjet);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> evaluationService.validateEvaluationParent(evaluation));
+
+        assertEquals("Une evaluation doit etre rattachee exactement a un SujetProjet ou a un ProjetCatalogue.",
+                ex.getMessage());
+    }
+
+    @Test
+    void getCatalogueEvaluations_shouldUseCatalogueIdAndStableOrdering() {
+        Evaluation older = catalogueEvaluation(80L, LocalDateTime.of(2026, 7, 16, 10, 0), 70.0);
+        Evaluation latest = catalogueEvaluation(81L, LocalDateTime.of(2026, 7, 16, 10, 0), 82.0);
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(Optional.of(latest));
+        when(evaluationRepository.findByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(List.of(latest, older));
+
+        var latestResponse = evaluationService.getLatestEvaluationByProjetCatalogue(7L);
+        var history = evaluationService.getEvaluationHistoryByProjetCatalogue(7L);
+
+        assertEquals(81L, latestResponse.id());
+        assertNull(latestResponse.sujetProjetId());
+        assertEquals(7L, latestResponse.projetCatalogueId());
+        assertEquals(List.of(81L, 80L), history.stream().map(response -> response.id()).toList());
+        verify(evaluationRepository).findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L);
+        verify(evaluationRepository).findByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L);
+    }
+
+    @Test
+    void calculateAutomaticEvaluationForCatalogue_whenPersistenceFails_shouldNotSaveProjectScore() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L)).thenReturn(Optional.empty());
+        when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
+        when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
+        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(7L))
+                .thenReturn(List.of(catalogueGitLivrable));
+        when(contentExtractionService.extractCatalogue(List.of(catalogueGitLivrable))).thenReturn(List.of());
+        when(mlEvaluationClient.evaluate(any())).thenReturn(new MlEvaluationResponse(
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2",
+                0.8, List.of(), List.of(), List.of(), List.of(),
+                List.of(new MlCriterionResult(
+                        20L, "NOTE", 4.0, 5.0, 0.8, 0.8, null,
+                        "Qualite analysee", List.of(), List.of(), List.of(), List.of()
+                ))
+        ));
+        doThrow(new RuntimeException("db down")).when(evaluationRepository).saveAndFlush(any(Evaluation.class));
+
+        assertThrows(EvaluationPersistenceException.class,
+                () -> evaluationService.calculateAutomaticEvaluationForCatalogue(7L, "rollback"));
+
+        verify(projetCatalogueRepository, never()).save(any());
+        verifyNoInteractions(projetCatalogueService);
     }
 
     @Test
@@ -217,7 +385,7 @@ class EvaluationServiceTest {
                 List.of(),
                 List.of(noteResult)
         ));
-        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(evaluationRepository.saveAndFlush(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "empty");
 
@@ -261,7 +429,7 @@ class EvaluationServiceTest {
                 0.2, List.of(), List.of("INSUFFICIENT_EVIDENCE"),
                 List.of("ADD_TRACEABLE_EVIDENCE"), List.of(), List.of(insufficient)
         ));
-        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(evaluationRepository.saveAndFlush(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "insufficient");
 
@@ -382,12 +550,15 @@ class EvaluationServiceTest {
                 "COMPLETED", "2.0.0", "multimodal-semantic-v2",
                 0.8, List.of(), List.of(), List.of(), List.of(), List.of(valid)
         ));
-        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(evaluationRepository.saveAndFlush(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = evaluationService.calculateAutomaticEvaluation(1L, "deterministic evidence");
 
         assertEquals(80.0, response.scoreFinal());
         assertEquals("COMPLETED", response.mlStatus());
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_CALCULEE),
+                eq("Evaluation calculee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -402,7 +573,7 @@ class EvaluationServiceTest {
                 "COMPLETED", "2.0.0", "multimodal-semantic-v2",
                 0.0, List.of(), List.of(), List.of(), List.of(), List.of()
         ));
-        when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(evaluationRepository.saveAndFlush(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertEquals("ROLE_ENSEIGNANT User11 Test", evaluationService
                 .calculateAutomaticEvaluation(1L, "Nouveaux livrables").calculatedBy());
@@ -433,11 +604,11 @@ class EvaluationServiceTest {
         Evaluation evaluation = savedEvaluation();
         when(userService.getCurrentUser()).thenReturn(ci);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
-        when(evaluationRepository.findBySujetProjetIdOrderByDateCalculDesc(1L)).thenReturn(List.of(evaluation));
+        when(evaluationRepository.findBySujetProjetIdOrderByDateCalculDescIdDesc(1L)).thenReturn(List.of(evaluation));
 
         assertEquals(1, evaluationService.getEvaluationHistoryByProjet(1L).size());
 
-        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L)).thenReturn(Optional.of(evaluation));
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(1L)).thenReturn(Optional.of(evaluation));
         when(evaluationRepository.save(any(Evaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var validated = evaluationService.validateLatestEvaluation(1L, new EvaluationValidationRequest("Valide"));
@@ -454,6 +625,16 @@ class EvaluationServiceTest {
         assertEquals(91.5, overridden.finalValidatedScore());
         assertEquals("Avis admin", overridden.overrideReason());
         assertEquals(91.5, projet.getScoreFinalEvaluation());
+
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation terminee"), anyString(), eq("/frontoffice/mes-projets"));
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation refusee"), anyString(), eq("/frontoffice/mes-projets"));
+        verify(notificationService).creerNotification(
+                eq(11L), eq(NotificationType.EVALUATION_TERMINEE),
+                eq("Evaluation surchargee"), anyString(), eq("/frontoffice/mes-projets"));
     }
 
     @Test
@@ -469,7 +650,7 @@ class EvaluationServiceTest {
     @Test
     void getOldValues_returnsEvaluationFields() {
         Evaluation evaluation = savedEvaluation();
-        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L))
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(1L))
                 .thenReturn(Optional.of(evaluation));
 
         var result = evaluationService.getOldValues(1L);
@@ -481,7 +662,7 @@ class EvaluationServiceTest {
 
     @Test
     void getOldValues_noEvaluation_returnsEmptyMap() {
-        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(1L))
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(1L))
                 .thenReturn(Optional.empty());
 
         var result = evaluationService.getOldValues(1L);
@@ -580,6 +761,27 @@ class EvaluationServiceTest {
         resultat.setPoids(2.0);
         resultat.setScorePondere(1.6);
         evaluation.addResultat(resultat);
+        return evaluation;
+    }
+
+    private Evaluation catalogueEvaluation(Long id, LocalDateTime dateCalcul, double scoreFinal) {
+        Evaluation evaluation = new Evaluation();
+        evaluation.setId(id);
+        evaluation.setSujetProjet(null);
+        evaluation.setProjetCatalogue(catalogueProjet);
+        evaluation.setScoreFinal(scoreFinal);
+        evaluation.setMlScore(scoreFinal);
+        evaluation.setMlStatus("COMPLETED");
+        evaluation.setMlModelVersion("2.0.0");
+        evaluation.setPipelineVersion("multimodal-semantic-v2");
+        evaluation.setEngineType("multimodal-semantic-v2");
+        evaluation.setMlGlobalConfidence(0.8);
+        evaluation.setEligibleIndustrialisation(true);
+        evaluation.setBloqueParEliminatoire(false);
+        evaluation.setHasEliminatoryWarnings(false);
+        evaluation.setEliminatoryWarningsCount(0);
+        evaluation.setDateCalcul(dateCalcul);
+        evaluation.setValidationStatus("PENDING");
         return evaluation;
     }
 

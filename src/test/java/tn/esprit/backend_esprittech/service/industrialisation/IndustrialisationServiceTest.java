@@ -44,7 +44,10 @@ import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
+import tn.esprit.backend_esprittech.enums.NotificationType;
+import tn.esprit.backend_esprittech.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,9 +62,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
 
 @ExtendWith(MockitoExtension.class)
 class IndustrialisationServiceTest {
@@ -92,6 +97,12 @@ class IndustrialisationServiceTest {
 
     @Mock
     private MinioStorageService storageService;
+
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private IndustrialisationService industrialisationService;
@@ -166,6 +177,7 @@ class IndustrialisationServiceTest {
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
 
         var response = industrialisationService.soumettre(11L, new SubmitIndustrialisationRequest(true));
 
@@ -173,6 +185,10 @@ class IndustrialisationServiceTest {
         assertTrue(response.hasEliminatoryWarnings());
         assertEquals(1, response.eliminatoryWarningsCount());
         assertTrue(response.eliminatoryWarningsDetails().get(0).contains("Depot Git disponible"));
+        verify(notificationService, atLeastOnce()).creerNotification(
+                eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
+                eq("Demande d'industrialisation"), anyString(),
+                eq("/ci/industrialisation"));
     }
 
     @Test
@@ -447,10 +463,15 @@ class IndustrialisationServiceTest {
         when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
 
         var response = industrialisationService.soumettre(11L);
 
         assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
+        verify(notificationService, atLeastOnce()).creerNotification(
+                eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
+                eq("Demande d'industrialisation"), anyString(),
+                eq("/ci/industrialisation"));
     }
 
     @Test
@@ -498,11 +519,16 @@ class IndustrialisationServiceTest {
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
 
         var response = industrialisationService.soumettre(11L);
 
         assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
         assertTrue(response.warnings().contains("Aucun livrable nest déposé pour ce projet. La CI verra cette alerte."));
+        verify(notificationService, atLeastOnce()).creerNotification(
+                eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
+                eq("Demande d'industrialisation"), anyString(),
+                eq("/ci/industrialisation"));
     }
 
     @Test
@@ -518,11 +544,16 @@ class IndustrialisationServiceTest {
         when(livrableService.findByProjet(42L)).thenReturn(List.of());
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
 
         var response = industrialisationService.soumettre(11L);
 
         assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
         assertEquals(StatutSujet.CANDIDAT_INDUSTRIALISATION_EXTERNE, projet.getStatut());
+        verify(notificationService, atLeastOnce()).creerNotification(
+                eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
+                eq("Demande d'industrialisation"), anyString(),
+                eq("/ci/industrialisation"));
     }
 
     @Test
@@ -572,10 +603,15 @@ class IndustrialisationServiceTest {
         when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 11L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
 
         var response = industrialisationService.soumettre(11L);
 
         assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
+        verify(notificationService, atLeastOnce()).creerNotification(
+                eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
+                eq("Demande d'industrialisation"), anyString(),
+                eq("/ci/industrialisation"));
     }
 
     @Test
@@ -725,6 +761,10 @@ class IndustrialisationServiceTest {
         assertEquals(OrientationIndustrialisation.DSI, candidature.getOrientation());
         assertEquals("ok dsi", candidature.getMotifDecision());
         assertEquals(StatutSujet.INDUSTRIALISE_DSI, projet.getStatut());
+        verify(notificationService).creerNotification(
+                eq(7L), eq(NotificationType.CI_DEMANDE_APPOUVEE),
+                eq("Demande industrialisation approuvee"), anyString(),
+                eq("/frontoffice/demandes-industrialisation"));
     }
 
     @Test
@@ -741,6 +781,10 @@ class IndustrialisationServiceTest {
 
         assertEquals(StatutSujet.INDUSTRIALISE_EXTERNE, projet.getStatut());
         assertNull(candidature.getMotifDecision());
+        verify(notificationService).creerNotification(
+                eq(7L), eq(NotificationType.CI_DEMANDE_APPOUVEE),
+                eq("Demande industrialisation approuvee"), anyString(),
+                eq("/frontoffice/demandes-industrialisation"));
     }
 
     @Test
@@ -801,6 +845,10 @@ class IndustrialisationServiceTest {
         assertFalse(candidature.getDecisionGoNoGo());
         assertEquals("manque de maturite", candidature.getMotifDecision());
         assertEquals(ci, candidature.getCiDecideur());
+        verify(notificationService).creerNotification(
+                eq(7L), eq(NotificationType.CI_DEMANDE_REJETEE),
+                eq("Demande industrialisation refusee"), anyString(),
+                eq("/frontoffice/demandes-industrialisation"));
     }
 
     @Test

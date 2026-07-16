@@ -9,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -26,7 +25,6 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.GlobalExceptionHandler;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
-import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
@@ -50,9 +48,6 @@ class AdminControllerTest {
 
     @Mock
     private UserMapper userMapper;
-
-    @Mock
-    private ReferentielService referentielService;
 
     @Mock
     private SujetProjetService sujetProjetService;
@@ -94,43 +89,6 @@ class AdminControllerTest {
                 "encadrantId", 10,
                 "sujet", validSujetPayload()
         );
-    }
-
-    // ---------------- IMPORT REFERENTIEL ----------------
-
-    @Test
-    void importerReferentiel_validFile_returnsCreated() throws Exception {
-        MockMultipartFile file = new MockMultipartFile(
-                "file",
-                "users.csv",
-                "text/csv",
-                "a,b,c".getBytes());
-
-        when(referentielService.importerCsv(any())).thenReturn(5);
-
-        mockMvc.perform(multipart("/api/admin/import-referentiel")
-                        .file(file))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message")
-                        .value("5 utilisateur(s) importé(s) dans le référentiel"));
-
-        verify(referentielService).importerCsv(any());
-    }
-
-    @Test
-    void importerReferentiel_serviceThrows_returns500() throws Exception {
-        MockMultipartFile file = new MockMultipartFile(
-                "file",
-                "users.csv",
-                "text/csv",
-                "a,b,c".getBytes());
-
-        when(referentielService.importerCsv(any()))
-                .thenThrow(new RuntimeException("Parse error"));
-
-        mockMvc.perform(multipart("/api/admin/import-referentiel")
-                        .file(file))
-                .andExpect(status().isInternalServerError());
     }
 
     // ---------------- CREATE USER ----------------

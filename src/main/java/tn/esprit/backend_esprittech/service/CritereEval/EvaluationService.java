@@ -44,10 +44,12 @@ import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.ActionType;
 import tn.esprit.backend_esprittech.enums.EntityType;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.exception.BusinessConflictException;
 import tn.esprit.backend_esprittech.exception.BusinessException;
+import tn.esprit.backend_esprittech.exception.EvaluationPersistenceException;
 import tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException;
 import tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.CritereEliminatoireRepository;
@@ -58,6 +60,7 @@ import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
@@ -94,6 +97,7 @@ public class EvaluationService {
     private final MlEvaluationClient mlEvaluationClient;
     private final ObjectMapper objectMapper;
     private final ProjetCatalogueService projetCatalogueService;
+    private final NotificationService notificationService;
     private final ProjetCatalogueRepository projetCatalogueRepository;
     private final LivrableCatalogueRepository livrableCatalogueRepository;
 
@@ -173,7 +177,7 @@ public class EvaluationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
         ensureCanView(userService.getCurrentUser(), projet);
 
-        Evaluation evaluation = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId)
+        Evaluation evaluation = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(projetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
 
         return toResponse(evaluation);
@@ -184,7 +188,7 @@ public class EvaluationService {
         SujetProjet projet = sujetProjetRepository.findById(projetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
         ensureCanView(userService.getCurrentUser(), projet);
-        return evaluationRepository.findBySujetProjetIdOrderByDateCalculDesc(projetId)
+        return evaluationRepository.findBySujetProjetIdOrderByDateCalculDescIdDesc(projetId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -229,14 +233,37 @@ public class EvaluationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
         ensureCanViewCatalogue(userService.getCurrentUser(), projet);
 
-        Evaluation evaluation = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDesc(projetId)
+        Evaluation evaluation = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(projetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
 
         return toResponse(evaluation);
     }
 
+    @Transactional(readOnly = true)
+    public List<EvaluationResponse> getEvaluationHistoryByProjetCatalogue(Long projetId) {
+        ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+        ensureCanViewCatalogue(userService.getCurrentUser(), projet);
+        return evaluationRepository.findByProjetCatalogueIdOrderByDateCalculDescIdDesc(projetId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EvaluationResponse getEvaluationDetailByProjetCatalogue(Long projetId, Long evaluationId) {
+        ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+        ensureCanViewCatalogue(userService.getCurrentUser(), projet);
+        Evaluation evaluation = evaluationRepository.findByIdAndProjetCatalogueId(evaluationId, projetId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Evaluation introuvable avec id: " + evaluationId + " pour le projet catalogue id: " + projetId
+                ));
+        return toResponse(evaluation);
+    }
+
     public Map<String, Object> getOldValues(Long projetId) {
-        Evaluation e = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId).orElse(null);
+        Evaluation e = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(projetId).orElse(null);
         if (e == null) return Map.of();
         Map<String, Object> map = new HashMap<>();
         map.put("validationStatus", e.getValidationStatus());
@@ -260,7 +287,16 @@ public class EvaluationService {
         }
         projet.setScoreFinalEvaluation(evaluation.getScoreFinal());
         sujetProjetRepository.save(projet);
-        return toResponse(evaluationRepository.save(evaluation));
+        EvaluationResponse response = toResponse(evaluationRepository.save(evaluation));
+
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.EVALUATION_TERMINEE,
+                "Evaluation terminee",
+                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete validee avec un score de " + evaluation.getScoreFinal() + "/100.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Historise(action = ActionType.REFUSE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'REJECTED'}", summaryExpression = "'Rejet évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
@@ -274,7 +310,17 @@ public class EvaluationService {
         if (request != null && StringUtils.hasText(request.commentaire())) {
             evaluation.setCommentaire(request.commentaire().trim());
         }
-        return toResponse(evaluationRepository.save(evaluation));
+        EvaluationResponse response = toResponse(evaluationRepository.save(evaluation));
+
+        SujetProjet projet = getProjet(projetId);
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.EVALUATION_TERMINEE,
+                "Evaluation refusee",
+                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete refusee.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     @Historise(action = ActionType.OVERRIDE, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", oldValuesExpression = "@evaluationService.getOldValues(#projetId)", newValuesExpression = "{'validationStatus': 'OVERRIDDEN', 'finalValidatedScore': #result.finalValidatedScore()}", metadataExpression = "{'reason': #request.reason()}", summaryExpression = "'Surcharge évaluation projet ' + @evaluationService.getProjetTitreById(#projetId)")
@@ -290,7 +336,16 @@ public class EvaluationService {
         evaluation.setValidatedAt(LocalDateTime.now());
         projet.setScoreFinalEvaluation(evaluation.getFinalValidatedScore());
         sujetProjetRepository.save(projet);
-        return toResponse(evaluationRepository.save(evaluation));
+        EvaluationResponse response = toResponse(evaluationRepository.save(evaluation));
+
+        notificationService.creerNotification(
+                projet.getEncadrantId(),
+                NotificationType.EVALUATION_TERMINEE,
+                "Evaluation surchargee",
+                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete surchargee avec le score " + evaluation.getFinalValidatedScore() + "/100.",
+                "/frontoffice/mes-projets");
+
+        return response;
     }
 
     private SujetProjet getProjetAndValidateTerminated(Long projetId) {
@@ -308,7 +363,7 @@ public class EvaluationService {
     }
 
     private Evaluation latestEvaluation(Long projetId) {
-        return evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId)
+        return evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(projetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
     }
 
@@ -580,7 +635,7 @@ public class EvaluationService {
                 mlResponse == null ? "MANUAL" : mlResponse.effectiveStatus(),
                 eligibilityStatus,
                 mlResponse == null ? null : mlResponse.globalConfidence(),
-                mlResponse == null ? scoreFinal : scoreFinal,
+                scoreFinal,
                 mlResponse == null ? List.of() : safeList(mlResponse.warnings()),
                 mlResponse == null ? List.of() : safeList(mlResponse.strengths()),
                 mlResponse == null ? List.of() : safeList(mlResponse.weaknesses()),
@@ -595,6 +650,7 @@ public class EvaluationService {
                                                  String recalculationReason) {
         Evaluation evaluation = new Evaluation();
         evaluation.setSujetProjet(projet);
+        evaluation.setProjetCatalogue(null);
         evaluation.setScoreFinal(data.scoreFinal());
         evaluation.setMlScore(data.mlScore());
         evaluation.setMlStatus(data.mlStatus());
@@ -626,9 +682,9 @@ public class EvaluationService {
         evaluation.setCommentaire(data.commentaire());
         evaluation.setCalculatedBy(calculatedBy);
         evaluation.setRecalculationReason(recalculationReason);
-        data.resultats().forEach(evaluation::addResultat);
+        validateEvaluationParent(evaluation);
 
-        Evaluation savedEvaluation = evaluationRepository.save(evaluation);
+        Evaluation savedEvaluation = saveEvaluationWithResults(evaluation, data.resultats());
 
         projet.setScoreFinalEvaluation(data.scoreFinal());
         projet.setEligibleIndustrialisation(Boolean.TRUE.equals(data.eligibleIndustrialisation()));
@@ -643,6 +699,14 @@ public class EvaluationService {
                     (int) Math.round(data.scoreFinal())
             );
         }
+        if (projet.getEncadrantId() != null && data.scoreFinal() != null) {
+            notificationService.creerNotification(
+                    projet.getEncadrantId(),
+                    NotificationType.EVALUATION_CALCULEE,
+                    "Evaluation calculee",
+                    "L'evaluation automatique du projet \"" + projet.getTitre() + "\" est terminee. Score : " + String.format("%.1f", data.scoreFinal()) + "/100.",
+                    "/frontoffice/mes-projets");
+        }
 
         return toResponse(savedEvaluation);
     }
@@ -652,6 +716,7 @@ public class EvaluationService {
                                                          String calculatedBy,
                                                          String recalculationReason) {
         Evaluation evaluation = new Evaluation();
+        evaluation.setSujetProjet(null);
         evaluation.setProjetCatalogue(projet);
         evaluation.setScoreFinal(data.scoreFinal());
         evaluation.setMlScore(data.mlScore());
@@ -684,9 +749,9 @@ public class EvaluationService {
         evaluation.setCommentaire(data.commentaire());
         evaluation.setCalculatedBy(calculatedBy);
         evaluation.setRecalculationReason(recalculationReason);
-        data.resultats().forEach(evaluation::addResultat);
+        validateEvaluationParent(evaluation);
 
-        Evaluation savedEvaluation = evaluationRepository.save(evaluation);
+        Evaluation savedEvaluation = saveEvaluationWithResults(evaluation, data.resultats());
 
         if (data.scoreFinal() != null) {
             projet.setScore(Math.max(0, (int) Math.round(data.scoreFinal())));
@@ -694,6 +759,29 @@ public class EvaluationService {
         }
 
         return toResponse(savedEvaluation);
+    }
+
+    void validateEvaluationParent(Evaluation evaluation) {
+        boolean hasSujetProjet = evaluation.getSujetProjet() != null;
+        boolean hasProjetCatalogue = evaluation.getProjetCatalogue() != null;
+        if (hasSujetProjet == hasProjetCatalogue) {
+            throw new BusinessException(
+                    "Une evaluation doit etre rattachee exactement a un SujetProjet ou a un ProjetCatalogue."
+            );
+        }
+    }
+
+    private Evaluation saveEvaluationWithResults(Evaluation evaluation, List<ResultatCritere> resultats) {
+        try {
+            Evaluation savedEvaluation = evaluationRepository.saveAndFlush(evaluation);
+            safeList(resultats).forEach(savedEvaluation::addResultat);
+            return evaluationRepository.saveAndFlush(savedEvaluation);
+        } catch (RuntimeException ex) {
+            throw new EvaluationPersistenceException(
+                    "L'evaluation a ete calculee mais n'a pas pu etre enregistree.",
+                    ex
+            );
+        }
     }
 
     private void applyNoteResult(ResultatCritere resultat,
@@ -1488,7 +1576,7 @@ public class EvaluationService {
         if (recalculationCooldownSeconds <= 0) {
             return;
         }
-        Evaluation latest = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(projetId).orElse(null);
+        Evaluation latest = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(projetId).orElse(null);
         if (latest == null || latest.getDateCalcul() == null) {
             return;
         }
@@ -1567,7 +1655,7 @@ public class EvaluationService {
         if (recalculationCooldownSeconds <= 0) {
             return;
         }
-        Evaluation latest = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDesc(projetId).orElse(null);
+        Evaluation latest = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(projetId).orElse(null);
         if (latest == null || latest.getDateCalcul() == null) {
             return;
         }
@@ -1734,13 +1822,17 @@ public class EvaluationService {
                 .toList();
         String coverageMessage = coverageMessage(evaluation, totalNotes, notesConfigures, incompleteCriteria.size());
 
-        Long projetIdForResponse = evaluation.getSujetProjet() != null
-                ? evaluation.getSujetProjet().getId()
-                : (evaluation.getProjetCatalogue() != null ? evaluation.getProjetCatalogue().getId() : null);
+        Long sujetProjetId = evaluation.getSujetProjet() == null ? null : evaluation.getSujetProjet().getId();
+        Long projetCatalogueId = evaluation.getProjetCatalogue() == null ? null : evaluation.getProjetCatalogue().getId();
+        String evaluationContext = sujetProjetId != null
+                ? "SUJET_PROJET"
+                : (projetCatalogueId != null ? "PROJET_CATALOGUE" : null);
 
         return new EvaluationResponse(
                 evaluation.getId(),
-                projetIdForResponse,
+                sujetProjetId,
+                projetCatalogueId,
+                evaluationContext,
                 evaluation.getScoreFinal(),
                 evaluation.getEligibleIndustrialisation(),
                 evaluation.getBloqueParEliminatoire(),

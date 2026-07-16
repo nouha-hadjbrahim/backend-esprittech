@@ -14,6 +14,7 @@ import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
@@ -22,6 +23,7 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.lang.reflect.Method;
@@ -44,6 +46,7 @@ class SujetProjetServiceTest {
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
     @Mock private AffectationRepository affectationRepository;
     @Mock private ProjetCatalogueService projetCatalogueService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks private SujetProjetService service;
 
@@ -80,7 +83,9 @@ class SujetProjetServiceTest {
 
     @Test
     void creerSujet_savesAndReturnsResponse() {
-        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("Equipe Test").build();
+        User chef = User.builder().id(20L).nom("Chef").prenom("Ahmed")
+                .role(Role.ROLE_CHEF_EQUIPE).typeUtilisateur(TypeUtilisateur.ENSEIGNANT).build();
+        EquipeRecherche equipe = EquipeRecherche.builder().id(1L).nom("Equipe Test").chef(chef).build();
         enseignant.setEquipeRecherche(equipe);
         when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
         when(sujetProjetMapper.toEntity(request, 10L)).thenReturn(entity);
@@ -88,6 +93,10 @@ class SujetProjetServiceTest {
         when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", "Equipe Test", 0)).thenReturn(response);
 
         assertEquals(response, service.creerSujet(request));
+
+        verify(notificationService).creerNotification(
+                eq(chef.getId()), eq(NotificationType.SUJET_DEMANDE),
+                anyString(), anyString(), eq("/frontoffice/validation-sujets"));
     }
 
     @Test
@@ -186,6 +195,10 @@ class SujetProjetServiceTest {
         assertEquals(StatutSujet.VALIDE, entity.getStatut());
         assertTrue(entity.getCatalogue());
         assertNotNull(entity.getDateValidation());
+
+        verify(notificationService).creerNotification(
+                eq(10L), eq(NotificationType.SUJET_VALIDE),
+                anyString(), anyString(), eq("/frontoffice/sujets/mes-sujets"));
     }
 
     @Test
@@ -230,6 +243,10 @@ class SujetProjetServiceTest {
         assertEquals(StatutSujet.INVALIDE, entity.getStatut());
         assertEquals("Sujet incomplet", entity.getMotifInvalidation());
         assertNotNull(entity.getDateValidation());
+
+        verify(notificationService).creerNotification(
+                eq(10L), eq(NotificationType.SUJET_REJETE),
+                anyString(), anyString(), eq("/frontoffice/sujets/mes-sujets"));
     }
 
     @Test
@@ -431,7 +448,7 @@ class SujetProjetServiceTest {
 
         var result = service.getOldValues(1L);
 
-        assertEquals(entity.getStatut(), result.get("statut"));
+        assertEquals(entity.getStatut().name(), result.get("statut"));
         assertEquals(entity.getTitre(), result.get("titre"));
         assertEquals(entity.getCatalogue(), result.get("catalogue"));
     }
@@ -462,5 +479,48 @@ class SujetProjetServiceTest {
         when(sujetProjetRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertEquals("Inconnu", service.getTitreById(99L));
+    }
+
+    @Test
+    void validerSujetAsAdmin_validatesSubject() {
+        enseignant.setRole(Role.ROLE_ADMIN);
+        entity.setStatut(StatutSujet.SOUMIS_EN_VALIDATION);
+        when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(sujetProjetRepository.save(entity)).thenReturn(entity);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
+
+        SujetProjetResponse result = service.validerSujetAsAdmin(1L);
+
+        assertEquals(response, result);
+        assertEquals(StatutSujet.VALIDE, entity.getStatut());
+        assertTrue(entity.getCatalogue());
+        assertNotNull(entity.getDateValidation());
+
+        verify(notificationService).creerNotification(
+                eq(10L), eq(NotificationType.SUJET_VALIDE),
+                anyString(), anyString(), eq("/frontoffice/sujets/mes-sujets"));
+    }
+
+    @Test
+    void invaliderSujetAsAdmin_invalidatesSubject() {
+        enseignant.setRole(Role.ROLE_ADMIN);
+        entity.setStatut(StatutSujet.SOUMIS_EN_VALIDATION);
+        when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(sujetProjetRepository.save(entity)).thenReturn(entity);
+        when(sujetProjetMapper.toResponse(eq(entity), eq("Sami Ben Ali"), eq("sami@esprit.tn"), isNull(), eq(0))).thenReturn(response);
+
+        SujetInvalidationRequest invReq = new SujetInvalidationRequest("Non conforme");
+        SujetProjetResponse result = service.invaliderSujetAsAdmin(1L, invReq);
+
+        assertEquals(response, result);
+        assertEquals(StatutSujet.INVALIDE, entity.getStatut());
+        assertEquals("Non conforme", entity.getMotifInvalidation());
+        assertNotNull(entity.getDateValidation());
+
+        verify(notificationService).creerNotification(
+                eq(10L), eq(NotificationType.SUJET_REJETE),
+                anyString(), anyString(), eq("/frontoffice/sujets/mes-sujets"));
     }
 }

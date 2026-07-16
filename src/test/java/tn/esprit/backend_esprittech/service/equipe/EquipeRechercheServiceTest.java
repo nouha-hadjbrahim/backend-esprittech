@@ -17,7 +17,9 @@ import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.mapper.equipe.EquipeMapper;
 import tn.esprit.backend_esprittech.repository.equipe.AffiliationEnseignantRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.repository.UserRepository;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +43,8 @@ class EquipeRechercheServiceTest {
 
     @Mock
     private AffiliationEnseignantRepository affiliationRepository;
+    @Mock
+    private NotificationService notificationService;
 
     private EquipeDomaine testDomaine;
 
@@ -490,6 +494,10 @@ class EquipeRechercheServiceTest {
         when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
 
         assertNotNull(service.assignerChef(1L, 2L));
+        verify(notificationService).creerNotification(
+                eq(2L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Chef d'equipe designé"),
+                anyString(), anyString());
     }
 
     // =========================================================================
@@ -869,6 +877,10 @@ class EquipeRechercheServiceTest {
 
         assertNotNull(service.ajouterMembres(1L, List.of(20L)));
         assertTrue(e.getMembers().contains(member));
+        verify(notificationService).creerNotification(
+                eq(20L), eq(NotificationType.EQUIPE_REJOINTE),
+                eq("Ajout dans une equipe"),
+                anyString(), anyString());
     }
 
     @Test
@@ -994,6 +1006,10 @@ class EquipeRechercheServiceTest {
         assertFalse(e.getMembers().contains(member));
         assertNull(member.getEquipeRecherche());
         assertTrue(e.getMembers().contains(chef));
+        verify(notificationService).creerNotification(
+                eq(20L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Retrait de l'equipe"),
+                anyString(), anyString());
     }
 
     @Test
@@ -1011,6 +1027,10 @@ class EquipeRechercheServiceTest {
         assertNotNull(service.retirerMembre(1L, 20L));
         assertFalse(e.getMembers().contains(member));
         assertNull(member.getEquipeRecherche());
+        verify(notificationService).creerNotification(
+                eq(20L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Retrait de l'equipe"),
+                anyString(), anyString());
     }
 
     // =========================================================================
@@ -1068,6 +1088,10 @@ class EquipeRechercheServiceTest {
         assertEquals(Role.ROLE_ENSEIGNANT, chef.getRole());
         verify(equipeRepository).save(e);
         verify(userRepository).save(chef);
+        verify(notificationService).creerNotification(
+                eq(1L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Retrait du role de chef"),
+                anyString(), anyString());
     }
 
     @Test
@@ -1091,6 +1115,7 @@ class EquipeRechercheServiceTest {
         assertNull(e.getChef());
         verify(equipeRepository).save(e);
         verifyNoInteractions(userRepository); // save never called because chef was null
+        verifyNoInteractions(notificationService); // no notification when chef is null
     }
 
     // =========================================================================
@@ -1265,5 +1290,121 @@ class EquipeRechercheServiceTest {
         when(equipeRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertEquals("Inconnu", service.getNomById(99L));
+    }
+
+    // =========================================================================
+    // Notification verification
+    // =========================================================================
+
+    @Test
+    void assignerChef_valid_sendsNotification() {
+        EquipeRecherche e = equipeVide();
+        User chef = enseignant(2L);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(chef));
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeRepository.existsByChefIdAndIdNot(2L, 1L)).thenReturn(false);
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.assignerChef(1L, 2L);
+
+        verify(notificationService, times(1)).creerNotification(
+                eq(2L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Chef d'equipe designé"),
+                anyString(), anyString());
+    }
+
+    @Test
+    void ajouterMembres_multipleMembers_sendsNotificationForEachNewMember() {
+        EquipeRecherche e = equipeVide();
+        User member1 = enseignant(20L);
+        User member2 = enseignant(21L);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findAllByIdIn(any())).thenReturn(List.of(member1, member2));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.ajouterMembres(1L, List.of(20L, 21L));
+
+        verify(notificationService, times(2)).creerNotification(
+                anyLong(), eq(NotificationType.EQUIPE_REJOINTE),
+                eq("Ajout dans une equipe"),
+                anyString(), anyString());
+        verify(notificationService).creerNotification(
+                eq(20L), eq(NotificationType.EQUIPE_REJOINTE),
+                eq("Ajout dans une equipe"),
+                anyString(), anyString());
+        verify(notificationService).creerNotification(
+                eq(21L), eq(NotificationType.EQUIPE_REJOINTE),
+                eq("Ajout dans une equipe"),
+                anyString(), anyString());
+    }
+
+    @Test
+    void ajouterMembres_emptyMemberIds_noNotification() {
+        EquipeRecherche e = equipeVide();
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.ajouterMembres(1L, List.of());
+
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void retirerMembre_valid_sendsNotification() {
+        EquipeRecherche e = equipeVide();
+        User member = enseignant(20L);
+        e.getMembers().add(member);
+        member.setEquipeRecherche(e);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(userRepository.findById(20L)).thenReturn(Optional.of(member));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.retirerMembre(1L, 20L);
+
+        verify(notificationService, times(1)).creerNotification(
+                eq(20L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Retrait de l'equipe"),
+                anyString(), anyString());
+    }
+
+    @Test
+    void retirerChef_valid_sendsNotification() {
+        EquipeRecherche e = equipeVide();
+        User chef = chefEquipe(1L);
+        e.setChef(chef);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(userRepository.save(chef)).thenReturn(chef);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.retirerChef(1L);
+
+        verify(notificationService, times(1)).creerNotification(
+                eq(1L), eq(NotificationType.EQUIPE_INVITATION),
+                eq("Retrait du role de chef"),
+                anyString(), anyString());
+    }
+
+    @Test
+    void retirerChef_noChef_noNotification() {
+        EquipeRecherche e = equipeVide();
+        e.setChef(null);
+
+        when(equipeRepository.findById(1L)).thenReturn(Optional.of(e));
+        when(equipeRepository.save(e)).thenReturn(e);
+        when(equipeMapper.toResponse(any(), anyInt())).thenReturn(mock(EquipeResponse.class));
+
+        service.retirerChef(1L);
+
+        verifyNoInteractions(notificationService);
     }
 }

@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 
+import java.util.List;
+
 /**
  * Évaluation d'un projet du catalogue applicatif, exposée directement par l'identifiant du
  * projet catalogue. Le moteur d'évaluation ML est le même que pour les sujets, mais les
@@ -39,5 +41,19 @@ public class ProjetCatalogueEvaluationController {
     @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
     public EvaluationResponse getLatestEvaluation(@PathVariable Long id) {
         return evaluationService.getLatestEvaluationByProjetCatalogue(id);
+    }
+
+    /** Renvoie l'historique des evaluations d'un projet catalogue. */
+    @GetMapping("/{id}/evaluations")
+    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
+    public List<EvaluationResponse> getEvaluationHistory(@PathVariable Long id) {
+        return evaluationService.getEvaluationHistoryByProjetCatalogue(id);
+    }
+
+    /** Renvoie une evaluation precise rattachee au projet catalogue. */
+    @GetMapping("/{id}/evaluations/{evaluationId}")
+    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
+    public EvaluationResponse getEvaluationDetail(@PathVariable Long id, @PathVariable Long evaluationId) {
+        return evaluationService.getEvaluationDetailByProjetCatalogue(id, evaluationId);
     }
 }
