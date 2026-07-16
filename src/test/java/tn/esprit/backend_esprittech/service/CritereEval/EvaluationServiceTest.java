@@ -64,6 +64,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
@@ -86,6 +88,7 @@ class EvaluationServiceTest {
     @Mock private MlEvaluationClient mlEvaluationClient;
     @Mock private ObjectMapper objectMapper;
     @Mock private ProjetCatalogueService projetCatalogueService;
+    @Mock private NotificationService notificationService;
     @Mock private ProjetCatalogueRepository projetCatalogueRepository;
 
     @InjectMocks

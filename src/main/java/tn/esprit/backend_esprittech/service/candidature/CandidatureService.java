@@ -109,7 +109,7 @@ public class CandidatureService {
                 NotificationType.CANDIDATURE_RECUE,
                 "Nouvelle candidature",
                 etudiant.getPrenom() + " " + etudiant.getNom() + " a depose une candidature sur votre sujet \"" + sujet.getTitre() + "\".",
-                "/frontoffice/validation-sujets");
+                "/frontoffice/sujets/mes-sujets");
 
         return response;
     }
