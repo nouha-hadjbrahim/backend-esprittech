@@ -9,11 +9,13 @@ import java.util.Optional;
 
 public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
 
-    Optional<Evaluation> findTopBySujetProjetIdOrderByDateCalculDesc(Long sujetProjetId);
+    Optional<Evaluation> findTopBySujetProjetIdOrderByDateCalculDescIdDesc(Long sujetProjetId);
 
-    List<Evaluation> findBySujetProjetIdOrderByDateCalculDesc(Long sujetProjetId);
+    List<Evaluation> findBySujetProjetIdOrderByDateCalculDescIdDesc(Long sujetProjetId);
 
-    Optional<Evaluation> findTopByProjetCatalogueIdOrderByDateCalculDesc(Long projetCatalogueId);
+    Optional<Evaluation> findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(Long projetCatalogueId);
 
-    List<Evaluation> findByProjetCatalogueIdOrderByDateCalculDesc(Long projetCatalogueId);
+    List<Evaluation> findByProjetCatalogueIdOrderByDateCalculDescIdDesc(Long projetCatalogueId);
+
+    Optional<Evaluation> findByIdAndProjetCatalogueId(Long id, Long projetCatalogueId);
 }

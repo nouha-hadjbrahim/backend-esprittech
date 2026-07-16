@@ -151,7 +151,7 @@ class IndustrialisationScoreServiceTest {
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
         when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(questions);
         when(reponseRepository.findByCandidatureIndustrialisationId(11L)).thenReturn(responses);
-        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDesc(42L)).thenReturn(evaluation);
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(42L)).thenReturn(evaluation);
     }
 
     private QuestionIndustrialisation question(Long id) {

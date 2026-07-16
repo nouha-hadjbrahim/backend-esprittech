@@ -54,7 +54,7 @@ public class IndustrialisationScoreService {
                 .stream()
                 .collect(Collectors.toMap(r -> r.getQuestion().getId(), Function.identity()));
         Optional<Evaluation> latestEvaluation = evaluationRepository
-                .findTopBySujetProjetIdOrderByDateCalculDesc(candidature.getSujetProjet().getId());
+                .findTopBySujetProjetIdOrderByDateCalculDescIdDesc(candidature.getSujetProjet().getId());
 
         if (noCriteriaAvailable(questions, latestEvaluation, candidature.getSujetProjet().getScoreFinalEvaluation())) {
             return emptyCriteriaResponse(candidature);

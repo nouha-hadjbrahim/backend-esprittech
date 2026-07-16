@@ -14,7 +14,13 @@ import java.util.List;
 @Getter
 @Setter
 @Entity
-@Table(name = "evaluations")
+@Table(
+        name = "evaluations",
+        indexes = {
+                @Index(name = "idx_evaluations_sujet_projet", columnList = "sujet_projet_id"),
+                @Index(name = "idx_evaluations_projet_catalogue", columnList = "projet_catalogue_id")
+        }
+)
 
 public class Evaluation {
     @Id
@@ -25,16 +31,16 @@ public class Evaluation {
      * Sujet évalué lorsque l'évaluation porte sur le pipeline SujetProjet.
      * Nullable : exactement un des deux (sujetProjet, projetCatalogue) est renseigné.
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sujet_projet_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "sujet_projet_id", nullable = true, foreignKey = @ForeignKey(name = "fk_evaluations_sujet_projet"))
     private SujetProjet sujetProjet;
 
     /**
      * Projet du catalogue applicatif évalué directement (dépôt manuel ou publié depuis un sujet).
      * Nullable : exactement un des deux (sujetProjet, projetCatalogue) est renseigné.
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "projet_catalogue_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "projet_catalogue_id", nullable = true, foreignKey = @ForeignKey(name = "fk_evaluations_projet_catalogue"))
     private ProjetCatalogue projetCatalogue;
 
     private Double scoreFinal;
@@ -154,6 +160,22 @@ public class Evaluation {
     @PrePersist
     public void prePersist() {
         this.dateCalcul = LocalDateTime.now();
+        validateSingleProjectParent();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        validateSingleProjectParent();
+    }
+
+    public void validateSingleProjectParent() {
+        boolean hasSujetProjet = sujetProjet != null;
+        boolean hasProjetCatalogue = projetCatalogue != null;
+        if (hasSujetProjet == hasProjetCatalogue) {
+            throw new IllegalStateException(
+                    "Une evaluation doit etre rattachee exactement a un SujetProjet ou a un ProjetCatalogue."
+            );
+        }
     }
 
     public void addResultat(ResultatCritere resultat) {
