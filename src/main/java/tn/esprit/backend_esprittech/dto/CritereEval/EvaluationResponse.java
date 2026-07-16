@@ -7,6 +7,8 @@ import java.util.List;
 public record EvaluationResponse(
         Long id,
         Long sujetProjetId,
+        Long projetCatalogueId,
+        String evaluationContext,
         Double scoreFinal,
         Boolean eligibleIndustrialisation,
         Boolean bloqueParEliminatoire,
@@ -82,7 +84,8 @@ public record EvaluationResponse(
             String scoreCalculationCoverageMessage,
             List<String> blockingCriteriaNames
     ) {
-        this(id, sujetProjetId, scoreFinal, eligibleIndustrialisation,
+        this(id, sujetProjetId, null, sujetProjetId == null ? null : "SUJET_PROJET",
+                scoreFinal, eligibleIndustrialisation,
                 bloqueParEliminatoire, hasEliminatoryWarnings,
                 eliminatoryWarningsCount, eliminatoryWarningsDetails, dateCalcul,
                 commentaire, calculatedBy, recalculationReason, resultats,
@@ -111,7 +114,8 @@ public record EvaluationResponse(
             String recalculationReason,
             List<ResultatCritereResponse> resultats
     ) {
-        this(id, sujetProjetId, scoreFinal, eligibleIndustrialisation, bloqueParEliminatoire,
+        this(id, sujetProjetId, null, sujetProjetId == null ? null : "SUJET_PROJET",
+                scoreFinal, eligibleIndustrialisation, bloqueParEliminatoire,
                 Boolean.TRUE.equals(bloqueParEliminatoire), 0, List.of(), dateCalcul,
                 commentaire, calculatedBy, recalculationReason, resultats,
                 null, null, null, null, null, null, null, null, null, 0, List.of(),

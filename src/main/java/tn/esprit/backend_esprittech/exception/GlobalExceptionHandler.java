@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -109,6 +110,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ProblemDetail handleBusiness(BusinessException ex) {
         return build(HttpStatus.BAD_REQUEST, "Règle métier violée", ex.getMessage());
+    }
+
+    @ExceptionHandler(EvaluationPersistenceException.class)
+    public ResponseEntity<Map<String, Object>> handleEvaluationPersistence(
+            EvaluationPersistenceException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Echec de persistance d'evaluation", ex);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", EvaluationPersistenceException.CODE);
+        body.put("message", ex.getMessage());
+        body.put("timestamp", Instant.now());
+        body.put("path", request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
