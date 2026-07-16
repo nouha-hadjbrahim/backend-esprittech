@@ -27,6 +27,10 @@ import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndu
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -93,6 +97,8 @@ class DashboardServiceTest {
         lenient().when(affiliationEnseignantRepository.countByStatut(StatutAffiliation.EN_ATTENTE)).thenReturn(2L);
 
         lenient().when(historiqueRepository.findTop15ByOrderByCreatedAtDesc()).thenReturn(List.of());
+        lenient().when(historiqueRepository.findByOrderByCreatedAtDesc(any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
     }
 
     // ================================================================
@@ -157,7 +163,7 @@ class DashboardServiceTest {
 
     @Test
     void getExtendedDashboard_aggregatesAllKpisAndCharts() {
-        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard();
+        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertNotNull(response);
         assertNotNull(response.kpis());
@@ -192,9 +198,10 @@ class DashboardServiceTest {
 
     @Test
     void getExtendedDashboard_emptyHistory_returnsEmptyActivity() {
-        when(historiqueRepository.findTop15ByOrderByCreatedAtDesc()).thenReturn(Collections.emptyList());
+        when(historiqueRepository.findByOrderByCreatedAtDesc(any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard();
+        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertNotNull(response.recentActivity());
         assertTrue(response.recentActivity().isEmpty());
@@ -217,9 +224,10 @@ class DashboardServiceTest {
                 .entityId(20L).summary(null).createdAt(LocalDateTime.now().minusHours(2))
                 .build();
 
-        when(historiqueRepository.findTop15ByOrderByCreatedAtDesc()).thenReturn(List.of(h1, h2));
+        when(historiqueRepository.findByOrderByCreatedAtDesc(any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of(h1, h2)));
 
-        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard();
+        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertEquals(2, response.recentActivity().size());
         assertEquals("Sujet validé", response.recentActivity().get(0).message());
@@ -243,7 +251,7 @@ class DashboardServiceTest {
         when(equipeRechercheRepository.countEquipesByMonth())
                 .thenReturn(List.<Object[]>of(new Object[]{currentYear, currentMonth, 3L}));
 
-        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard();
+        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertTrue(response.trendsSujets().stream().anyMatch(t -> t.value() > 0));
         assertTrue(response.trendsCandidatures().stream().anyMatch(t -> t.value() > 0));

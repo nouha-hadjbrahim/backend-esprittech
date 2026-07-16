@@ -244,8 +244,10 @@ public class IndustrialisationService {
         ensureEditable(candidature);
 
         boolean hasActiveLivrables;
+        String projetTitre;
         if (candidature.getSujetProjet() != null) {
             SujetProjet projet = candidature.getSujetProjet();
+            projetTitre = projet.getTitre();
             if (projet.getScoreFinalEvaluation() == null) {
                 throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
             }
@@ -265,6 +267,7 @@ public class IndustrialisationService {
             sujetProjetRepository.save(projet);
         } else {
             ProjetCatalogue projet = candidature.getProjetCatalogue();
+            projetTitre = projet.getTitre();
             hasActiveLivrables = livrableCatalogueRepository.existsByProjetIdAndActifTrue(projet.getId());
 
             validateCompleteness(candidature);
@@ -288,7 +291,7 @@ public class IndustrialisationService {
                     ciMember.getId(),
                     NotificationType.CI_DEMANDE_SOUMISE,
                     "Demande d'industrialisation",
-                    "Nouvelle demande d'industrialisation soumise pour le projet \"" + projet.getTitre() + "\".",
+                    "Nouvelle demande d'industrialisation soumise pour le projet \"" + projetTitre + "\".",
                     "/ci/industrialisation");
         }
 
@@ -383,14 +386,17 @@ public class IndustrialisationService {
         candidature.setCiDecideur(current);
         candidature.setDateDecisionCI(java.time.LocalDateTime.now());
 
+        String projetTitre;
         if (candidature.getSujetProjet() != null) {
             SujetProjet projet = candidature.getSujetProjet();
+            projetTitre = projet.getTitre();
             projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
                     ? StatutSujet.INDUSTRIALISE_DSI
                     : StatutSujet.INDUSTRIALISE_EXTERNE);
             sujetProjetRepository.save(projet);
         } else {
             ProjetCatalogue projet = candidature.getProjetCatalogue();
+            projetTitre = projet.getTitre();
             projet.setStatut(request.orientation() == OrientationIndustrialisation.DSI
                     ? StatutProjet.INDUSTRIALISE_DSI
                     : StatutProjet.INDUSTRIALISE_EXTERNE);
@@ -403,7 +409,7 @@ public class IndustrialisationService {
                 candidature.getDemandeur().getId(),
                 NotificationType.CI_DEMANDE_APPOUVEE,
                 "Demande industrialisation approuvee",
-                "Votre demande d'industrialisation pour le projet \"" + projet.getTitre() + "\" a ete approuvee (GO - " + request.orientation() + ").",
+                "Votre demande d'industrialisation pour le projet \"" + projetTitre + "\" a ete approuvee (GO - " + request.orientation() + ").",
                 "/frontoffice/demandes-industrialisation");
 
         return toResponse(saved, true);

@@ -18,6 +18,7 @@ import tn.esprit.backend_esprittech.config.AuthCookieFactory;
 import tn.esprit.backend_esprittech.dto.request.LoginRequest;
 import tn.esprit.backend_esprittech.dto.request.RegisterRequest;
 import tn.esprit.backend_esprittech.dto.response.AuthResponse;
+import tn.esprit.backend_esprittech.dto.response.MessageResponse;
 import tn.esprit.backend_esprittech.dto.response.UserResponse;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
@@ -56,17 +57,14 @@ class AuthControllerTest {
     }
 
     @Test
-    void register_returns201_withUserBodyAndCookies() {
+    void register_returns202_sendsVerificationCode() {
         var request = new RegisterRequest("Test", "User", "test@esprit.tn", "password123");
-        when(authService.register(request)).thenReturn(authResponse);
-        stubAuthCookies();
-        var response = new MockHttpServletResponse();
 
-        ResponseEntity<UserResponse> result = authController.register(request, response);
+        ResponseEntity<MessageResponse> result = authController.register(request);
 
-        assertEquals(HttpStatus.CREATED, result.getStatusCode());
-        assertEquals(userResponse, result.getBody());
-        assertEquals(2, response.getHeaders(HttpHeaders.SET_COOKIE).size());
+        assertEquals(HttpStatus.ACCEPTED, result.getStatusCode());
+        assertNotNull(result.getBody());
+        verify(authService).startRegistration(request);
     }
 
     @Test
