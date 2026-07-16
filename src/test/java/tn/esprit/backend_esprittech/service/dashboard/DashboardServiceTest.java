@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tn.esprit.backend_esprittech.dto.accueil.AccueilStatsResponse;
 import tn.esprit.backend_esprittech.dto.dashboard.DashboardResponse;
 import tn.esprit.backend_esprittech.dto.dashboard.extended.ExtendedDashboardResponse;
 import tn.esprit.backend_esprittech.entity.User;
@@ -127,6 +128,18 @@ class DashboardServiceTest {
         DashboardResponse response = dashboardService.getDashboard();
 
         assertEquals(0.0, response.scoreMoyen());
+    }
+
+    @Test
+    void getAccueilStats_aggregatesPublicCounters() {
+        when(userRepository.countByRole(Role.ROLE_ETUDIANT)).thenReturn(812L);
+
+        AccueilStatsResponse response = dashboardService.getAccueilStats();
+
+        assertEquals(3L, response.projetsActifs());
+        assertEquals(812L, response.etudiants());
+        assertEquals(20L, response.encadrants());
+        assertEquals(8L, response.equipesRdi());
     }
 
     @Test

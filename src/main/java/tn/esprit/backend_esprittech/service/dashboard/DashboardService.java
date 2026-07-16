@@ -3,6 +3,7 @@ package tn.esprit.backend_esprittech.service.dashboard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.backend_esprittech.dto.accueil.AccueilStatsResponse;
 import tn.esprit.backend_esprittech.dto.dashboard.DashboardResponse;
 import tn.esprit.backend_esprittech.dto.dashboard.extended.*;
 import tn.esprit.backend_esprittech.entity.historique.Historique;
@@ -65,6 +66,22 @@ public class DashboardService {
     private final EquipeRechercheRepository equipeRechercheRepository;
     private final AffiliationEnseignantRepository affiliationEnseignantRepository;
     private final HistoriqueRepository historiqueRepository;
+
+    @Transactional(readOnly = true)
+    public AccueilStatsResponse getAccueilStats() {
+        long sujetsTotal = sujetProjetRepository.count();
+        long sujetsInvalides = sujetProjetRepository.countByStatut(StatutSujet.INVALIDE);
+        long sujetsEnAttente = sujetProjetRepository.countByStatut(StatutSujet.SOUMIS_EN_VALIDATION)
+                + sujetProjetRepository.countByStatut(StatutSujet.EN_ATTENTE);
+        long projetsActifs = sujetsTotal - sujetsInvalides - sujetsEnAttente;
+
+        long etudiants = userRepository.countByRole(Role.ROLE_ETUDIANT);
+        long encadrants = userRepository.countByRole(Role.ROLE_ENSEIGNANT)
+                + userRepository.countByRole(Role.ROLE_CHEF_EQUIPE);
+        long equipesRdi = equipeRechercheRepository.count();
+
+        return new AccueilStatsResponse(projetsActifs, etudiants, encadrants, equipesRdi);
+    }
 
     public DashboardResponse getDashboard() {
         long sujetsTotal = sujetProjetRepository.count();
