@@ -49,6 +49,8 @@ public interface HistoriqueRepository extends JpaRepository<Historique, Long> {
 
     List<Historique> findTop15ByOrderByCreatedAtDesc();
 
+    Page<Historique> findByOrderByCreatedAtDesc(Pageable pageable);
+
     Page<Historique> findByActorIdOrderByCreatedAtDesc(Long actorId, Pageable pageable);
 
     @Query("""

@@ -203,6 +203,18 @@ public class EquipeRechercheService {
         equipe.removeMember(user);
         EquipeRecherche saved = equipeRepository.save(equipe);
 
+        List<AffiliationEnseignant> toReset = affiliationRepository
+                .findByEnseignantIdAndStatut(userId, StatutAffiliation.ACCEPTEE)
+                .stream()
+                .filter(a -> a.getEquipe().getId().equals(equipeId))
+                .toList();
+        for (AffiliationEnseignant a : toReset) {
+            a.setStatut(StatutAffiliation.REFUSEE);
+            a.setDateDecision(LocalDateTime.now());
+            a.setMotifDecision("Retiré de l'équipe");
+        }
+        affiliationRepository.saveAll(toReset);
+
         notificationService.creerNotification(
                 userId,
                 NotificationType.EQUIPE_INVITATION,
