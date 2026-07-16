@@ -310,7 +310,7 @@ public class IndustrialisationScoreService {
             double weight = positiveWeight(resultat.getPoids());
             double normalized = resultat.getNormalizedScore() != null
                     ? clamp(resultat.getNormalizedScore() * 100.0)
-                    : clamp(((resultat.getNoteValue() != null ? resultat.getNoteValue() : resultat.getNoteObtenue())
+                    : clamp(((resultat.getNoteValue() != null ? (double) resultat.getNoteValue() : resultat.getNoteObtenue())
                     / noteScale(resultat)) * 100.0);
             weightedScores += normalized * weight;
             totalWeight += weight;

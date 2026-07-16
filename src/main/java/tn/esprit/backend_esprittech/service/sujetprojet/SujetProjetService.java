@@ -110,7 +110,7 @@ public class SujetProjetService {
             if (chef != null) {
                 notificationService.creerNotification(
                         chef.getId(),
-                        NotificationType.AFFILIATION_DEMANDE,
+                        NotificationType.SUJET_DEMANDE,
                         "Nouveau sujet a valider",
                         "L'enseignant " + encadrant.getPrenom() + " " + encadrant.getNom() + " a depose un nouveau sujet \"" + sujet.getTitre() + "\" a valider.",
                         "/frontoffice/validation-sujets");

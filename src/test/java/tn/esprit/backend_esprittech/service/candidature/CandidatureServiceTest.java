@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
@@ -27,6 +28,7 @@ import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository
 import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
+import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 import java.util.List;
@@ -34,6 +36,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +51,7 @@ class CandidatureServiceTest {
     @Mock private AffectationMapper affectationMapper;
     @Mock private UserService userService;
     @Mock private SujetProjetService sujetProjetService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private CandidatureService candidatureService;
@@ -77,16 +82,19 @@ class CandidatureServiceTest {
         sujetValide.setId(10L);
         sujetValide.setStatut(StatutSujet.VALIDE);
         sujetValide.setEncadrantId(2L);
+        sujetValide.setCapaciteAccueil(3);
 
         sujetOuvert = new SujetProjet();
         sujetOuvert.setId(10L);
         sujetOuvert.setStatut(StatutSujet.CANDIDATURE_OUVERTE);
         sujetOuvert.setEncadrantId(2L);
+        sujetOuvert.setCapaciteAccueil(3);
 
         sujetEnRealisation = new SujetProjet();
         sujetEnRealisation.setId(10L);
         sujetEnRealisation.setStatut(StatutSujet.REALISATION_EN_COURS);
         sujetEnRealisation.setEncadrantId(2L);
+        sujetEnRealisation.setCapaciteAccueil(3);
 
         lenient().when(userService.getCurrentUser()).thenReturn(encadrant);
 
@@ -131,7 +139,9 @@ class CandidatureServiceTest {
     void deposerCandidature_sujetOuvert_creeCandidate() {
         when(userService.getCurrentUser()).thenReturn(etudiant);
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
-        when(candidatureRepository.findBySujetIdAndEtudiantId(10L, 1L)).thenReturn(Optional.empty());
+        when(affectationRepository.countActiveByEtudiantIdOnOngoingProjects(1L)).thenReturn(0L);
+        when(candidatureRepository.existsBySujetIdAndEtudiantIdAndStatutIn(10L, 1L, List.of(StatutCandidature.DEPOSEE, StatutCandidature.ACCEPTEE))).thenReturn(false);
+        when(affectationRepository.countBySujetIdAndStatut(10L, StatutAffectation.ACTIVE)).thenReturn(0L);
         when(candidatureRepository.save(any())).thenReturn(candidatureDeposee);
         when(candidatureMapper.toResponse(any())).thenReturn(mockCandidatureResponse());
 
@@ -140,6 +150,7 @@ class CandidatureServiceTest {
 
         assertNotNull(result);
         verify(candidatureRepository).save(any(Candidature.class));
+        verify(notificationService).creerNotification(eq(2L), eq(NotificationType.CANDIDATURE_RECUE), eq("Nouvelle candidature"), anyString(), eq("/frontoffice/validation-sujets"));
     }
 
     @Test
@@ -157,7 +168,8 @@ class CandidatureServiceTest {
     void deposerCandidature_doublonExistant_leveException() {
         when(userService.getCurrentUser()).thenReturn(etudiant);
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
-        when(candidatureRepository.findBySujetIdAndEtudiantId(10L, 1L)).thenReturn(Optional.of(candidatureDeposee));
+        when(affectationRepository.countActiveByEtudiantIdOnOngoingProjects(1L)).thenReturn(0L);
+        when(candidatureRepository.existsBySujetIdAndEtudiantIdAndStatutIn(10L, 1L, List.of(StatutCandidature.DEPOSEE, StatutCandidature.ACCEPTEE))).thenReturn(true);
 
         assertThrows(IllegalStateException.class,
                 () -> candidatureService.deposerCandidature(new CandidatureRequest(10L, "Je candidate")));
@@ -192,6 +204,7 @@ class CandidatureServiceTest {
         assertNotNull(autreCandidature.getDateDecision());
         verify(affectationRepository).save(any(Affectation.class));
         verify(candidatureRepository).saveAll(List.of(autreCandidature));
+        verify(notificationService).creerNotification(eq(1L), eq(NotificationType.CANDIDATURE_ACCEPTEE), eq("Candidature acceptee"), anyString(), eq("/frontoffice/mes-candidatures"));
     }
 
     @Test
@@ -249,6 +262,7 @@ class CandidatureServiceTest {
         assertEquals(StatutCandidature.ARCHIVEE, enAttente.getStatut());
         verify(candidatureRepository).saveAll(List.of(enAttente));
         verify(sujetProjetRepository).save(sujetOuvert);
+        verify(notificationService).creerNotification(eq(1L), eq(NotificationType.CANDIDATURE_REJETEE), eq("Candidature archivee"), anyString(), eq("/frontoffice/mes-candidatures"));
     }
 
     @Test
@@ -443,7 +457,47 @@ class CandidatureServiceTest {
 
         var result = candidatureService.getOldValues(100L);
 
-        assertEquals(candidatureDeposee.getStatut(), result.get("statut"));
+        assertEquals(candidatureDeposee.getStatut().name(), result.get("statut"));
+    }
+
+    // ── Notification verification tests ────────────────────────────
+
+    @Test
+    void deciderCandidature_refus_envoieNotificationRejetee() {
+        when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
+        when(candidatureRepository.save(candidatureDeposee)).thenReturn(candidatureDeposee);
+        when(candidatureMapper.toResponse(candidatureDeposee)).thenReturn(mockCandidatureResponse());
+
+        candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(false, "Profil non retenu"));
+
+        ArgumentCaptor<Long> userIdCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<NotificationType> typeCaptor = ArgumentCaptor.forClass(NotificationType.class);
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).creerNotification(
+                userIdCaptor.capture(), typeCaptor.capture(), eq("Candidature refusee"),
+                messageCaptor.capture(), eq("/frontoffice/mes-candidatures"));
+        assertEquals(1L, userIdCaptor.getValue());
+        assertEquals(NotificationType.CANDIDATURE_REJETEE, typeCaptor.getValue());
+        assertTrue(messageCaptor.getValue().contains("Profil non retenu"));
+    }
+
+    @Test
+    void retirerEtudiant_envoieNotificationRetrait() {
+        sujetEnRealisation.setTitre("Sujet IoT");
+        when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
+        when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetEnRealisation));
+        when(affectationRepository.save(affectationActive)).thenReturn(affectationActive);
+        when(affectationMapper.toResponse(affectationActive)).thenReturn(mockAffectationResponse());
+
+        candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Abandon sans justification"));
+
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).creerNotification(
+                eq(1L), eq(NotificationType.CANDIDATURE_REJETEE), eq("Retrait du projet"),
+                messageCaptor.capture(), eq("/frontoffice/mes-candidatures"));
+        assertTrue(messageCaptor.getValue().contains("Abandon sans justification"));
+        assertTrue(messageCaptor.getValue().contains("Sujet IoT"));
     }
 
     // ─────────────────────────────────────────────────────────────────

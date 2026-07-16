@@ -514,7 +514,7 @@ public class EvaluationService {
                 mlResponse == null ? "MANUAL" : mlResponse.effectiveStatus(),
                 eligibilityStatus,
                 mlResponse == null ? null : mlResponse.globalConfidence(),
-                mlResponse == null ? scoreFinal : scoreFinal,
+                scoreFinal,
                 mlResponse == null ? List.of() : safeList(mlResponse.warnings()),
                 mlResponse == null ? List.of() : safeList(mlResponse.strengths()),
                 mlResponse == null ? List.of() : safeList(mlResponse.weaknesses()),

@@ -19,6 +19,7 @@ public enum NotificationType {
     PROJET_REJETE,
 
     // Sujet
+    SUJET_DEMANDE,
     SUJET_VALIDE,
     SUJET_REJETE,
 
@@ -29,8 +30,5 @@ public enum NotificationType {
     // Industrialisation
     CI_DEMANDE_SOUMISE,
     CI_DEMANDE_APPOUVEE,
-    CI_DEMANDE_REJETEE,
-
-    // Livrable
-    LIVRABLE_TELECHARGE
+    CI_DEMANDE_REJETEE
 }

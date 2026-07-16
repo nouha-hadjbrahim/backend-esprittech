@@ -122,12 +122,29 @@ class AuthControllerTest {
     }
 
     @Test
-    void me_returns200() {
+    void me_returns200_withAccessTokenHeader() {
         when(userService.getCurrentUserResponse()).thenReturn(userResponse);
+        var request = new MockHttpServletRequest();
+        request.setCookies(new Cookie("access_token", "the-jwt-token"));
+        var response = new MockHttpServletResponse();
 
-        ResponseEntity<UserResponse> response = authController.me();
+        ResponseEntity<UserResponse> result = authController.me(request, response);
 
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(userResponse, response.getBody());
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals(userResponse, result.getBody());
+        assertEquals("Bearer the-jwt-token", response.getHeader(HttpHeaders.AUTHORIZATION));
+    }
+
+    @Test
+    void me_noCookie_returns200_withoutAuthorizationHeader() {
+        when(userService.getCurrentUserResponse()).thenReturn(userResponse);
+        var request = new MockHttpServletRequest();
+        var response = new MockHttpServletResponse();
+
+        ResponseEntity<UserResponse> result = authController.me(request, response);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals(userResponse, result.getBody());
+        assertNull(response.getHeader(HttpHeaders.AUTHORIZATION));
     }
 }

@@ -155,7 +155,7 @@ public class EquipeRechercheService {
         notificationService.creerNotification(
                 chef.getId(),
                 NotificationType.EQUIPE_INVITATION,
-                "Chef d'equipe designe",
+                "Chef d'equipe designé",
                 "Vous etes maintenant chef de l'equipe \"" + equipe.getNom() + "\".",
                 "/frontoffice/equipes-recherche/" + equipeId);
 

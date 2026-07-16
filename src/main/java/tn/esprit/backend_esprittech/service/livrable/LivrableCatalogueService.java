@@ -16,13 +16,11 @@ import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
-import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.service.UserService;
-import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.io.InputStream;
@@ -60,7 +58,6 @@ public class LivrableCatalogueService {
     private final ProjetCatalogueRepository projetRepository;
     private final UserService userService;
     private final MinioStorageService storageService;
-    private final NotificationService notificationService;
 
     public LivrableCatalogueResponse upload(Long projetId,
                                             TypeLivrable typeLivrable,
@@ -90,15 +87,6 @@ public class LivrableCatalogueService {
 
         LivrableCatalogueResponse response = toResponse(livrableRepository.save(livrable));
 
-        if (projet.getEncadrant() != null) {
-            notificationService.creerNotification(
-                    projet.getEncadrant().getId(),
-                    NotificationType.LIVRABLE_TELECHARGE,
-                    "Livrable telecharge",
-                    "Un nouveau livrable \"" + nom + "\" a ete depose sur le projet catalogue \"" + projet.getTitre() + "\".",
-                    "/frontoffice/mes-projets");
-        }
-
         return response;
     }
 
@@ -118,15 +106,6 @@ public class LivrableCatalogueService {
         livrable.setDeposant(current);
 
         LivrableCatalogueResponse response = toResponse(livrableRepository.save(livrable));
-
-        if (projet.getEncadrant() != null) {
-            notificationService.creerNotification(
-                    projet.getEncadrant().getId(),
-                    NotificationType.LIVRABLE_TELECHARGE,
-                    "Lien livrable ajoute",
-                    "Un nouveau lien livrable \"" + request.nom() + "\" a ete ajoute sur le projet catalogue \"" + projet.getTitre() + "\".",
-                    "/frontoffice/mes-projets");
-        }
 
         return response;
     }

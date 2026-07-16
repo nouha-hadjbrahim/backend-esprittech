@@ -206,7 +206,7 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    private List<RecentActivityItem> buildRecentActivity() {
+    public List<RecentActivityItem> buildRecentActivity() {
         List<Historique> history = historiqueRepository.findTop15ByOrderByCreatedAtDesc();
         return history.stream().map(h -> {
             String actorName = h.getActor().getPrenom() + " " + h.getActor().getNom();
