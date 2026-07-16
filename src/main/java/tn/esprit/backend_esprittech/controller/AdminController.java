@@ -11,7 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import tn.esprit.backend_esprittech.dto.request.CreateUserRequest;
 import tn.esprit.backend_esprittech.dto.request.UpdateUserRequest;
@@ -26,43 +25,30 @@ import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.mapper.UserMapper;
-import tn.esprit.backend_esprittech.service.ReferentielService;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 
 /**
- * Endpoints réservés à l'administrateur : import du référentiel CSV,
- * création d'équipes et assignation des chefs.
+ * Endpoints réservés à l'administrateur : gestion des utilisateurs,
+ * des sujets, création d'équipes et assignation des chefs.
  */
 @RestController
 @RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Administration", description = "Import du référentiel et gestion des équipes (ADMIN)")
+@Tag(name = "Administration", description = "Gestion des utilisateurs et des équipes (ADMIN)")
 public class AdminController {
 
-        private final ReferentielService referentielService;
         private final UserService userService;
         private final UserMapper userMapper;
         private final SujetProjetService sujetProjetService;
 
-        public AdminController(ReferentielService referentielService,
-                        UserService userService,
+        public AdminController(UserService userService,
                         UserMapper userMapper,
                         SujetProjetService sujetProjetService) {
-                this.referentielService = referentielService;
                 this.userService = userService;
                 this.userMapper = userMapper;
                 this.sujetProjetService = sujetProjetService;
         }
-
-        @PostMapping(value = "/import-referentiel", consumes = "multipart/form-data")
-        @Operation(summary = "Importer le référentiel", description = "Parse un fichier CSV (nom,prenom,email,identifiant,type,telephone) et alimente le référentiel.")
-        public ResponseEntity<MessageResponse> importerReferentiel(@RequestParam("file") MultipartFile file) {
-                int importes = referentielService.importerCsv(file);
-                return ResponseEntity.status(HttpStatus.CREATED)
-                                .body(MessageResponse.of(importes + " utilisateur(s) importé(s) dans le référentiel"));
-        }
-
 
         // ----- Gestion des utilisateurs -----
 
