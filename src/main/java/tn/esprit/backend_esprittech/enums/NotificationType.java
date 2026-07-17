@@ -15,6 +15,7 @@ public enum NotificationType {
     AFFILIATION_REJETEE,
 
     // Projet
+    PROJET_SOUMIS,
     PROJET_VALIDE,
     PROJET_REJETE,
 
