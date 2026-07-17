@@ -134,8 +134,9 @@ public class ProjetCatalogueService {
 
         applyCover(projet, request.coverImageBase64(), request.coverImageContentType());
 
+        ProjetCatalogue saved;
         try {
-            return mapper.toResponse(projetRepository.save(projet));
+            saved = projetRepository.save(projet);
         } catch (DataAccessException ex) {
             if (isPacketTooLarge(ex)) {
                 throw new BusinessException(
@@ -144,6 +145,28 @@ public class ProjetCatalogueService {
             }
             throw ex;
         }
+
+        notifierChefNouveauProjet(saved, encadrant, equipe);
+
+        return mapper.toResponse(saved);
+    }
+
+    /**
+     * Notifie le chef de l'équipe qu'un nouveau projet vient d'être soumis pour validation.
+     * Aucune notification si l'équipe n'a pas de chef ou si l'encadrant est lui-même le chef.
+     */
+    private void notifierChefNouveauProjet(ProjetCatalogue projet, User encadrant, EquipeRecherche equipe) {
+        User chef = equipe.getChef();
+        if (chef == null || chef.getId().equals(encadrant.getId())) {
+            return;
+        }
+        notificationService.creerNotification(
+                chef.getId(),
+                NotificationType.PROJET_SOUMIS,
+                "Nouveau projet a valider",
+                "L'enseignant " + encadrant.getPrenom() + " " + encadrant.getNom()
+                        + " a soumis un nouveau projet \"" + projet.getTitre() + "\" a valider.",
+                "/frontoffice/validation-projets");
     }
 
     /**
