@@ -1,0 +1,33 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*credential*
+*credentials*
+*secret*
+*.pem
+*.key
+*.p12
+*.jks
+
+# VCS and local tooling
+.git/
+.gitignore
+.idea/
+.vscode/
+.claude/
+
+# Build outputs and caches
+target/
+.m2/
+.sonar/
+.trivycache/
+
+# Runtime and local compose state
+docker-compose*.yml
+*.log
+test_output.txt
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

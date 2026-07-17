@@ -1,24 +1,35 @@
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v/'
     - when: never
 
 stages:
   - validate
   - test
+  - coverage
   - dependency-scan
-  - coverage-gate
+  - secret-scan
   - sonarqube
   - package
-  # - docker-build-push
+  - docker-build
+  - image-scan
+  - publish
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  MAVEN_CLI_OPTS: "-B"
   GIT_DEPTH: "0"
+  TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+  TRIVY_NO_PROGRESS: "true"
+  IMAGE_TAR: "image.tar"
+
+default:
+  interruptible: true
 
 cache:
-  key: ${CI_PROJECT_NAME}
+  key: "${CI_PROJECT_NAME}-maven"
   policy: pull-push
   paths:
     - .m2/repository/
@@ -27,102 +38,119 @@ cache:
   image: maven:3.9-eclipse-temurin-17
   before_script:
     - mkdir -p .m2/repository
+    - mvn --version
+
+.kaniko-job:
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > /kaniko/.docker/config.json
 
 validate-backend:
   stage: validate
   extends: .maven-job
   script:
-    - mvn validate
+    - mvn $MAVEN_CLI_OPTS validate
 
 test-backend:
   stage: test
   extends: .maven-job
   script:
-    - mvn -B clean verify
-    - mvn -B -DskipTests dependency:go-offline
+    - mvn $MAVEN_CLI_OPTS clean verify
   artifacts:
     when: always
     expire_in: 1 week
     paths:
       - target/
     reports:
-      junit: target/surefire-reports/*.xml
+      junit:
+        - target/surefire-reports/*.xml
+
+coverage-gate:
+  stage: coverage
+  extends: .maven-job
+  needs:
+    - job: test-backend
+      artifacts: true
+  script:
+    - test -f target/site/jacoco/jacoco.xml
+    - mvn $MAVEN_CLI_OPTS -DskipTests jacoco:check
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - target/site/jacoco/
 
 dependency-scan-trivy:
   stage: dependency-scan
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-  variables:
-    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
-    TRIVY_NO_PROGRESS: "true"
   cache:
     key: "${CI_PROJECT_NAME}-trivy"
     policy: pull-push
     paths:
       - .trivycache/
-      - .m2/repository/
-  before_script:
-    - mkdir -p target/trivy
-    - mkdir -p "$HOME/.m2"
-    - ln -sfn "$CI_PROJECT_DIR/.m2/repository" "$HOME/.m2/repository"
-    - trivy --version
   script:
-    - trivy fs --scanners vuln --severity HIGH,CRITICAL --offline-scan --format table --output target/trivy/dependency-scan.txt .
-    - trivy fs --scanners vuln --severity HIGH,CRITICAL --offline-scan --exit-code 1 --no-progress .
+    - mkdir -p target/trivy
+    - trivy --version
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --format table --output target/trivy/dependency-scan.txt .
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 .
   artifacts:
     when: always
     expire_in: 1 week
     paths:
       - target/trivy/
 
-coverage-gate:
-  stage: coverage-gate
-  extends: .maven-job
-  dependencies:
-    - test-backend
+secret-scan-trivy:
+  stage: secret-scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  cache:
+    key: "${CI_PROJECT_NAME}-trivy"
+    policy: pull-push
+    paths:
+      - .trivycache/
   script:
-    - |
-      echo "Checking JaCoCo instruction coverage threshold: minimum 80%"
-
-      REPORT="target/site/jacoco/jacoco.xml"
-
-      if [ ! -f "$REPORT" ]; then
-        echo "ERROR: JaCoCo report not found at $REPORT"
-        exit 1
-      fi
-
-      COUNTER=$(grep -o '<counter type="INSTRUCTION" missed="[0-9]*" covered="[0-9]*"' "$REPORT" | tail -n 1)
-
-      MISSED=$(echo "$COUNTER" | grep -o 'missed="[0-9]*"' | grep -o '[0-9]*')
-      COVERED=$(echo "$COUNTER" | grep -o 'covered="[0-9]*"' | grep -o '[0-9]*')
-      TOTAL=$((MISSED + COVERED))
-
-      if [ "$TOTAL" -eq 0 ]; then
-        echo "ERROR: No JaCoCo instruction coverage data found."
-        exit 1
-      fi
-
-      COVERAGE=$(awk "BEGIN { printf \"%.2f\", ($COVERED / $TOTAL) * 100 }")
-
-      echo "Instruction coverage: $COVERAGE%"
-
-      awk "BEGIN { exit !($COVERAGE >= 80) }" || {
-        echo "ERROR: Coverage is below 80%. Merge blocked."
-        exit 1
-      }
-
-      echo "Coverage is >= 80%. OK."
+    - mkdir -p target/trivy
+    - trivy --version
+    - trivy fs --scanners secret --format table --output target/trivy/secret-scan.txt --exit-code 1 .
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - target/trivy/secret-scan.txt
 
 sonarqube-analysis:
   stage: sonarqube
   extends: .maven-job
-  dependencies:
-    - test-backend
+  needs:
+    - job: test-backend
+      artifacts: true
+    - job: coverage-gate
+      artifacts: true
+  variables:
+    SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
+  cache:
+    key: "${CI_PROJECT_NAME}-sonar"
+    policy: pull-push
+    paths:
+      - .sonar/cache/
   script:
-    # SonarCloud checks its available Quality Gate. Coverage >= 80% is enforced by coverage-gate.
+    - |
+      for variable_name in SONAR_HOST_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_ORGANIZATION; do
+        eval "variable_value=\${$variable_name:-}"
+        if [ -z "$variable_value" ]; then
+          echo "$variable_name is not configured. Add it as a protected masked GitLab CI/CD variable."
+          exit 1
+        fi
+      done
+    - test -f target/site/jacoco/jacoco.xml
     - >
-      mvn sonar:sonar
+      mvn $MAVEN_CLI_OPTS sonar:sonar
       -Dsonar.host.url="$SONAR_HOST_URL"
       -Dsonar.token="$SONAR_TOKEN"
       -Dsonar.projectKey="$SONAR_PROJECT_KEY"
@@ -133,34 +161,69 @@ sonarqube-analysis:
 package-backend:
   stage: package
   extends: .maven-job
+  needs:
+    - job: test-backend
+      artifacts: true
   script:
-    - mvn clean package -DskipTests
+    - test -n "$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*sources.jar' -print -quit)"
+    - find target -maxdepth 1 -type f -name '*.jar' ! -name '*sources.jar' -print
   artifacts:
     expire_in: 1 week
     paths:
       - target/*.jar
 
-# docker-build-push:
-#   stage: docker-build-push
-#   image: docker:27
-#   services:
-#     - name: docker:27-dind
-#       command: ["--tls=false"]
-#   variables:
-#     DOCKER_TLS_CERTDIR: ""
-#     DOCKER_IMAGE_NAME: "kmokaddem/catalogue_industrialisation_esprit-tech"
-#   dependencies:
-#     - package-backend
-#   script:
-#     - TODAY_DATE=$(date +%Y%m%d)
-#     - BACKEND_DATE_TAG="backendSpring-${TODAY_DATE}"
-#     - echo "Backend date image tag is $BACKEND_DATE_TAG"
-#     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-#     - docker build
-#       -t "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
-#       -t "$DOCKER_IMAGE_NAME:latest"
-#       -t "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
-#       .
-#     - docker push "$DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
-#     - docker push "$DOCKER_IMAGE_NAME:latest"
-#     - docker push "$DOCKER_IMAGE_NAME:$BACKEND_DATE_TAG"
+docker-build-validate:
+  stage: docker-build
+  extends: .kaniko-job
+  needs:
+    - job: package-backend
+      artifacts: true
+  script:
+    - export IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
+    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile "$CI_PROJECT_DIR/Dockerfile" --destination "$CI_REGISTRY_IMAGE:$IMAGE_TAG" --no-push --tar-path "$IMAGE_TAR"
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - image.tar
+
+image-scan-trivy:
+  stage: image-scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs:
+    - job: docker-build-validate
+      artifacts: true
+  cache:
+    key: "${CI_PROJECT_NAME}-trivy"
+    policy: pull-push
+    paths:
+      - .trivycache/
+  script:
+    - mkdir -p target/trivy
+    - trivy image --input "$IMAGE_TAR" --severity HIGH,CRITICAL --format table --output target/trivy/image-scan.txt
+    - trivy image --input "$IMAGE_TAR" --severity HIGH,CRITICAL --exit-code 1
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - target/trivy/image-scan.txt
+
+publish-image:
+  stage: publish
+  extends: .kaniko-job
+  needs:
+    - job: package-backend
+      artifacts: true
+    - job: image-scan-trivy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+    - when: never
+  script:
+    - |
+      DESTINATIONS="--destination $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        DESTINATIONS="$DESTINATIONS --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG"
+      fi
+      /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile "$CI_PROJECT_DIR/Dockerfile" $DESTINATIONS
