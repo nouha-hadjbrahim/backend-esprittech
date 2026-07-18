@@ -22,6 +22,7 @@
 
         <spring-dotenv.version>4.0.0</spring-dotenv.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <jacoco.instruction.coverage.minimum>0.80</jacoco.instruction.coverage.minimum>
         <sonar.projectKey>sonarQubeTest</sonar.projectKey>
         <sonar.projectName>sonarQubeTest</sonar.projectName>
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
@@ -174,6 +175,27 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>coverage-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.instruction.coverage.minimum}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -234,14 +234,29 @@ class EvaluationServiceTest {
     void calculateAutomaticEvaluationForCatalogue_shouldPersistCatalogueParentOnly() {
         when(userService.getCurrentUser()).thenReturn(admin);
         when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
-        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L)).thenReturn(Optional.empty());
         when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(eliminatoire));
         when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
         when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));
         when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(7L))
                 .thenReturn(List.of(catalogueGitLivrable));
-        when(contentExtractionService.extractCatalogue(List.of(catalogueGitLivrable))).thenReturn(List.of());
-        when(mlEvaluationClient.evaluate(any())).thenReturn(mlResponse(0.9, true));
+        MlDeliverableContent catalogueContent = new MlDeliverableContent(
+                catalogueGitLivrable.getId(), "LIEN_GIT", "Depot Git", "text/plain", "READY", null, "lien git content");
+        when(contentExtractionService.extractCatalogue(List.of(catalogueGitLivrable))).thenReturn(List.of(catalogueContent));
+        MlEvidenceResponse catalogueEvidence = new MlEvidenceResponse(catalogueGitLivrable.getId(), "Architecture API et tests", 0.8, List.of("architecture", "test"));
+        MlCriterionResult catalogueElimResult = new MlCriterionResult(
+                10L, "ELIMINATOIRE", 1.0, 1.0, 0.8, 0.8, true,
+                "Documentation analysee", List.of(catalogueEvidence), List.of("Doc claire"), List.of(), List.of("Maintenir")
+        );
+        MlCriterionResult catalogueNoteResult = new MlCriterionResult(
+                20L, "NOTE", 4.5, 5.0, 0.9, 0.8, null,
+                "Qualite analysee", List.of(catalogueEvidence), List.of("Architecture presente"), List.of(), List.of("Completer les tests")
+        );
+        MlEvaluationResponse catalogueMlResponse = new MlEvaluationResponse(
+                "COMPLETED", "2.0.0", "multimodal-semantic-v2", 0.8,
+                List.of("Contenu exploitable"), List.of(), List.of("Completer les tests"), List.of(),
+                List.of(catalogueElimResult, catalogueNoteResult)
+        );
+        when(mlEvaluationClient.evaluate(any())).thenReturn(catalogueMlResponse);
         ArgumentCaptor<Evaluation> evaluationCaptor = ArgumentCaptor.forClass(Evaluation.class);
         when(evaluationRepository.saveAndFlush(evaluationCaptor.capture())).thenAnswer(invocation -> {
             Evaluation evaluation = invocation.getArgument(0);
@@ -320,7 +335,6 @@ class EvaluationServiceTest {
     void calculateAutomaticEvaluationForCatalogue_whenPersistenceFails_shouldNotSaveProjectScore() {
         when(userService.getCurrentUser()).thenReturn(admin);
         when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
-        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L)).thenReturn(Optional.empty());
         when(critereEliminatoireRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
         when(critereNoteRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of(note));
         when(noteLevelService.activeValues()).thenReturn(Set.of(1, 2, 3, 4, 5));

@@ -150,7 +150,7 @@ class CandidatureServiceTest {
 
         assertNotNull(result);
         verify(candidatureRepository).save(any(Candidature.class));
-        verify(notificationService).creerNotification(eq(2L), eq(NotificationType.CANDIDATURE_RECUE), eq("Nouvelle candidature"), anyString(), eq("/frontoffice/validation-sujets"));
+        verify(notificationService).creerNotification(eq(2L), eq(NotificationType.CANDIDATURE_RECUE), eq("Nouvelle candidature"), anyString(), eq("/frontoffice/sujets/mes-sujets"));
     }
 
     @Test
