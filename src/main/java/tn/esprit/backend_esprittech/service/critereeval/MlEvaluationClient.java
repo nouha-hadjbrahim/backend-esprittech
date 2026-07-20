@@ -125,58 +125,10 @@ public class MlEvaluationClient {
         IOException lastIoException = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(evaluationsUri)
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .timeout(requestTimeout)
-                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .header("Accept", MediaType.APPLICATION_JSON_VALUE)
-                    .header("X-Requested-Engine-Version", requiredEngineVersion)
-                    .POST(HttpRequest.BodyPublishers.ofString(
-                            payload,
-                            StandardCharsets.UTF_8
-                    ));
-
-            if (!correlationId.isBlank()) {
-                builder.header("X-Correlation-Id", correlationId);
-            }
-
             try {
-                HttpResponse<String> response = httpClient.send(
-                        builder.build(),
-                        HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-                );
-
-                int statusCode = response.statusCode();
-                String body = response.body() == null ? "" : response.body();
-
-                if (statusCode >= 200 && statusCode < 300) {
-                    if (body.length() > maxResponseChars) {
-                        throw new BusinessException(
-                                "La reponse ML depasse la taille autorisee."
-                        );
-                    }
-                    return body;
-                }
-
-                if (RETRYABLE_HTTP_STATUSES.contains(statusCode)
-                        && attempt < maxAttempts) {
-                    log.warn(
-                            "Evaluation ML temporairement indisponible: HTTP {}, tentative {}/{}.",
-                            statusCode,
-                            attempt,
-                            maxAttempts
-                    );
-                    pauseBeforeRetry();
-                    continue;
-                }
-
-                throw new BusinessException(
-                        "Evaluation ML indisponible: "
-                                + statusCode
-                                + " "
-                                + abbreviate(body, MAX_ERROR_BODY_CHARS)
-                );
-
+                return readResponse(buildRequest(payload, correlationId), attempt);
+            } catch (RetryableMlException ex) {
+                pauseBeforeRetry();
             } catch (IOException ex) {
                 lastIoException = ex;
                 if (attempt < maxAttempts) {
@@ -200,6 +152,69 @@ public class MlEvaluationClient {
                         ? "erreur reseau inconnue"
                         : lastIoException.getMessage())
         );
+    }
+
+    private HttpRequest buildRequest(String payload, String correlationId) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(evaluationsUri)
+                .version(HttpClient.Version.HTTP_1_1)
+                .timeout(requestTimeout)
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .header("Accept", MediaType.APPLICATION_JSON_VALUE)
+                .header("X-Requested-Engine-Version", requiredEngineVersion)
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        payload,
+                        StandardCharsets.UTF_8
+                ));
+
+        if (!correlationId.isBlank()) {
+            builder.header("X-Correlation-Id", correlationId);
+        }
+        return builder.build();
+    }
+
+    /**
+     * Envoie la requete et renvoie le corps en cas de succes. Leve {@link RetryableMlException}
+     * lorsque le statut est reessayable et qu'il reste des tentatives.
+     */
+    private String readResponse(HttpRequest request, int attempt) throws IOException, InterruptedException {
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        int statusCode = response.statusCode();
+        String body = response.body() == null ? "" : response.body();
+
+        if (statusCode >= 200 && statusCode < 300) {
+            if (body.length() > maxResponseChars) {
+                throw new BusinessException("La reponse ML depasse la taille autorisee.");
+            }
+            return body;
+        }
+
+        if (RETRYABLE_HTTP_STATUSES.contains(statusCode) && attempt < maxAttempts) {
+            log.warn(
+                    "Evaluation ML temporairement indisponible: HTTP {}, tentative {}/{}.",
+                    statusCode,
+                    attempt,
+                    maxAttempts
+            );
+            throw new RetryableMlException();
+        }
+
+        throw new BusinessException(
+                "Evaluation ML indisponible: "
+                        + statusCode
+                        + " "
+                        + abbreviate(body, MAX_ERROR_BODY_CHARS)
+        );
+    }
+
+    /** Signal interne : le statut HTTP recu justifie une nouvelle tentative. */
+    private static class RetryableMlException extends RuntimeException {
+        RetryableMlException() {
+            super(null, null, false, false);
+        }
     }
 
     private MlEvaluationResponse fromJson(String payload) {

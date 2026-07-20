@@ -61,9 +61,7 @@ public class CritereEliminatoireService {
         for (OrdreCritereRequest request : requests) {
             CritereEliminatoire critere = getEntity(request.critereId());
 
-            if (request.ordre() == null || request.ordre() < 1) {
-                throw new BadRequestException("L'ordre doit être supérieur ou égal à 1.");
-            }
+            requireOrdreValide(request.ordre());
 
             critere.setOrdre(request.ordre());
             repository.save(critere);
@@ -131,6 +129,16 @@ public class CritereEliminatoireService {
             return null;
         }
         return value.trim();
+    }
+
+    /**
+     * Valide un ordre recu dans une collection. @Valid ne cascade pas dans les elements d'une
+     * List : la valeur peut donc reellement etre nulle a l'execution.
+     */
+    private void requireOrdreValide(Integer ordre) {
+        if (ordre == null || ordre < 1) {
+            throw new BadRequestException("L'ordre doit être supérieur ou égal à 1.");
+        }
     }
 
     private void validateRequest(CritereEliminatoireRequest request) {

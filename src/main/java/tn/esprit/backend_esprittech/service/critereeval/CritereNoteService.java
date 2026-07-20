@@ -74,9 +74,7 @@ public class CritereNoteService {
     public void reorder(List<OrdreCritereRequest> requests) {
         for (OrdreCritereRequest request : requests) {
             CritereNote critere = getEntity(request.critereId());
-            if (request.ordre() == null || request.ordre() < 1) {
-                throw new BadRequestException("L'ordre doit etre superieur ou egal a 1.");
-            }
+            requireOrdreValide(request.ordre());
             critere.setOrdre(request.ordre());
             repository.save(critere);
         }
@@ -141,16 +139,34 @@ public class CritereNoteService {
         critere.setSourceAuthorityRules(trimToNull(request.sourceAuthorityRules()));
     }
 
+    /**
+     * Valide un ordre recu dans une collection. @Valid ne cascade pas dans les elements d'une
+     * List : la valeur peut donc reellement etre nulle a l'execution.
+     */
+    private void requireOrdreValide(Integer ordre) {
+        if (ordre == null || ordre < 1) {
+            throw new BadRequestException("L'ordre doit etre superieur ou egal a 1.");
+        }
+    }
+
     private void validateRequest(CritereNoteRequest request) {
+        validateIdentite(request);
+        validateBareme(request);
+    }
+
+    /** Champs descriptifs du critere. */
+    private void validateIdentite(CritereNoteRequest request) {
         if (request.libelle() == null || request.libelle().isBlank()) {
             throw new BadRequestException("Le libelle est obligatoire.");
         }
         if (request.domaine() == null || request.domaine().isBlank()) {
             throw new BadRequestException("Le domaine est obligatoire.");
         }
-        if (request.ordre() == null || request.ordre() < 1) {
-            throw new BadRequestException("L'ordre doit etre superieur ou egal a 1.");
-        }
+        requireOrdreValide(request.ordre());
+    }
+
+    /** Parametres de notation : bareme, poids, seuils et bornes automatiques. */
+    private void validateBareme(CritereNoteRequest request) {
         if (request.bareme() != null && request.bareme() <= 0) {
             throw new BadRequestException("Le bareme doit etre superieur a 0.");
         }

@@ -1128,6 +1128,22 @@ public class EvaluationService {
                                     List<CritereNote> criteresNotes,
                                     MlEvaluationRequest request,
                                     List<MlDeliverableContent> deliverables) {
+        validateResponseEnvelope(response, request);
+
+        Set<Long> eliminatoryIds = new HashSet<>();
+        criteresEliminatoires.forEach(critere -> eliminatoryIds.add(critere.getId()));
+        validateCriterionCoverage(response, criteresEliminatoires, criteresNotes);
+
+        Set<Long> deliverableIds = deliverables.stream()
+                .map(MlDeliverableContent::deliverableId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        response.effectiveResults()
+                .forEach(result -> validateCriterionResult(result, eliminatoryIds, deliverableIds));
+    }
+
+    /** Coherence de l'enveloppe : statut, correlation, snapshot et version de pipeline. */
+    private void validateResponseEnvelope(MlEvaluationResponse response, MlEvaluationRequest request) {
         if (response == null || response.effectiveResults() == null) {
             throw new BusinessException("Le moteur ML a retourne une reponse vide.");
         }
@@ -1148,12 +1164,16 @@ public class EvaluationService {
                 && !VERSION_MOTEUR_ML.equals(response.effectivePipelineVersion())) {
             throw new BusinessException("La version de pipeline ML est invalide.");
         }
+    }
 
+    /** Chaque critere actif doit etre renvoye exactement une fois, et aucun critere inconnu. */
+    private void validateCriterionCoverage(MlEvaluationResponse response,
+                                           List<CritereEliminatoire> criteresEliminatoires,
+                                           List<CritereNote> criteresNotes) {
         Set<Long> expectedIds = new HashSet<>();
-        Set<Long> eliminatoryIds = new HashSet<>();
         criteresEliminatoires.forEach(critere -> expectedIds.add(critere.getId()));
-        criteresEliminatoires.forEach(critere -> eliminatoryIds.add(critere.getId()));
         criteresNotes.forEach(critere -> expectedIds.add(critere.getId()));
+
         Set<Long> returnedIds = new HashSet<>();
         for (MlCriterionResult result : response.effectiveResults()) {
             if (result.criterionId() == null) {
@@ -1169,70 +1189,79 @@ public class EvaluationService {
         if (!returnedIds.equals(expectedIds)) {
             throw new BusinessException("La reponse ML ne couvre pas tous les criteres actifs.");
         }
+    }
 
-        Set<Long> deliverableIds = deliverables.stream()
-                .map(MlDeliverableContent::deliverableId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        response.effectiveResults().forEach(result -> {
-            boolean scoreMissingAllowed = Set.of(
-                            STATUT_INSUFFICIENT_EVIDENCE,
-                            STATUT_INDETERMINATE,
-                            "MODEL_UNAVAILABLE",
-                            STATUT_FAILED_RETRYABLE,
-                            STATUT_CONFIGURATION_INCOMPLETE
-                    )
-                    .contains(safeUpper(result.status()));
-            if (scoreMissingAllowed && (result.normalizedScore() != null || result.score() != null)) {
-                throw new BusinessException("La reponse ML contient un score non nul pour un critere non evaluable " + result.criterionId());
-            }
-            if (result.normalizedScore() == null && !scoreMissingAllowed) {
-                throw new BusinessException("La reponse ML contient un score manquant pour le critere " + result.criterionId());
-            }
-            validateRange(result.normalizedScore(), "score normalise ML", result.criterionId(), true);
-            validateRange(result.confidence(), "confiance ML", result.criterionId(), false);
-            validateRange(result.evidenceQuality(), "qualite preuve ML", result.criterionId(), true);
-            validateRange(result.extractionQuality(), "qualite extraction ML", result.criterionId(), true);
-            validateRange(result.sourceCoverage(), "couverture source ML", result.criterionId(), true);
-            validateRange(result.supportStrength(), "force de support ML", result.criterionId(), true);
-            validateRange(result.contradictionStrength(), "force contradiction ML", result.criterionId(), true);
-            validateRange(result.projectSpecificity(), "specificite projet ML", result.criterionId(), true);
-            validateRange(result.stanceConfidence(), "confiance stance ML", result.criterionId(), true);
-            if (result.score() != null && !finite(result.score())) {
-                throw new BusinessException("La reponse ML contient un score non fini pour le critere " + result.criterionId());
-            }
-            if (result.maxScore() != null && (!finite(result.maxScore()) || result.maxScore() < 0.0)) {
-                throw new BusinessException("La reponse ML contient un bareme invalide pour le critere " + result.criterionId());
-            }
-            for (MlEvidenceResponse evidence : safeList(result.evidence())) {
-                if (evidence.deliverableId() != null && !deliverableIds.contains(evidence.deliverableId())) {
-                    throw new BusinessException("La reponse ML reference un livrable inconnu: " + evidence.deliverableId());
-                }
-                validateRange(evidence.relevance(), "pertinence preuve ML", result.criterionId(), false);
-                validateRange(evidence.rawSemanticSimilarity(), "similarite brute preuve ML", result.criterionId(), true);
-                validateRange(evidence.calibratedRelevance(), "pertinence calibree preuve ML", result.criterionId(), true);
-                validateRange(evidence.projectRelevanceScore(), "pertinence projet preuve ML", result.criterionId(), true);
-                validateRange(evidence.rankingMargin(), "marge classement preuve ML", result.criterionId(), true);
-                validateRange(evidence.stanceConfidence(), "confiance stance preuve ML", result.criterionId(), true);
-                validateRange(evidence.sourceAuthority(), "autorite source preuve ML", result.criterionId(), true);
-                validateRange(evidence.contradictionStrength(), "force contradiction preuve ML", result.criterionId(), true);
-                validateRange(evidence.evidenceQuality(), "qualite preuve detail ML", result.criterionId(), true);
-                validateRange(evidence.extractionQuality(), "qualite extraction preuve ML", result.criterionId(), true);
-                validateRange(evidence.documentCategoryConfidence(), "confiance categorie document ML", result.criterionId(), true);
-                validateAllowedEvidenceState(evidence, result.criterionId());
-                if (!StringUtils.hasText(evidence.excerpt())) {
-                    throw new BusinessException("La reponse ML contient une preuve vide pour le critere " + result.criterionId());
-                }
-            }
-            if (eliminatoryIds.contains(result.criterionId())
-                    && STATUT_NOT_OK.equals(safeUpper(result.eliminatoryState()))
-                    && !hasConfirmedNegativeEvidence(result)) {
-                throw new BusinessException("La reponse ML declare NOT_OK sans preuve negative confirmee pour le critere " + result.criterionId());
-            }
-            if (result.confidence() == null || result.confidence() < 0.0 || result.confidence() > 1.0) {
-                throw new BusinessException("La confiance ML est invalide pour le critere " + result.criterionId());
-            }
-        });
+    /** Scores, bornes et preuves d'un critere renvoye par le moteur ML. */
+    private void validateCriterionResult(MlCriterionResult result,
+                                         Set<Long> eliminatoryIds,
+                                         Set<Long> deliverableIds) {
+        validateCriterionScores(result);
+        for (MlEvidenceResponse evidence : safeList(result.evidence())) {
+            validateEvidence(evidence, result.criterionId(), deliverableIds);
+        }
+        if (eliminatoryIds.contains(result.criterionId())
+                && STATUT_NOT_OK.equals(safeUpper(result.eliminatoryState()))
+                && !hasConfirmedNegativeEvidence(result)) {
+            throw new BusinessException("La reponse ML declare NOT_OK sans preuve negative confirmee pour le critere " + result.criterionId());
+        }
+        if (result.confidence() == null || result.confidence() < 0.0 || result.confidence() > 1.0) {
+            throw new BusinessException("La confiance ML est invalide pour le critere " + result.criterionId());
+        }
+    }
+
+    /** Presence et domaine de definition des metriques numeriques du critere. */
+    private void validateCriterionScores(MlCriterionResult result) {
+        boolean scoreMissingAllowed = Set.of(
+                        STATUT_INSUFFICIENT_EVIDENCE,
+                        STATUT_INDETERMINATE,
+                        "MODEL_UNAVAILABLE",
+                        STATUT_FAILED_RETRYABLE,
+                        STATUT_CONFIGURATION_INCOMPLETE
+                )
+                .contains(safeUpper(result.status()));
+        if (scoreMissingAllowed && (result.normalizedScore() != null || result.score() != null)) {
+            throw new BusinessException("La reponse ML contient un score non nul pour un critere non evaluable " + result.criterionId());
+        }
+        if (result.normalizedScore() == null && !scoreMissingAllowed) {
+            throw new BusinessException("La reponse ML contient un score manquant pour le critere " + result.criterionId());
+        }
+        validateRange(result.normalizedScore(), "score normalise ML", result.criterionId(), true);
+        validateRange(result.confidence(), "confiance ML", result.criterionId(), false);
+        validateRange(result.evidenceQuality(), "qualite preuve ML", result.criterionId(), true);
+        validateRange(result.extractionQuality(), "qualite extraction ML", result.criterionId(), true);
+        validateRange(result.sourceCoverage(), "couverture source ML", result.criterionId(), true);
+        validateRange(result.supportStrength(), "force de support ML", result.criterionId(), true);
+        validateRange(result.contradictionStrength(), "force contradiction ML", result.criterionId(), true);
+        validateRange(result.projectSpecificity(), "specificite projet ML", result.criterionId(), true);
+        validateRange(result.stanceConfidence(), "confiance stance ML", result.criterionId(), true);
+        if (result.score() != null && !finite(result.score())) {
+            throw new BusinessException("La reponse ML contient un score non fini pour le critere " + result.criterionId());
+        }
+        if (result.maxScore() != null && (!finite(result.maxScore()) || result.maxScore() < 0.0)) {
+            throw new BusinessException("La reponse ML contient un bareme invalide pour le critere " + result.criterionId());
+        }
+    }
+
+    /** Une preuve doit citer un livrable connu, rester dans les bornes et porter un extrait. */
+    private void validateEvidence(MlEvidenceResponse evidence, Long criterionId, Set<Long> deliverableIds) {
+        if (evidence.deliverableId() != null && !deliverableIds.contains(evidence.deliverableId())) {
+            throw new BusinessException("La reponse ML reference un livrable inconnu: " + evidence.deliverableId());
+        }
+        validateRange(evidence.relevance(), "pertinence preuve ML", criterionId, false);
+        validateRange(evidence.rawSemanticSimilarity(), "similarite brute preuve ML", criterionId, true);
+        validateRange(evidence.calibratedRelevance(), "pertinence calibree preuve ML", criterionId, true);
+        validateRange(evidence.projectRelevanceScore(), "pertinence projet preuve ML", criterionId, true);
+        validateRange(evidence.rankingMargin(), "marge classement preuve ML", criterionId, true);
+        validateRange(evidence.stanceConfidence(), "confiance stance preuve ML", criterionId, true);
+        validateRange(evidence.sourceAuthority(), "autorite source preuve ML", criterionId, true);
+        validateRange(evidence.contradictionStrength(), "force contradiction preuve ML", criterionId, true);
+        validateRange(evidence.evidenceQuality(), "qualite preuve detail ML", criterionId, true);
+        validateRange(evidence.extractionQuality(), "qualite extraction preuve ML", criterionId, true);
+        validateRange(evidence.documentCategoryConfidence(), "confiance categorie document ML", criterionId, true);
+        validateAllowedEvidenceState(evidence, criterionId);
+        if (!StringUtils.hasText(evidence.excerpt())) {
+            throw new BusinessException("La reponse ML contient une preuve vide pour le critere " + criterionId);
+        }
     }
 
     private void applyMlResult(ResultatCritere resultat,
