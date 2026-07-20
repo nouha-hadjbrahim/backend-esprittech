@@ -7,6 +7,7 @@ import tn.esprit.backend_esprittech.dto.accueil.AccueilStatsResponse;
 import tn.esprit.backend_esprittech.dto.dashboard.DashboardResponse;
 import tn.esprit.backend_esprittech.dto.dashboard.extended.*;
 import tn.esprit.backend_esprittech.entity.historique.Historique;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.*;
 import tn.esprit.backend_esprittech.enums.equipe.StatutAffiliation;
@@ -122,16 +123,20 @@ public class DashboardService {
     public ExtendedDashboardResponse getExtendedDashboard(int recentActivityLimit) {
         AdminKpiResponse kpis = buildKpis();
         List<TrendItem> trendsSujets = buildTrendItems(sujetProjetRepository.countSujetsByMonth(), 12);
-        List<TrendItem> trendsCandidatures = buildTrendItems(candidatureRepository.countCandidaturesByMonth(), 7);
+        List<TrendItem> trendsCandidatures = buildTrendItems(candidatureRepository.countCandidaturesByMonth(), 9);
+        List<TrendItem> trendsIndustrialisation = buildTrendItems(
+                candidatureIndustrialisationRepository.countIndustrialisationsByMonth(), 9);
         List<TrendItem> trendsEquipes = buildTrendItems(equipeRechercheRepository.countEquipesByMonth(), 12);
         List<SujetByStatutItem> sujetsByStatut = buildSujetsByStatut();
+        List<SujetByCategorieItem> sujetsByCategorie = buildSujetsByCategorie();
         List<UsersByRoleItem> usersByRole = buildUsersByRole();
         List<CatalogueByDomainItem> catalogueByDomain = buildCatalogueByDomain();
+        List<CatalogueByDomainItem> sujetsByDomaine = buildSujetsByDomaine();
         List<RecentActivityItem> recentActivity = buildRecentActivity(recentActivityLimit);
 
         return new ExtendedDashboardResponse(
-                kpis, trendsSujets, trendsCandidatures, trendsEquipes,
-                sujetsByStatut, usersByRole, catalogueByDomain, recentActivity
+                kpis, trendsSujets, trendsCandidatures, trendsIndustrialisation, trendsEquipes,
+                sujetsByStatut, sujetsByCategorie, usersByRole, catalogueByDomain, sujetsByDomaine, recentActivity
         );
     }
 
@@ -209,6 +214,14 @@ public class DashboardService {
         );
     }
 
+    private List<SujetByCategorieItem> buildSujetsByCategorie() {
+        return List.of(
+                new SujetByCategorieItem("Stage", sujetProjetRepository.countByCategorie(CategorieSujet.STAGE_INGENIEUR), "#FFB74D"),
+                new SujetByCategorieItem("PFE", sujetProjetRepository.countByCategorie(CategorieSujet.PFE), "#E23E3E"),
+                new SujetByCategorieItem("RDI", sujetProjetRepository.countByCategorie(CategorieSujet.RDI), "#94A3B8")
+        );
+    }
+
     private List<UsersByRoleItem> buildUsersByRole() {
         return Arrays.stream(Role.values())
                 .map(r -> new UsersByRoleItem(
@@ -223,6 +236,27 @@ public class DashboardService {
         return rows.stream()
                 .map(row -> new CatalogueByDomainItem((String) row[0], ((Number) row[1]).longValue()))
                 .collect(Collectors.toList());
+    }
+
+    private List<CatalogueByDomainItem> buildSujetsByDomaine() {
+        List<Object[]> rows = sujetProjetRepository.countTopDomaines();
+        return rows.stream()
+                .map(row -> new CatalogueByDomainItem(
+                        shortenDomainLabel((String) row[0]),
+                        ((Number) row[1]).longValue()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    private String shortenDomainLabel(String domaine) {
+        if (domaine == null || domaine.isBlank()) {
+            return "Autre";
+        }
+        String cleaned = domaine.trim();
+        if (cleaned.length() <= 14) {
+            return cleaned;
+        }
+        return cleaned.substring(0, 12).trim() + "…";
     }
 
     @Transactional(readOnly = true)

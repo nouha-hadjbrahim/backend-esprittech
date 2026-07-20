@@ -19,6 +19,9 @@ public interface CandidatureIndustrialisationRepository extends JpaRepository<Ca
     @Query("SELECT AVG(c.scoreEvaluationProjet) FROM CandidatureIndustrialisation c WHERE c.scoreEvaluationProjet IS NOT NULL")
     Double averageScoreEvaluationProjet();
 
+    @Query(value = "SELECT YEAR(c.date_demande) as y, MONTH(c.date_demande) as m, COUNT(*) FROM candidatures_industrialisation c GROUP BY y, m ORDER BY y, m", nativeQuery = true)
+    List<Object[]> countIndustrialisationsByMonth();
+
     List<CandidatureIndustrialisation> findByDemandeurIdOrderByDateDemandeDesc(Long demandeurId);
 
     List<CandidatureIndustrialisation> findByStatutInOrderByDateDemandeDesc(Collection<StatutIndustrialisation> statuts);

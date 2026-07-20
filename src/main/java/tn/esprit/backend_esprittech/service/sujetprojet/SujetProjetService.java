@@ -347,8 +347,8 @@ public class SujetProjetService {
         notificationService.creerNotification(
                 sujet.getEncadrantId(),
                 NotificationType.SUJET_VALIDE,
-                "Sujet valide",
-                "Votre sujet \"" + sujet.getTitre() + "\" a ete valide par le chef d'equipe.",
+                "Sujet accepté",
+                "Votre sujet \"" + sujet.getTitre() + "\" a été accepté par le chef d'équipe. Vous pouvez ouvrir les candidatures quand vous le souhaitez.",
                 "/frontoffice/sujets/mes-sujets");
 
         return response;
@@ -656,8 +656,8 @@ public class SujetProjetService {
         notificationService.creerNotification(
                 sujet.getEncadrantId(),
                 NotificationType.SUJET_VALIDE,
-                "Sujet valide par admin",
-                "Votre sujet \"" + sujet.getTitre() + "\" a ete valide par un administrateur.",
+                "Sujet accepté",
+                "Votre sujet \"" + sujet.getTitre() + "\" a été accepté par un administrateur. Vous pouvez ouvrir les candidatures quand vous le souhaitez.",
                 "/frontoffice/sujets/mes-sujets");
 
         return response;

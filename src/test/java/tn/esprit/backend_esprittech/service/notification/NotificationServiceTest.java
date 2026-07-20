@@ -126,6 +126,28 @@ class NotificationServiceTest {
     }
 
     @Test
+    void getNonLuesParType_returnsUnreadSujetValide() {
+        Notification valide = Notification.builder()
+                .id(2L)
+                .userId(10L)
+                .type(NotificationType.SUJET_VALIDE)
+                .title("Sujet accepté")
+                .message("Votre sujet \"IA\" a été accepté.")
+                .link("/frontoffice/sujets/mes-sujets")
+                .read(false)
+                .createdAt(Instant.parse("2026-07-15T11:00:00Z"))
+                .build();
+        when(repository.findByUserIdAndTypeAndReadFalseOrderByCreatedAtDesc(10L, NotificationType.SUJET_VALIDE))
+                .thenReturn(List.of(valide));
+
+        List<NotificationDTO> result = service.getNonLuesParType(10L, NotificationType.SUJET_VALIDE);
+
+        assertEquals(1, result.size());
+        assertEquals(NotificationType.SUJET_VALIDE, result.get(0).type());
+        assertEquals(2L, result.get(0).id());
+    }
+
+    @Test
     void marquerCommeLu_delegatesToRepository() {
         when(repository.markAsRead(1L, 10L)).thenReturn(1);
 

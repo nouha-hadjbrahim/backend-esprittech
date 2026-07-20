@@ -51,10 +51,13 @@ class AdminDashboardControllerTest {
                 kpis,
                 List.of(new TrendItem("janv. 2026", 5)),
                 List.of(new TrendItem("janv. 2026", 10)),
+                List.of(new TrendItem("janv. 2026", 4)),
                 List.of(new TrendItem("janv. 2026", 3)),
                 List.of(new SujetByStatutItem("En attente", 5, "#F59E0B")),
+                List.of(new SujetByCategorieItem("PFE", 8, "#E23E3E")),
                 List.of(new UsersByRoleItem("Étudiant", 30)),
                 List.of(new CatalogueByDomainItem("Informatique", 4)),
+                List.of(new CatalogueByDomainItem("IA", 8)),
                 List.of(new RecentActivityItem(1L, "Sujet validé", "Alice Dupont", "À l'instant", "validation"))
         );
         when(dashboardService.getExtendedDashboard(15)).thenReturn(response);
@@ -65,7 +68,9 @@ class AdminDashboardControllerTest {
                 .andExpect(jsonPath("$.kpis.equipesTotal").value(8))
                 .andExpect(jsonPath("$.trendsSujets.length()").value(1))
                 .andExpect(jsonPath("$.trendsCandidatures.length()").value(1))
+                .andExpect(jsonPath("$.trendsIndustrialisation.length()").value(1))
                 .andExpect(jsonPath("$.sujetsByStatut.length()").value(1))
+                .andExpect(jsonPath("$.sujetsByCategorie.length()").value(1))
                 .andExpect(jsonPath("$.usersByRole.length()").value(1))
                 .andExpect(jsonPath("$.recentActivity.length()").value(1));
 
@@ -91,6 +96,9 @@ class AdminDashboardControllerTest {
         );
         ExtendedDashboardResponse response = new ExtendedDashboardResponse(
                 kpis,
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList(),
