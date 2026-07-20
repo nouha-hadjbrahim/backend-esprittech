@@ -189,4 +189,30 @@ class CiIndustrialisationControllerTest {
         assertEquals(StatutIndustrialisation.NO_GO, result.statut());
         verify(industrialisationService).decideNoGo(11L, request);
     }
+
+    @Test
+    void score_convertedCandidature_shouldReturnPersistedProjectScoreWithout500() {
+        IndustrialisationScoreResponse score = new IndustrialisationScoreResponse(
+                18L,
+                55L,
+                84.0,
+                DecisionRecommandeeIndustrialisation.GO,
+                false,
+                List.of(),
+                0.0,
+                0.0,
+                84.0,
+                List.of(),
+                List.of(),
+                "GO recommande"
+        );
+        when(scoreService.calculate(18L)).thenReturn(score);
+
+        IndustrialisationScoreResponse result = controller.score(18L);
+
+        assertEquals(84.0, result.scoreFinal());
+        assertEquals(55L, result.projetId());
+        assertEquals(18L, result.candidatureId());
+        verify(scoreService).calculate(18L);
+    }
 }

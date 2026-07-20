@@ -28,9 +28,12 @@ import tn.esprit.backend_esprittech.entity.industrialisation.ReponseIndustrialis
 import tn.esprit.backend_esprittech.entity.industrialisation.StatutIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeReponseIndustrialisation;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
 import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.enums.StatutProjet;
+import tn.esprit.backend_esprittech.enums.TypeProjet;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.EliminatoryWarningsConfirmationRequiredException;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
@@ -40,6 +43,8 @@ import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
+import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
@@ -103,6 +108,12 @@ class IndustrialisationServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ProjetCatalogueRepository projetCatalogueRepository;
+
+    @Mock
+    private LivrableCatalogueRepository livrableCatalogueRepository;
 
     @InjectMocks
     private IndustrialisationService industrialisationService;
@@ -1024,5 +1035,198 @@ class IndustrialisationServiceTest {
         when(candidatureRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertEquals("Inconnu", industrialisationService.getProjetTitreByCandidatureId(99L));
+    }
+
+    @Test
+    void createForCatalogue_shouldAssociateProjetAndCopyScoreSnapshot() {
+        ProjetCatalogue catalogue = new ProjetCatalogue();
+        catalogue.setId(55L);
+        catalogue.setTitre("Catalogue IoT");
+        catalogue.setStatut(StatutProjet.VALIDE);
+        catalogue.setTypeProjet(TypeProjet.RDI);
+        catalogue.setScore(84);
+        catalogue.setSujetId(42L);
+        catalogue.setEncadrant(encadrant);
+        catalogue.setDomaines(java.util.Set.of());
+        catalogue.setTechnologies(java.util.Set.of());
+        catalogue.setPrerequis(java.util.Set.of());
+
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(projetCatalogueRepository.findById(55L)).thenReturn(Optional.of(catalogue));
+        when(candidatureRepository.findByProjetCatalogueIdOrderByDateDemandeDesc(55L)).thenReturn(List.of());
+        when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
+                .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
+        when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> {
+            CandidatureIndustrialisation saved = invocation.getArgument(0);
+            saved.setId(18L);
+            return saved;
+        });
+        when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+
+        var response = industrialisationService.createForCatalogue(
+                55L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null, false));
+
+        assertEquals(18L, response.id());
+        assertEquals(55L, response.projetId());
+        assertEquals(84.0, response.scoreEvaluationProjet());
+        assertNull(response.latestEvaluation());
+        ArgumentCaptor<CandidatureIndustrialisation> captor = ArgumentCaptor.forClass(CandidatureIndustrialisation.class);
+        verify(candidatureRepository).save(captor.capture());
+        assertEquals(catalogue, captor.getValue().getProjetCatalogue());
+        assertNull(captor.getValue().getSujetProjet());
+        assertEquals(84.0, captor.getValue().getScoreEvaluationProjet());
+    }
+
+    @Test
+    void detailForCi_convertedCandidature_shouldExposeCatalogueEvaluation() {
+        ProjetCatalogue catalogue = new ProjetCatalogue();
+        catalogue.setId(55L);
+        catalogue.setTitre("Catalogue IoT");
+        catalogue.setStatut(StatutProjet.VALIDE);
+        catalogue.setTypeProjet(TypeProjet.RDI);
+        catalogue.setScore(0);
+        catalogue.setSujetId(42L);
+        catalogue.setEncadrant(encadrant);
+        catalogue.setDomaines(java.util.Set.of());
+        catalogue.setTechnologies(java.util.Set.of());
+        catalogue.setPrerequis(java.util.Set.of());
+
+        CandidatureIndustrialisation converted = new CandidatureIndustrialisation();
+        converted.setId(18L);
+        converted.setProjetCatalogue(catalogue);
+        converted.setSujetProjet(null);
+        converted.setTypeIndustrialisation(TypeIndustrialisation.INTERNE);
+        converted.setStatut(StatutIndustrialisation.SOUMISE);
+        converted.setDemandeur(encadrant);
+        converted.setDateDemande(LocalDateTime.now());
+        converted.setScoreEvaluationProjet(81.0);
+
+        EvaluationResponse evaluation = new EvaluationResponse(
+                9L,
+                42L,
+                81.0,
+                true,
+                false,
+                false,
+                0,
+                List.of(),
+                LocalDateTime.now(),
+                null,
+                "SYSTEM",
+                null,
+                List.of(),
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                true,
+                "ok",
+                List.of()
+        );
+
+        when(userService.getCurrentUser()).thenReturn(ci);
+        when(candidatureRepository.findById(18L)).thenReturn(Optional.of(converted));
+        when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+        when(evaluationService.getLatestEvaluationByProjetCatalogue(55L)).thenReturn(evaluation);
+
+        var response = industrialisationService.detailForCi(18L);
+
+        assertEquals(55L, response.projetId());
+        assertEquals(81.0, response.scoreEvaluationProjet());
+        assertEquals(9L, response.latestEvaluation().id());
+        assertTrue(response.eligibleIndustrialisation());
+    }
+
+    @Test
+    void decideNoGo_catalogueCandidature_shouldNotRequireSujetProjet() {
+        ProjetCatalogue catalogue = new ProjetCatalogue();
+        catalogue.setId(55L);
+        catalogue.setTitre("Catalogue IoT");
+        catalogue.setStatut(StatutProjet.VALIDE);
+        catalogue.setTypeProjet(TypeProjet.RDI);
+        catalogue.setEncadrant(encadrant);
+        catalogue.setDomaines(java.util.Set.of());
+        catalogue.setTechnologies(java.util.Set.of());
+        catalogue.setPrerequis(java.util.Set.of());
+
+        CandidatureIndustrialisation converted = new CandidatureIndustrialisation();
+        converted.setId(18L);
+        converted.setProjetCatalogue(catalogue);
+        converted.setTypeIndustrialisation(TypeIndustrialisation.INTERNE);
+        converted.setStatut(StatutIndustrialisation.SOUMISE);
+        converted.setDemandeur(encadrant);
+        converted.setDateDemande(LocalDateTime.now());
+
+        when(userService.getCurrentUser()).thenReturn(ci);
+        when(candidatureRepository.findById(18L)).thenReturn(Optional.of(converted));
+        when(candidatureRepository.save(converted)).thenReturn(converted);
+        when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+        when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
+                .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
+
+        var response = industrialisationService.decideNoGo(18L, new DecisionNoGoRequest("refus catalogue"));
+
+        assertEquals(StatutIndustrialisation.NO_GO, response.statut());
+        verify(notificationService).creerNotification(
+                eq(7L), eq(NotificationType.CI_DEMANDE_REJETEE),
+                eq("Demande industrialisation refusee"), anyString(),
+                eq("/frontoffice/demandes-industrialisation"));
+    }
+
+    @Test
+    void soumettre_catalogueCandidature_shouldUpdateProjetCatalogueStatus() {
+        ProjetCatalogue catalogue = new ProjetCatalogue();
+        catalogue.setId(55L);
+        catalogue.setTitre("Catalogue IoT");
+        catalogue.setStatut(StatutProjet.VALIDE);
+        catalogue.setTypeProjet(TypeProjet.RDI);
+        catalogue.setEncadrant(encadrant);
+        catalogue.setDomaines(java.util.Set.of());
+        catalogue.setTechnologies(java.util.Set.of());
+        catalogue.setPrerequis(java.util.Set.of());
+
+        CandidatureIndustrialisation converted = new CandidatureIndustrialisation();
+        converted.setId(18L);
+        converted.setProjetCatalogue(catalogue);
+        converted.setSujetProjet(null);
+        converted.setTypeIndustrialisation(TypeIndustrialisation.INTERNE);
+        converted.setStatut(StatutIndustrialisation.BROUILLON);
+        converted.setDemandeur(encadrant);
+        converted.setDateDemande(LocalDateTime.now());
+
+        when(userService.getCurrentUser()).thenReturn(encadrant);
+        when(candidatureRepository.findById(18L)).thenReturn(Optional.of(converted));
+        when(livrableCatalogueRepository.existsByProjetIdAndActifTrue(55L)).thenReturn(true);
+        when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
+        when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
+        when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
+                .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
+        when(projetCatalogueRepository.save(catalogue)).thenReturn(catalogue);
+        when(candidatureRepository.save(converted)).thenReturn(converted);
+        when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
+        when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
+                .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
+        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+
+        var response = industrialisationService.soumettre(18L, new SubmitIndustrialisationRequest(false));
+
+        assertEquals(StatutIndustrialisation.SOUMISE, response.statut());
+        assertEquals(StatutProjet.CANDIDAT_INDUSTRIALISATION_INTERNE, catalogue.getStatut());
+        verify(projetCatalogueRepository).save(catalogue);
+        verify(notificationService).creerNotification(
+                eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
+                eq("Demande d'industrialisation"), anyString(),
+                eq("/ci/industrialisation"));
     }
 }
