@@ -45,7 +45,7 @@ cache:
 
 .buildkit-job:
   image:
-    name: moby/buildkit:rootless-v0.15.2
+    name: moby/buildkit:v0.15.2-rootless
     entrypoint: [""]
   before_script:
     - mkdir -p "$HOME/.docker"
@@ -99,7 +99,7 @@ coverage-gate:
       artifacts: true
   script:
     - test -f target/site/jacoco/jacoco.xml
-    - mvn $MAVEN_CLI_OPTS -DskipTests jacoco:check
+    - mvn $MAVEN_CLI_OPTS -DskipTests jacoco:check@coverage-check
   artifacts:
     when: always
     expire_in: 1 week
@@ -211,9 +211,12 @@ image-scan-trivy:
       artifacts: true
   script:
     - test -s "$IMAGE_OCI_ARCHIVE"
-    - mkdir -p target/trivy
-    - trivy image --input "$IMAGE_OCI_ARCHIVE" --severity HIGH,CRITICAL --format table --output target/trivy/image-scan.txt
-    - trivy image --input "$IMAGE_OCI_ARCHIVE" --severity HIGH,CRITICAL --exit-code 1
+    - rm -rf image.oci
+    - mkdir -p target/trivy image.oci
+    - tar -xf "$IMAGE_OCI_ARCHIVE" -C image.oci
+    - test -f image.oci/index.json
+    - trivy image --input image.oci --severity HIGH,CRITICAL --format table --output target/trivy/image-scan.txt
+    - trivy image --input image.oci --severity HIGH,CRITICAL --exit-code 1
   artifacts:
     when: always
     expire_in: 1 week
