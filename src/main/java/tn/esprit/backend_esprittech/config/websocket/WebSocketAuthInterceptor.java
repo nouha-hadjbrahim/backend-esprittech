@@ -7,8 +7,8 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import tn.esprit.backend_esprittech.config.CustomUserDetailsService;
@@ -34,6 +34,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     }
 
     @Override
+    @Nullable
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor
                 .getAccessor(message, StompHeaderAccessor.class);
@@ -47,10 +48,6 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 if (tokenProvider.validateToken(token) && !tokenProvider.isRefreshToken(token)) {
                     String email = tokenProvider.getEmailFromToken(token);
                     UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails, null, userDetails.getAuthorities());
 
                     Long userId = ((User) userDetails).getId();
                     accessor.setUser((Principal) () -> String.valueOf(userId));

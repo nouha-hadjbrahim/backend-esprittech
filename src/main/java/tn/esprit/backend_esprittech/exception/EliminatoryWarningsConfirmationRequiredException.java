@@ -7,7 +7,11 @@ import java.util.List;
 public class EliminatoryWarningsConfirmationRequiredException extends RuntimeException {
 
     private final int count;
-    private final List<BlocageEliminatoireDto> details;
+    /**
+     * Détails purement informatifs, consommés dans le même processus pour construire la réponse
+     * HTTP : marqués {@code transient} car {@link BlocageEliminatoireDto} n'est pas sérialisable.
+     */
+    private final transient List<BlocageEliminatoireDto> details;
 
     public EliminatoryWarningsConfirmationRequiredException(int count, List<BlocageEliminatoireDto> details) {
         super("Etes-vous sur de continuer ? Vous avez " + count

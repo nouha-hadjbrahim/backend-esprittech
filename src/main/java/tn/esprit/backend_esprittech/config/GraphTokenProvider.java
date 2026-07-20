@@ -2,8 +2,6 @@ package tn.esprit.backend_esprittech.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -23,7 +21,6 @@ import java.time.Instant;
 @Component
 public class GraphTokenProvider {
 
-    private static final Logger log = LoggerFactory.getLogger(GraphTokenProvider.class);
     private static final String GRAPH_SCOPE = "https://graph.microsoft.com/.default";
     /** Marge de sécurité : on renouvelle le token un peu avant son expiration réelle. */
     private static final long TOKEN_EXPIRY_MARGIN_SECONDS = 60;
@@ -80,8 +77,8 @@ public class GraphTokenProvider {
             }
             return token;
         } catch (RestClientException e) {
-            log.error("Échec d'obtention du token Azure AD (tenant {})", properties.tenantId(), e);
-            throw new AzureGraphException("Authentification à Azure AD impossible pour le moment.", e);
+            throw new AzureGraphException(
+                    "Authentification à Azure AD impossible pour le moment (tenant " + properties.tenantId() + ").", e);
         }
     }
 

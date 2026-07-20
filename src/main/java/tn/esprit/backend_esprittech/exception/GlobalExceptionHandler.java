@@ -26,9 +26,19 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** Titres de ProblemDetail réutilisés par plusieurs handlers. */
+    private static final String TITRE_CONFLIT = "Conflit";
+    private static final String TITRE_ACCES_REFUSE = "Accès refusé";
+    private static final String TITRE_RESSOURCE_INTROUVABLE = "Ressource introuvable";
+    private static final String TITRE_REQUETE_INVALIDE = "Requête invalide";
+    private static final String TITRE_ERREUR_INTERNE = "Erreur interne";
+    private static final String DETAIL_DROITS_INSUFFISANTS = "Vous n'avez pas les droits requis";
+    /** Clé exposée dans le corps des réponses d'erreur. */
+    private static final String CLE_MESSAGE = "message";
+
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ProblemDetail handleEmailExists(EmailAlreadyExistsException ex) {
-        return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
+        return build(HttpStatus.CONFLICT, TITRE_CONFLIT, ex.getMessage());
     }
 
     @ExceptionHandler(OrganizationMembershipException.class)
@@ -49,7 +59,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(java.util.NoSuchElementException.class)
     public ProblemDetail handleNoSuchElement(java.util.NoSuchElementException ex) {
-        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, TITRE_RESSOURCE_INTROUVABLE, ex.getMessage());
     }
 
     @ExceptionHandler({BadCredentialsException.class, AuthenticationException.class})
@@ -59,34 +69,34 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ProblemDetail handleAccessDenied(AccessDeniedException ex) {
-        return build(HttpStatus.FORBIDDEN, "Accès refusé", "Vous n'avez pas les droits requis");
+        return build(HttpStatus.FORBIDDEN, TITRE_ACCES_REFUSE, DETAIL_DROITS_INSUFFISANTS);
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ProblemDetail handleAuthorizationDenied(AuthorizationDeniedException ex) {
-        return build(HttpStatus.FORBIDDEN, "Accès refusé", "Vous n'avez pas les droits requis");
+        return build(HttpStatus.FORBIDDEN, TITRE_ACCES_REFUSE, DETAIL_DROITS_INSUFFISANTS);
     }
 
     @ExceptionHandler(ForbiddenException.class)
     public ProblemDetail handleForbidden(ForbiddenException ex) {
-        return build(HttpStatus.FORBIDDEN, "Accès refusé", ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, TITRE_ACCES_REFUSE, ex.getMessage());
     }
 
     @ExceptionHandler({ConflictException.class, BusinessConflictException.class})
     public ProblemDetail handleConflict(RuntimeException ex) {
-        return build(HttpStatus.CONFLICT, "Conflit", ex.getMessage());
+        return build(HttpStatus.CONFLICT, TITRE_CONFLIT, ex.getMessage());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         log.error("Violation d'intégrité de données", ex);
-        return build(HttpStatus.CONFLICT, "Conflit", "Contrainte d'unicité ou d'intégrité violée.");
+        return build(HttpStatus.CONFLICT, TITRE_CONFLIT, "Contrainte d'unicité ou d'intégrité violée.");
     }
 
     @ExceptionHandler(JpaSystemException.class)
     public ProblemDetail handleJpaSystemException(JpaSystemException ex) {
         log.error("Erreur JPA/SQL inattendue", ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne",
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, TITRE_ERREUR_INTERNE,
                 "Une erreur technique est survenue. Veuillez réessayer plus tard.");
     }
 
@@ -97,14 +107,14 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("requiresConfirmation", true);
         body.put("nbCriteresEliminatoires", ex.getCount());
-        body.put("message", ex.getMessage());
+        body.put(CLE_MESSAGE, ex.getMessage());
         body.put("details", ex.getDetails());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
-        return build(HttpStatus.BAD_REQUEST, "Requête invalide", ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, TITRE_REQUETE_INVALIDE, ex.getMessage());
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -120,7 +130,7 @@ public class GlobalExceptionHandler {
         log.error("Echec de persistance d'evaluation", ex);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", EvaluationPersistenceException.CODE);
-        body.put("message", ex.getMessage());
+        body.put(CLE_MESSAGE, ex.getMessage());
         body.put("timestamp", Instant.now());
         body.put("path", request.getRequestURI());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
@@ -128,17 +138,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, TITRE_RESSOURCE_INTROUVABLE, ex.getMessage());
     }
 
     @ExceptionHandler(tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException.class)
     public ProblemDetail handleCritereEvalNotFound(tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, TITRE_RESSOURCE_INTROUVABLE, ex.getMessage());
     }
 
     @ExceptionHandler(tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException.class)
     public ProblemDetail handleCritereEvalBadRequest(tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException ex) {
-        return build(HttpStatus.BAD_REQUEST, "Requête invalide", ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, TITRE_REQUETE_INVALIDE, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -158,14 +168,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex) {
         log.error("Erreur interne non gérée", ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne",
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, TITRE_ERREUR_INTERNE,
                 "Une erreur inattendue est survenue. Veuillez réessayer plus tard.");
     }
 
     private ProblemDetail build(HttpStatus status, String title, String detail) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
         pd.setTitle(title);
-        pd.setProperty("message", detail);
+        pd.setProperty(CLE_MESSAGE, detail);
         pd.setProperty("timestamp", Instant.now());
         return pd;
     }

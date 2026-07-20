@@ -38,6 +38,9 @@ import tn.esprit.backend_esprittech.service.sujetprojet.SujetProjetService;
 @Tag(name = "Administration", description = "Gestion des utilisateurs et des équipes (ADMIN)")
 public class AdminController {
 
+        /** Champ de tri par défaut des listes paginées. */
+        private static final String CHAMP_DATE_CREATION = "dateCreation";
+
         private final UserService userService;
         private final UserMapper userMapper;
         private final SujetProjetService sujetProjetService;
@@ -112,7 +115,7 @@ public class AdminController {
                         @RequestParam(required = false) String search,
                         @RequestParam(required = false) CategorieSujet categorie,
                         @RequestParam(required = false) StatutSujet statut) {
-                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateCreation"));
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, CHAMP_DATE_CREATION));
                 Page<SujetProjetResponse> sujets = sujetProjetService.listSujetsForAdmin(categorie, statut, search, pageable);
                 return ResponseEntity.ok(new PagedResponse<>(
                                 sujets.getContent(),
@@ -131,7 +134,7 @@ public class AdminController {
                         @RequestParam(defaultValue = "8") int size,
                         @RequestParam(required = false) String search,
                         @RequestParam(required = false) CategorieSujet categorie) {
-                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateCreation"));
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, CHAMP_DATE_CREATION));
                 Page<SujetProjetResponse> demandes = sujetProjetService.listDemandesForAdmin(categorie, search, pageable);
                 return ResponseEntity.ok(new PagedResponse<>(
                                 demandes.getContent(),
@@ -150,7 +153,7 @@ public class AdminController {
                         @RequestParam(defaultValue = "8") int size,
                         @RequestParam(required = false) String search,
                         @RequestParam(required = false) CategorieSujet categorie) {
-                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateCreation"));
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, CHAMP_DATE_CREATION));
                 Page<SujetProjetResponse> sujets = sujetProjetService.listSujetsDisponiblesForAdmin(categorie, search, pageable);
                 return ResponseEntity.ok(new PagedResponse<>(
                                 sujets.getContent(),

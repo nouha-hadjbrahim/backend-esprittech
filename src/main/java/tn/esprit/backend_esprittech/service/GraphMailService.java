@@ -76,8 +76,8 @@ public class GraphMailService {
                     .toBodilessEntity();
             log.info("Email envoyé à {} depuis {}", toEmail, sender);
         } catch (RestClientException e) {
-            log.error("Échec de l'envoi d'email à {} via Graph", toEmail, e);
-            throw new AzureGraphException("Envoi de l'email de vérification impossible pour le moment.", e);
+            throw new AzureGraphException(
+                    "Envoi de l'email de vérification impossible pour le moment (destinataire " + toEmail + ").", e);
         }
     }
 

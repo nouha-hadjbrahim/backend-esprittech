@@ -21,6 +21,7 @@ public record HistoriqueIndustrialisationResponse(
 ) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String CLE_STATUT = "statut";
 
     @SuppressWarnings("unchecked")
     public static HistoriqueIndustrialisationResponse from(HistoriqueResponse hr) {
@@ -32,14 +33,14 @@ public record HistoriqueIndustrialisationResponse(
         try {
             if (hr.oldValues() != null) {
                 Map<String, Object> oldMap = MAPPER.readValue(hr.oldValues(), Map.class);
-                if (oldMap.containsKey("statut")) {
-                    statutSource = StatutIndustrialisation.valueOf((String) oldMap.get("statut"));
+                if (oldMap.containsKey(CLE_STATUT)) {
+                    statutSource = StatutIndustrialisation.valueOf((String) oldMap.get(CLE_STATUT));
                 }
             }
             if (hr.newValues() != null) {
                 Map<String, Object> newMap = MAPPER.readValue(hr.newValues(), Map.class);
-                if (newMap.containsKey("statut")) {
-                    statutCible = StatutIndustrialisation.valueOf((String) newMap.get("statut"));
+                if (newMap.containsKey(CLE_STATUT)) {
+                    statutCible = StatutIndustrialisation.valueOf((String) newMap.get(CLE_STATUT));
                 }
             }
             if (hr.metadata() != null) {
@@ -52,6 +53,8 @@ public record HistoriqueIndustrialisationResponse(
                 }
             }
         } catch (Exception ignored) {
+            // Historique best-effort : un payload JSON illisible ou un statut inconnu ne doit pas
+            // empêcher l'affichage de la ligne d'historique. Les champs non résolus restent null.
         }
 
         return new HistoriqueIndustrialisationResponse(

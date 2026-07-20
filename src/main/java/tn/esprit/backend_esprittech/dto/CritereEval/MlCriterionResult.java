@@ -63,7 +63,7 @@ public record MlCriterionResult(
                 null,
                 null,
                 satisfied,
-                satisfied == null ? null : (satisfied ? "OK" : "NOT_OK"),
+                statutDepuisSatisfied(satisfied),
                 justification,
                 List.of(),
                 evidence,
@@ -79,5 +79,13 @@ public record MlCriterionResult(
                 weaknesses,
                 recommendations
         );
+    }
+
+    /** Statut lisible derive du drapeau {@code satisfied} ({@code null} si non evalue). */
+    private static String statutDepuisSatisfied(Boolean satisfied) {
+        if (satisfied == null) {
+            return null;
+        }
+        return satisfied ? "OK" : "NOT_OK";
     }
 }

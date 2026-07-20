@@ -94,8 +94,8 @@ public class AzureGraphService {
             }
             return response.value().get(0);
         } catch (RestClientException e) {
-            log.error("Échec de la recherche Graph de l'utilisateur {}", email, e);
-            throw new AzureGraphException("Vérification de l'organisation indisponible pour le moment.", e);
+            throw new AzureGraphException(
+                    "Vérification de l'organisation indisponible pour le moment (utilisateur " + email + ").", e);
         }
     }
 
@@ -113,8 +113,8 @@ public class AzureGraphService {
                     .body(GraphStringCollection.class);
             return (response == null || response.value() == null) ? List.of() : response.value();
         } catch (RestClientException e) {
-            log.error("Échec de checkMemberGroups pour l'utilisateur {}", userId, e);
-            throw new AzureGraphException("Vérification des groupes indisponible pour le moment.", e);
+            throw new AzureGraphException(
+                    "Vérification des groupes indisponible pour le moment (utilisateur " + userId + ").", e);
         }
     }
 

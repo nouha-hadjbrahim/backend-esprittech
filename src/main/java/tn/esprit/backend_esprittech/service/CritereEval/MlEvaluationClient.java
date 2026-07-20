@@ -30,6 +30,10 @@ public class MlEvaluationClient {
     private static final Set<String> FATAL_EVALUATION_STATUSES =
             Set.of("FAILED_RETRYABLE", "FAILED_PERMANENT");
     private static final int MAX_ERROR_BODY_CHARS = 2_000;
+    /** Cles JSON reutilisees dans les resumes de log ML. */
+    private static final String CLE_CRITERIA = "criteria";
+    private static final String CLE_SOURCE_TYPE = "sourceType";
+    private static final String CLE_STATUS = "status";
 
     private final HttpClient httpClient;
     private final URI evaluationsUri;
@@ -183,7 +187,6 @@ public class MlEvaluationClient {
                             ex.getMessage()
                     );
                     pauseBeforeRetry();
-                    continue;
                 }
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
@@ -220,7 +223,7 @@ public class MlEvaluationClient {
             String evaluationStatus = root.path("evaluationStatus").asText("");
             String engineType = root.path("engineType").asText("");
             String pipelineVersion = root.path("pipelineVersion").asText("");
-            JsonNode criteria = root.path("criteria");
+            JsonNode criteria = root.path(CLE_CRITERIA);
             JsonNode embedding = root.path("embedding");
 
             if (evaluationStatus.isBlank()) {
@@ -258,10 +261,13 @@ public class MlEvaluationClient {
     }
 
     private void logRequestSummary(String payload) {
+        if (!log.isInfoEnabled()) {
+            return;
+        }
         try {
             JsonNode root = objectMapper.readTree(payload);
             JsonNode project = root.path("project");
-            JsonNode criteria = root.path("criteria");
+            JsonNode criteria = root.path(CLE_CRITERIA);
             JsonNode deliverables = root.path("deliverables");
             JsonNode externalSources = root.path("externalSources");
 
@@ -307,7 +313,7 @@ public class MlEvaluationClient {
                                     + "contentChars={}, base64Chars={}, hashPresent={}",
                             item.path("deliverableId").asLong(),
                             item.path("filename").asText(""),
-                            item.path("sourceType").asText(""),
+                            item.path(CLE_SOURCE_TYPE).asText(""),
                             item.path("mimeType").asText(""),
                             item.path("content").asText("").length(),
                             item.path("contentBase64").asText("").length(),
@@ -320,7 +326,7 @@ public class MlEvaluationClient {
                 for (JsonNode item : externalSources) {
                     log.info(
                             "ML_EXTERNAL_SOURCE type={}, host={}",
-                            item.path("sourceType").asText(""),
+                            item.path(CLE_SOURCE_TYPE).asText(""),
                             safeHost(item.path("reference").asText(""))
                     );
                 }
@@ -332,9 +338,12 @@ public class MlEvaluationClient {
     }
 
     private void logResponseSummary(String payload, long durationMillis) {
+        if (!log.isInfoEnabled()) {
+            return;
+        }
         try {
             JsonNode root = objectMapper.readTree(payload);
-            JsonNode criteria = root.path("criteria");
+            JsonNode criteria = root.path(CLE_CRITERIA);
 
             log.info(
                     "ML_RESPONSE status={}, engineType={}, pipelineVersion={}, "
@@ -355,7 +364,7 @@ public class MlEvaluationClient {
                                     + "evidence={}, methods={}, reasons={}",
                             criterion.path("criterionId").asLong(),
                             criterion.path("type").asText(""),
-                            criterion.path("status").asText(""),
+                            criterion.path(CLE_STATUS).asText(""),
                             criterion.path("normalizedScore").isNumber()
                                     ? criterion.path("normalizedScore")
                                     .asDouble()
@@ -376,8 +385,8 @@ public class MlEvaluationClient {
                             "ML_PROCESSING filename={}, type={}, status={}, method={}, "
                                     + "pages={}, characters={}, chunks={}, warnings={}",
                             item.path("filename").asText(""),
-                            item.path("sourceType").asText(""),
-                            item.path("status").asText(""),
+                            item.path(CLE_SOURCE_TYPE).asText(""),
+                            item.path(CLE_STATUS).asText(""),
                             item.path("extractionMethod").asText(""),
                             item.path("pageCount").asInt(0),
                             metrics.path("extractedCharacters").asLong(0),
@@ -394,8 +403,8 @@ public class MlEvaluationClient {
                     log.info(
                             "ML_EXTERNAL_PROCESSING type={}, status={}, files={}, "
                                     + "sourceFiles={}, testFiles={}, remoteClone={}, commit={}",
-                            item.path("sourceType").asText(""),
-                            item.path("status").asText(""),
+                            item.path(CLE_SOURCE_TYPE).asText(""),
+                            item.path(CLE_STATUS).asText(""),
                             metrics.path("file_count").asLong(0),
                             metrics.path("source_files").asLong(0),
                             metrics.path("test_files").asLong(0),
