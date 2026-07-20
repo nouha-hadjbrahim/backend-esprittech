@@ -51,7 +51,8 @@ class LivrableCatalogueControllerTest {
                 7L,
                 "Ali Mansour",
                 LocalDateTime.now(),
-                true
+                true,
+                false
         );
     }
 
@@ -101,7 +102,8 @@ class LivrableCatalogueControllerTest {
                 7L,
                 "Ali Mansour",
                 LocalDateTime.now(),
-                true
+                true,
+                false
         );
         when(livrableService.addLink(42L, request)).thenReturn(linkResponse);
 
