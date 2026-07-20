@@ -251,6 +251,66 @@ public class IndustrialisationScoreService {
         );
     }
 
+    /** Question eliminatoire : alimente blocages, elements manquants et detail, sans score pondere. */
+    private void appliquerQuestionEliminatoire(QuestionIndustrialisation question,
+                                               ReponseIndustrialisation reponse,
+                                               List<ScoreBreakdownDto> details,
+                                               List<BlocageEliminatoireDto> blocages,
+                                               List<String> elementsManquants) {
+        ReponseEliminatoire result = IndustrialisationQuestionEvaluator.eliminatoryResult(question, reponse);
+        boolean answered = IndustrialisationQuestionEvaluator.isAnswered(question, reponse);
+        if (result == ReponseEliminatoire.NOT_OK && (Boolean.TRUE.equals(question.getObligatoire()) || answered)) {
+            blocages.add(new BlocageEliminatoireDto(
+                    "QUESTIONNAIRE",
+                    question.getId(),
+                    question.getLibelle(),
+                    answered
+                            ? "Reponse non conforme pour une question eliminatoire."
+                            : "Question eliminatoire obligatoire sans reponse."
+            ));
+        }
+        if (Boolean.TRUE.equals(question.getObligatoire()) && !answered) {
+            elementsManquants.add("Question obligatoire manquante: " + question.getLibelle());
+        }
+        details.add(new ScoreBreakdownDto(
+                "QUESTIONNAIRE_ELIMINATOIRE",
+                String.valueOf(question.getId()),
+                question.getLibelle(),
+                scoreEliminatoire(result),
+                null,
+                result == null ? "EN_ATTENTE" : result.name(),
+                "Critere eliminatoire calcule automatiquement.",
+                false
+        ));
+    }
+
+    /** Question notee : alimente le detail et renvoie le score normalise a ponderer. */
+    private double appliquerQuestionNote(QuestionIndustrialisation question,
+                                         ReponseIndustrialisation reponse,
+                                         double weight,
+                                         List<ScoreBreakdownDto> details,
+                                         List<String> elementsManquants) {
+        double normalizedScore = IndustrialisationQuestionEvaluator.scoreQuestion(question, reponse);
+        boolean answered = IndustrialisationQuestionEvaluator.isAnswered(question, reponse);
+        boolean manualReview = IndustrialisationQuestionEvaluator.requiresManualReview(question, reponse);
+        if (Boolean.TRUE.equals(question.getObligatoire()) && !answered) {
+            elementsManquants.add("Question obligatoire manquante: " + question.getLibelle());
+        }
+        details.add(new ScoreBreakdownDto(
+                "QUESTIONNAIRE_NOTE",
+                String.valueOf(question.getId()),
+                question.getLibelle(),
+                round(normalizedScore),
+                weight,
+                answered ? "NOTE_CALCULEE" : "MANQUANT",
+                manualReview
+                        ? "Score de completude automatique; la qualite doit etre revue par la CI."
+                        : "Score calcule depuis la reponse fournie.",
+                manualReview
+        ));
+        return normalizedScore;
+    }
+
     private ComponentScore calculateQuestionScore(List<QuestionIndustrialisation> questions,
                                                   Map<Long, ReponseIndustrialisation> reponsesByQuestion,
                                                   List<ScoreBreakdownDto> details,
@@ -262,55 +322,13 @@ public class IndustrialisationScoreService {
         for (QuestionIndustrialisation question : questions) {
             ReponseIndustrialisation reponse = reponsesByQuestion.get(question.getId());
             if (question.getTypeCritere() == TypeCritere.ELIMINATOIRE) {
-                ReponseEliminatoire result = IndustrialisationQuestionEvaluator.eliminatoryResult(question, reponse);
-                boolean answered = IndustrialisationQuestionEvaluator.isAnswered(question, reponse);
-                if (result == ReponseEliminatoire.NOT_OK && (Boolean.TRUE.equals(question.getObligatoire()) || answered)) {
-                    blocages.add(new BlocageEliminatoireDto(
-                            "QUESTIONNAIRE",
-                            question.getId(),
-                            question.getLibelle(),
-                            answered
-                                    ? "Reponse non conforme pour une question eliminatoire."
-                                    : "Question eliminatoire obligatoire sans reponse."
-                    ));
-                }
-                if (Boolean.TRUE.equals(question.getObligatoire()) && !answered) {
-                    elementsManquants.add("Question obligatoire manquante: " + question.getLibelle());
-                }
-                details.add(new ScoreBreakdownDto(
-                        "QUESTIONNAIRE_ELIMINATOIRE",
-                        String.valueOf(question.getId()),
-                        question.getLibelle(),
-                        scoreEliminatoire(result),
-                        null,
-                        result == null ? "EN_ATTENTE" : result.name(),
-                        "Critere eliminatoire calcule automatiquement.",
-                        false
-                ));
+                appliquerQuestionEliminatoire(question, reponse, details, blocages, elementsManquants);
                 continue;
             }
-
             double weight = positiveWeight(question.getPoids());
-            double normalizedScore = IndustrialisationQuestionEvaluator.scoreQuestion(question, reponsesByQuestion.get(question.getId()));
-            boolean answered = IndustrialisationQuestionEvaluator.isAnswered(question, reponse);
-            boolean manualReview = IndustrialisationQuestionEvaluator.requiresManualReview(question, reponse);
+            double normalizedScore = appliquerQuestionNote(question, reponse, weight, details, elementsManquants);
             weightedScores += normalizedScore * weight;
             totalWeight += weight;
-            if (Boolean.TRUE.equals(question.getObligatoire()) && !answered) {
-                elementsManquants.add("Question obligatoire manquante: " + question.getLibelle());
-            }
-            details.add(new ScoreBreakdownDto(
-                    "QUESTIONNAIRE_NOTE",
-                    String.valueOf(question.getId()),
-                    question.getLibelle(),
-                    round(normalizedScore),
-                    weight,
-                    answered ? "NOTE_CALCULEE" : "MANQUANT",
-                    manualReview
-                            ? "Score de completude automatique; la qualite doit etre revue par la CI."
-                            : "Score calcule depuis la reponse fournie.",
-                    manualReview
-            ));
         }
 
         return totalWeight > 0.0
@@ -391,34 +409,13 @@ public class IndustrialisationScoreService {
         double weightedScores = 0.0;
         double totalWeight = 0.0;
         for (ResultatCritere resultat : evaluation.getResultats()) {
-            if (resultat.getTypeCritere() == TypeCritere.ELIMINATOIRE
-                    && resultat.getReponseEliminatoire() == ReponseEliminatoire.NOT_OK) {
-                blocages.add(new BlocageEliminatoireDto(
-                        "EVALUATION_PROJET",
-                        resultat.getCritereId(),
-                        resultat.getCritereLibelle(),
-                        "Critere eliminatoire projet NOT_OK."
-                ));
-            }
+            collecterBlocageEliminatoire(resultat, blocages);
             if (!estNoteExploitable(resultat)) {
                 continue;
             }
             double weight = positiveWeight(resultat.getPoids());
-            double normalized = normalizedScore(resultat);
-            weightedScores += normalized * weight;
+            weightedScores += appliquerResultatNote(resultat, weight, details) * weight;
             totalWeight += weight;
-            details.add(new ScoreBreakdownDto(
-                    CATEGORIE_CRITERES_NOTES,
-                    String.valueOf(resultat.getCritereId()),
-                    resultat.getCritereLibelle(),
-                    round(normalized),
-                    weight,
-                    "NOTE_PROJET",
-                    StringUtils.hasText(resultat.getEvidenceSummary())
-                            ? resultat.getEvidenceSummary()
-                            : "Resultat note issu de l'evaluation projet.",
-                    false
-            ));
         }
 
         if (totalWeight > 0.0) {
@@ -437,6 +434,37 @@ public class IndustrialisationScoreService {
         return evaluation.getScoreFinal() == null
                 ? new ComponentScore(0.0, false)
                 : new ComponentScore(round(evaluation.getScoreFinal()), true);
+    }
+
+    /** Ajoute un blocage lorsque le critere eliminatoire du projet est NOT_OK. */
+    private void collecterBlocageEliminatoire(ResultatCritere resultat, List<BlocageEliminatoireDto> blocages) {
+        if (resultat.getTypeCritere() == TypeCritere.ELIMINATOIRE
+                && resultat.getReponseEliminatoire() == ReponseEliminatoire.NOT_OK) {
+            blocages.add(new BlocageEliminatoireDto(
+                    "EVALUATION_PROJET",
+                    resultat.getCritereId(),
+                    resultat.getCritereLibelle(),
+                    "Critere eliminatoire projet NOT_OK."
+            ));
+        }
+    }
+
+    /** Alimente le detail pour un critere note et renvoie son score normalise. */
+    private double appliquerResultatNote(ResultatCritere resultat, double weight, List<ScoreBreakdownDto> details) {
+        double normalized = normalizedScore(resultat);
+        details.add(new ScoreBreakdownDto(
+                CATEGORIE_CRITERES_NOTES,
+                String.valueOf(resultat.getCritereId()),
+                resultat.getCritereLibelle(),
+                round(normalized),
+                weight,
+                "NOTE_PROJET",
+                StringUtils.hasText(resultat.getEvidenceSummary())
+                        ? resultat.getEvidenceSummary()
+                        : "Resultat note issu de l'evaluation projet.",
+                false
+        ));
+        return normalized;
     }
 
     private double calculateWeightedFinalScore(List<WeightedComponent> weightedComponents) {
