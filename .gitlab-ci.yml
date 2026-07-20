@@ -45,7 +45,7 @@ cache:
 
 .buildkit-job:
   image:
-    name: moby/buildkit:rootless-v0.15.2
+    name: moby/buildkit:v0.15.2-rootless
     entrypoint: [""]
   before_script:
     - mkdir -p "$HOME/.docker"
