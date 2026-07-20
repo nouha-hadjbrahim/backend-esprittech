@@ -123,9 +123,42 @@ public class LivrableCatalogueService {
         User current = userService.getCurrentUser();
         ProjetCatalogue projet = getProjet(projetId);
         ensureCanRead(current, projet);
-        return livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetId)
+        return resolveLivrablesIncludingSujetFallback(projet);
+    }
+
+    /**
+     * True si le projet catalogue a des livrables actifs, ou à défaut le sujet d'origine.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasActiveLivrables(Long projetId) {
+        ProjetCatalogue projet = getProjet(projetId);
+        if (livrableRepository.existsByProjetIdAndActifTrue(projetId)) {
+            return true;
+        }
+        Long sujetId = projet.getSujetId();
+        return sujetId != null && sujetLivrableRepository.existsBySujetProjetIdAndActifTrue(sujetId);
+    }
+
+    /**
+     * Livrables catalogue s'ils existent ; sinon livrables du sujet d'origine (terminaison → publication).
+     */
+    private List<LivrableCatalogueResponse> resolveLivrablesIncludingSujetFallback(ProjetCatalogue projet) {
+        List<LivrableCatalogue> catalogueLivrables =
+                livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId());
+        if (!catalogueLivrables.isEmpty()) {
+            return catalogueLivrables.stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
+
+        Long sujetId = projet.getSujetId();
+        if (sujetId == null) {
+            return List.of();
+        }
+
+        return sujetLivrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(sujetId)
                 .stream()
-                .map(this::toResponse)
+                .map(livrable -> toResponseFromSujet(livrable, projet))
                 .toList();
     }
 
@@ -445,7 +478,30 @@ public class LivrableCatalogueService {
                 deposant.getId(),
                 deposant.getPrenom() + " " + deposant.getNom(),
                 livrable.getDateDepot(),
-                livrable.getActif()
+                livrable.getActif(),
+                false
+        );
+    }
+
+    private LivrableCatalogueResponse toResponseFromSujet(Livrable livrable, ProjetCatalogue projet) {
+        User deposant = livrable.getDeposant();
+        return new LivrableCatalogueResponse(
+                livrable.getId(),
+                projet.getId(),
+                projet.getTitre(),
+                livrable.getTypeLivrable(),
+                livrable.getNom(),
+                livrable.getDescription(),
+                livrable.getOriginalFileName(),
+                livrable.getObjectName(),
+                livrable.getContentType(),
+                livrable.getSize(),
+                livrable.getLienExterne(),
+                deposant.getId(),
+                deposant.getPrenom() + " " + deposant.getNom(),
+                livrable.getDateDepot(),
+                livrable.getActif(),
+                true
         );
     }
 

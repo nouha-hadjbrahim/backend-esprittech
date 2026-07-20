@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 /**
  * Représentation d'un livrable rattaché à un projet du catalogue applicatif.
+ * {@code fromSujet=true} indique une lecture héritée du sujet d'origine (après terminaison).
  */
 public record LivrableCatalogueResponse(
         Long id,
@@ -22,6 +23,7 @@ public record LivrableCatalogueResponse(
         Long deposantId,
         String deposantNom,
         LocalDateTime dateDepot,
-        Boolean actif
+        Boolean actif,
+        Boolean fromSujet
 ) {
 }

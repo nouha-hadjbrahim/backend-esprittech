@@ -1065,6 +1065,7 @@ class IndustrialisationServiceTest {
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
         when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+        when(livrableService.findByProjet(42L)).thenReturn(List.of());
 
         var response = industrialisationService.createForCatalogue(
                 55L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null, false));
@@ -1135,6 +1136,13 @@ class IndustrialisationServiceTest {
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
         when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+        when(livrableService.findByProjet(42L)).thenReturn(List.of(
+                new LivrableResponse(
+                        99L, 42L, "Sujet IoT", tn.esprit.backend_esprittech.entity.livrable.TypeLivrable.RAPPORT,
+                        "Rapport", null, "rapport.pdf", "obj", "application/pdf", 10L, null,
+                        7L, "Ali Mansour", LocalDateTime.now(), true
+                )
+        ));
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L)).thenReturn(evaluation);
 
         var response = industrialisationService.detailForCi(18L);
@@ -1143,6 +1151,8 @@ class IndustrialisationServiceTest {
         assertEquals(81.0, response.scoreEvaluationProjet());
         assertEquals(9L, response.latestEvaluation().id());
         assertTrue(response.eligibleIndustrialisation());
+        assertEquals(1, response.livrables().size());
+        assertEquals("Rapport", response.livrables().get(0).nom());
     }
 
     @Test
