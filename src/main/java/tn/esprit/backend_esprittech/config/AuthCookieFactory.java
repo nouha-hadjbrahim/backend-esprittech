@@ -30,9 +30,8 @@ public class AuthCookieFactory {
     /** Cookie portant le refresh token (restreint à l'endpoint de refresh). */
     public static final String REFRESH_TOKEN_COOKIE = "refresh_token";
 
-    private static final String ACCESS_PATH = "/api";
-    private static final String REFRESH_PATH = "/api/auth/refresh";
-
+    private final String accessPath;
+    private final String refreshPath;
     private final boolean secure;
     private final String sameSite;
     private final Duration accessMaxAge;
@@ -41,7 +40,11 @@ public class AuthCookieFactory {
     public AuthCookieFactory(
             JwtProperties jwtProperties,
             @Value("${app.auth.cookie.secure:false}") boolean secure,
-            @Value("${app.auth.cookie.same-site:Strict}") String sameSite) {
+            @Value("${app.auth.cookie.same-site:Strict}") String sameSite,
+            @Value("${app.auth.cookie.access-path:/api}") String accessPath,
+            @Value("${app.auth.cookie.refresh-path:/api/auth/refresh}") String refreshPath) {
+        this.accessPath = accessPath;
+        this.refreshPath = refreshPath;
         this.secure = secure;
         this.sameSite = sameSite;
         this.accessMaxAge = Duration.ofMillis(jwtProperties.getExpirationMs());
@@ -50,22 +53,22 @@ public class AuthCookieFactory {
 
     /** Cookie déposant l'access token, aligné sur la durée de vie du JWT. */
     public ResponseCookie accessToken(String token) {
-        return build(ACCESS_TOKEN_COOKIE, token, ACCESS_PATH, accessMaxAge);
+        return build(ACCESS_TOKEN_COOKIE, token, accessPath, accessMaxAge);
     }
 
     /** Cookie déposant le refresh token, aligné sur la durée de vie du refresh JWT. */
     public ResponseCookie refreshToken(String token) {
-        return build(REFRESH_TOKEN_COOKIE, token, REFRESH_PATH, refreshMaxAge);
+        return build(REFRESH_TOKEN_COOKIE, token, refreshPath, refreshMaxAge);
     }
 
     /** Cookie d'effacement (maxAge=0) de l'access token, pour le logout. */
     public ResponseCookie clearAccessToken() {
-        return build(ACCESS_TOKEN_COOKIE, "", ACCESS_PATH, Duration.ZERO);
+        return build(ACCESS_TOKEN_COOKIE, "", accessPath, Duration.ZERO);
     }
 
     /** Cookie d'effacement (maxAge=0) du refresh token, pour le logout. */
     public ResponseCookie clearRefreshToken() {
-        return build(REFRESH_TOKEN_COOKIE, "", REFRESH_PATH, Duration.ZERO);
+        return build(REFRESH_TOKEN_COOKIE, "", refreshPath, Duration.ZERO);
     }
 
     private ResponseCookie build(String name, String value, String path, Duration maxAge) {

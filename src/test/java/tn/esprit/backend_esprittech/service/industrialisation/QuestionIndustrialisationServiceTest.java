@@ -170,8 +170,9 @@ class QuestionIndustrialisationServiceTest {
     void update_missingQuestion_shouldThrowResourceNotFoundException() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
 
+        var request = validRequest("Question");
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                () -> service.update(99L, validRequest("Question")));
+                () -> service.update(99L, request));
 
         assertEquals("Question industrialisation introuvable avec id: 99", ex.getMessage());
         verify(repository, never()).save(any());

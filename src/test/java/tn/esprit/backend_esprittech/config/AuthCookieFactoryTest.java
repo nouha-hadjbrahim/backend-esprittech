@@ -16,7 +16,7 @@ class AuthCookieFactoryTest {
         JwtProperties properties = new JwtProperties();
         properties.setExpirationMs(900_000L);
         properties.setRefreshExpirationMs(604_800_000L);
-        factory = new AuthCookieFactory(properties, true, "Strict");
+        factory = new AuthCookieFactory(properties, true, "Strict", "/api", "/api/auth/refresh");
     }
 
     @Test

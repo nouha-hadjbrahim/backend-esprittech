@@ -400,10 +400,7 @@ public class IndustrialisationScoreService {
                         "Critere eliminatoire projet NOT_OK."
                 ));
             }
-            if (resultat.getTypeCritere() != TypeCritere.NOTE || !Boolean.TRUE.equals(resultat.getRuleConfigured())) {
-                continue;
-            }
-            if (resultat.getNoteValue() == null && resultat.getNoteObtenue() == null) {
+            if (!estNoteExploitable(resultat)) {
                 continue;
             }
             double weight = positiveWeight(resultat.getPoids());
@@ -499,6 +496,15 @@ public class IndustrialisationScoreService {
                 ? (double) resultat.getNoteValue()
                 : resultat.getNoteObtenue();
         return clamp((note / noteScale(resultat)) * 100.0);
+    }
+
+    /** Un critere de note n'est agrege que s'il est configure et effectivement note. */
+    private boolean estNoteExploitable(ResultatCritere resultat) {
+        if (resultat.getTypeCritere() != TypeCritere.NOTE
+                || !Boolean.TRUE.equals(resultat.getRuleConfigured())) {
+            return false;
+        }
+        return resultat.getNoteValue() != null || resultat.getNoteObtenue() != null;
     }
 
     private double noteScale(ResultatCritere resultat) {
