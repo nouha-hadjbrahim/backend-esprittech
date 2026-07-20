@@ -332,6 +332,71 @@ class EvaluationServiceTest {
     }
 
     @Test
+    void getLatestEvaluationByProjetCatalogue_afterLeavingValide_shouldKeepUnchangedEvaluation() {
+        Evaluation latest = catalogueEvaluation(81L, LocalDateTime.of(2026, 7, 16, 10, 0), 82.0);
+        ResultatCritere detail = new ResultatCritere();
+        detail.setCritereId(20L);
+        detail.setCritereLibelle("Qualite technique");
+        detail.setTypeCritere(TypeCritere.NOTE);
+        detail.setRuleConfigured(true);
+        detail.setNoteValue(4);
+        detail.setPoids(2.0);
+        detail.setEvidenceSummary("Evidence ML");
+        latest.addResultat(detail);
+        catalogueProjet.setScore(82);
+
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(Optional.of(latest));
+        when(evaluationRepository.findByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(List.of(latest));
+
+        double scoreBefore = latest.getScoreFinal();
+        int resultCountBefore = latest.getResultats().size();
+        int historyCountBefore = evaluationService.getEvaluationHistoryByProjetCatalogue(7L).size();
+
+        for (StatutProjet statut : List.of(
+                StatutProjet.CANDIDAT_INDUSTRIALISATION_INTERNE,
+                StatutProjet.INDUSTRIALISE_DSI
+        )) {
+            catalogueProjet.setStatut(statut);
+
+            var response = evaluationService.getLatestEvaluationByProjetCatalogue(7L);
+            var history = evaluationService.getEvaluationHistoryByProjetCatalogue(7L);
+
+            assertEquals(81L, response.id());
+            assertEquals(scoreBefore, response.scoreFinal());
+            assertEquals(resultCountBefore, response.resultats().size());
+            assertEquals("Qualite technique", response.resultats().get(0).critereLibelle());
+            assertEquals(historyCountBefore, history.size());
+            assertEquals(82, catalogueProjet.getScore());
+        }
+
+        verify(evaluationRepository, never()).delete(any());
+        verify(evaluationRepository, never()).deleteById(any());
+        verify(evaluationRepository, never()).save(any());
+        verify(evaluationRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void getLatestEvaluationForPublishedCatalogue_afterLeavingValide_shouldStillReturnEvaluation() {
+        Evaluation latest = catalogueEvaluation(81L, LocalDateTime.of(2026, 7, 16, 10, 0), 82.0);
+        catalogueProjet.setStatut(StatutProjet.CANDIDAT_INDUSTRIALISATION_EXTERNE);
+        catalogueProjet.setScore(82);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(Optional.of(latest));
+
+        var response = evaluationService.getLatestEvaluationForPublishedCatalogue(7L);
+
+        assertEquals(82.0, response.scoreFinal());
+        assertEquals(81L, response.id());
+        verify(evaluationRepository, never()).save(any());
+        verify(evaluationRepository, never()).delete(any());
+    }
+
+    @Test
     void calculateAutomaticEvaluationForCatalogue_whenPersistenceFails_shouldNotSaveProjectScore() {
         when(userService.getCurrentUser()).thenReturn(admin);
         when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
