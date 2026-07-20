@@ -132,6 +132,32 @@ class SujetProjetServiceTest {
     }
 
     @Test
+    void getMesSujets_excludesTerminatedSubjectsPublishedToCatalogue() {
+        SujetProjet termine = SujetProjet.builder()
+                .id(2L)
+                .titre("Termine")
+                .categorie(CategorieSujet.PFE)
+                .statut(StatutSujet.REALISATION_TERMINEE)
+                .encadrantId(10L)
+                .catalogue(true)
+                .build();
+        when(sujetProjetRepository.findByEncadrantIdOrderByDateCreationDesc(10L))
+                .thenReturn(List.of(entity, termine));
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
+
+        List<SujetProjetResponse> result = service.getMesSujets(null, null);
+
+        assertEquals(1, result.size());
+        assertEquals(response, result.get(0));
+    }
+
+    @Test
+    void getMesSujets_withTerminatedStatutFilter_returnsEmpty() {
+        assertEquals(List.of(), service.getMesSujets(null, StatutSujet.REALISATION_TERMINEE));
+        verify(sujetProjetRepository, never()).findByEncadrantIdAndStatutOrderByDateCreationDesc(any(), any());
+    }
+
+    @Test
     void getSujetById_owner_canAccess() {
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);

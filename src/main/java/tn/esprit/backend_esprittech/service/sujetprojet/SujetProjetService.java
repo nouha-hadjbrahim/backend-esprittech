@@ -31,6 +31,7 @@ import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,6 +53,18 @@ public class SujetProjetService {
     private static final List<StatutSujet> STATUTS_A_VALIDER = List.of(
             StatutSujet.SOUMIS_EN_VALIDATION,
             StatutSujet.EN_ATTENTE
+    );
+
+    /**
+     * Statuts après déclaration de terminaison : le sujet est publié au catalogue applicatif
+     * et ne doit plus apparaître dans « Mes sujets » / sujets d'équipe.
+     */
+    private static final Set<StatutSujet> STATUTS_PUBLIES_CATALOGUE = Set.of(
+            StatutSujet.REALISATION_TERMINEE,
+            StatutSujet.CANDIDAT_INDUSTRIALISATION_INTERNE,
+            StatutSujet.CANDIDAT_INDUSTRIALISATION_EXTERNE,
+            StatutSujet.INDUSTRIALISE_DSI,
+            StatutSujet.INDUSTRIALISE_EXTERNE
     );
 
     private final SujetProjetRepository sujetProjetRepository;
@@ -182,6 +195,10 @@ public class SujetProjetService {
 
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getMesSujets(CategorieSujet categorie, StatutSujet statut) {
+        if (statut != null && STATUTS_PUBLIES_CATALOGUE.contains(statut)) {
+            return List.of();
+        }
+
         Long encadrantId = getCurrentEncadrant().getId();
         List<SujetProjet> sujets;
 
@@ -198,7 +215,7 @@ public class SujetProjetService {
             sujets = sujetProjetRepository.findByEncadrantIdOrderByDateCreationDesc(encadrantId);
         }
 
-        return toResponses(sujets);
+        return toResponses(exclureSujetsPubliesAuCatalogue(sujets));
     }
 
     @Transactional(readOnly = true)
@@ -261,9 +278,15 @@ public class SujetProjetService {
             return List.of();
         }
 
+        if (statut != null && STATUTS_PUBLIES_CATALOGUE.contains(statut)) {
+            return List.of();
+        }
+
         List<StatutSujet> statuts = statut != null
                 ? List.of(statut)
-                : List.of(StatutSujet.values());
+                : Arrays.stream(StatutSujet.values())
+                        .filter(s -> !STATUTS_PUBLIES_CATALOGUE.contains(s))
+                        .toList();
 
         List<SujetProjet> sujets = sujetProjetRepository
                 .findByEncadrantIdInAndStatutInOrderByDateCreationDesc(
@@ -273,7 +296,7 @@ public class SujetProjetService {
             sujets = sujets.stream().filter(s -> s.getCategorie() == categorie).toList();
         }
 
-        return toResponses(sujets);
+        return toResponses(exclureSujetsPubliesAuCatalogue(sujets));
     }
 
     public String getTitreById(Long id) {
@@ -404,6 +427,12 @@ public class SujetProjetService {
         }
         throw new IllegalArgumentException(
                 "Vous devez être affilié à une équipe de recherche pour déposer un sujet.");
+    }
+
+    private List<SujetProjet> exclureSujetsPubliesAuCatalogue(List<SujetProjet> sujets) {
+        return sujets.stream()
+                .filter(sujet -> !STATUTS_PUBLIES_CATALOGUE.contains(sujet.getStatut()))
+                .toList();
     }
 
     private SujetProjetResponse toResponse(SujetProjet sujet) {

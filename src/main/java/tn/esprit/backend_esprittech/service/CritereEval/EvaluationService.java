@@ -232,11 +232,36 @@ public class EvaluationService {
         ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
         ensureCanViewCatalogue(userService.getCurrentUser(), projet);
+        return resolveLatestCatalogueOrSujetEvaluation(projet);
+    }
 
-        Evaluation evaluation = evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
+    /**
+     * Dernière évaluation d'un projet publié au catalogue (tout utilisateur authentifié) :
+     * évaluation catalogue si présente, sinon évaluation ML du sujet d'origine.
+     */
+    @Transactional(readOnly = true)
+    public EvaluationResponse getLatestEvaluationForPublishedCatalogue(Long projetId) {
+        ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+        if (!StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())) {
+            throw new ResourceNotFoundException("Projet introuvable dans le catalogue (id=" + projetId + ")");
+        }
+        return resolveLatestCatalogueOrSujetEvaluation(projet);
+    }
 
-        return toResponse(evaluation);
+    private EvaluationResponse resolveLatestCatalogueOrSujetEvaluation(ProjetCatalogue projet) {
+        return evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(projet.getId())
+                .map(this::toResponse)
+                .or(() -> {
+                    Long sujetId = projet.getSujetId();
+                    if (sujetId == null) {
+                        return java.util.Optional.empty();
+                    }
+                    return evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(sujetId)
+                            .map(this::toResponse);
+                })
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucune evaluation trouvee pour le projet id: " + projet.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -1641,6 +1666,10 @@ public class EvaluationService {
     }
 
     private void ensureCanViewCatalogue(User current, ProjetCatalogue projet) {
+        // Projet publié : visible comme le détail catalogue (tout utilisateur authentifié).
+        if (StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())) {
+            return;
+        }
         if (current.getRole() == Role.ROLE_ADMIN || current.getRole() == Role.ROLE_CI) {
             return;
         }

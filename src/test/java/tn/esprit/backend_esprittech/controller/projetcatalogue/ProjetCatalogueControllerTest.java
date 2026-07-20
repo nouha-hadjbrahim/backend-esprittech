@@ -17,6 +17,8 @@ import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetDetailsRe
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
+import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.time.LocalDate;
@@ -30,6 +32,8 @@ import static org.mockito.Mockito.*;
 class ProjetCatalogueControllerTest {
 
     @Mock private ProjetCatalogueService projetService;
+    @Mock private EvaluationService evaluationService;
+    @Mock private LivrableCatalogueService livrableCatalogueService;
     @InjectMocks private ProjetCatalogueController controller;
 
     private ProjetCatalogueResponse catalogueResponse;

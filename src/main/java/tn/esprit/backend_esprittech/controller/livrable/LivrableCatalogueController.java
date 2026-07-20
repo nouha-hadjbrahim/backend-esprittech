@@ -48,19 +48,19 @@ public class LivrableCatalogueController {
     }
 
     @GetMapping("/api/projets-catalogue/{projetId}/livrables")
-    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
+    @PreAuthorize("isAuthenticated()")
     public List<LivrableCatalogueResponse> findByProjet(@PathVariable Long projetId) {
         return livrableService.findByProjet(projetId);
     }
 
     @GetMapping("/api/livrables-catalogue/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
+    @PreAuthorize("isAuthenticated()")
     public LivrableCatalogueResponse findById(@PathVariable Long id) {
         return livrableService.findById(id);
     }
 
     @GetMapping("/api/livrables-catalogue/{id}/download")
-    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<InputStreamResource> download(@PathVariable Long id) {
         LivrableCatalogueService.LivrableDownload download = livrableService.download(id);
         MediaType mediaType = download.contentType() == null

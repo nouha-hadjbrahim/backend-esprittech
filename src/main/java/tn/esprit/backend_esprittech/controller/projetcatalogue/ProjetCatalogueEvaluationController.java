@@ -38,7 +38,7 @@ public class ProjetCatalogueEvaluationController {
 
     /** Renvoie la dernière évaluation disponible pour un projet catalogue. */
     @GetMapping("/{id}/evaluation")
-    @PreAuthorize("hasAnyRole('ADMIN','ENSEIGNANT','CHEF_EQUIPE','CI')")
+    @PreAuthorize("isAuthenticated()")
     public EvaluationResponse getLatestEvaluation(@PathVariable Long id) {
         return evaluationService.getLatestEvaluationByProjetCatalogue(id);
     }
