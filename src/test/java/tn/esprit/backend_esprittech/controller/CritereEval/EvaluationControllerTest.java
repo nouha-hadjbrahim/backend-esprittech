@@ -6,7 +6,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationOverrideRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationValidationRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
@@ -51,6 +53,16 @@ class EvaluationControllerTest {
     }
 
     @Test
+    void calculerEvaluation_shouldUseAutomaticEvaluationService() {
+        when(evaluationService.calculateAutomaticEvaluation(1L, "Recalcul manuel")).thenReturn(evaluationResponse);
+
+        EvaluationResponse result = controller.calculerEvaluation(1L);
+
+        assertEquals(evaluationResponse, result);
+        verify(evaluationService).calculateAutomaticEvaluation(1L, "Recalcul manuel");
+    }
+
+    @Test
     void calculerScore_shouldUseAutomaticEvaluationService() {
         when(evaluationService.calculateAutomaticEvaluation(1L, "Recalcul manuel")).thenReturn(evaluationResponse);
 
@@ -68,6 +80,49 @@ class EvaluationControllerTest {
 
         assertEquals(evaluationResponse, result);
         verify(evaluationService).getLatestEvaluationByProjet(1L);
+    }
+
+    @Test
+    void getEvaluationHistory_shouldReturnHistory() {
+        when(evaluationService.getEvaluationHistoryByProjet(1L)).thenReturn(List.of(evaluationResponse));
+
+        List<EvaluationResponse> result = controller.getEvaluationHistory(1L);
+
+        assertEquals(List.of(evaluationResponse), result);
+        verify(evaluationService).getEvaluationHistoryByProjet(1L);
+    }
+
+    @Test
+    void validerEvaluation_shouldDelegateRequest() {
+        EvaluationValidationRequest request = new EvaluationValidationRequest("ok");
+        when(evaluationService.validateLatestEvaluation(1L, request)).thenReturn(evaluationResponse);
+
+        EvaluationResponse result = controller.validerEvaluation(1L, request);
+
+        assertEquals(evaluationResponse, result);
+        verify(evaluationService).validateLatestEvaluation(1L, request);
+    }
+
+    @Test
+    void rejeterEvaluation_shouldDelegateRequest() {
+        EvaluationValidationRequest request = new EvaluationValidationRequest("ko");
+        when(evaluationService.rejectLatestEvaluation(1L, request)).thenReturn(evaluationResponse);
+
+        EvaluationResponse result = controller.rejeterEvaluation(1L, request);
+
+        assertEquals(evaluationResponse, result);
+        verify(evaluationService).rejectLatestEvaluation(1L, request);
+    }
+
+    @Test
+    void overrideEvaluation_shouldDelegateRequest() {
+        EvaluationOverrideRequest request = new EvaluationOverrideRequest(90.0, "manual");
+        when(evaluationService.overrideLatestEvaluation(1L, request)).thenReturn(evaluationResponse);
+
+        EvaluationResponse result = controller.overrideEvaluation(1L, request);
+
+        assertEquals(evaluationResponse, result);
+        verify(evaluationService).overrideLatestEvaluation(1L, request);
     }
 
     @Test
