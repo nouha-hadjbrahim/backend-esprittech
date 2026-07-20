@@ -28,8 +28,12 @@ import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -254,23 +258,7 @@ public class LivrableCatalogueService {
             throw new ResourceNotFoundException("Projet introuvable dans le catalogue (id=" + projetId + ")");
         }
 
-        List<LivrableCatalogue> catalogueLivrables =
-                livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetId);
-        if (!catalogueLivrables.isEmpty()) {
-            return catalogueLivrables.stream()
-                    .map(livrable -> toPublicResponse(livrable, false))
-                    .toList();
-        }
-
-        Long sujetId = projet.getSujetId();
-        if (sujetId == null) {
-            return List.of();
-        }
-
-        return sujetLivrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(sujetId)
-                .stream()
-                .map(livrable -> toPublicResponseFromSujet(livrable, projet))
-                .toList();
+        return resolvePublishedLivrables(projet);
     }
 
     @Transactional(readOnly = true)
@@ -359,6 +347,40 @@ public class LivrableCatalogueService {
                 livrable.getActif(),
                 true
         );
+    }
+
+    private List<CataloguePublicLivrableResponse> resolvePublishedLivrables(ProjetCatalogue projet) {
+        Map<String, CataloguePublicLivrableResponse> byStableKey = new LinkedHashMap<>();
+
+        livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projet.getId())
+                .stream()
+                .map(livrable -> toPublicResponse(livrable, false))
+                .forEach(response -> byStableKey.putIfAbsent(stableLivrableKey(response), response));
+
+        Long sujetId = projet.getSujetId();
+        if (sujetId != null) {
+            sujetLivrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(sujetId)
+                    .stream()
+                    .map(livrable -> toPublicResponseFromSujet(livrable, projet))
+                    .forEach(response -> byStableKey.putIfAbsent(stableLivrableKey(response), response));
+        }
+
+        return new ArrayList<>(byStableKey.values()).stream()
+                .sorted(Comparator.comparing(
+                        CataloguePublicLivrableResponse::dateDepot,
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ).reversed())
+                .toList();
+    }
+
+    private String stableLivrableKey(CataloguePublicLivrableResponse livrable) {
+        if (StringUtils.hasText(livrable.objectName())) {
+            return "object:" + livrable.objectName().trim();
+        }
+        if (StringUtils.hasText(livrable.lienExterne())) {
+            return "link:" + livrable.lienExterne().trim().toLowerCase(Locale.ROOT);
+        }
+        return (livrable.fromSujet() ? "sujet:" : "catalogue:") + livrable.id();
     }
 
     private void ensureCanManage(User current, ProjetCatalogue projet) {
