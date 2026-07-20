@@ -16,6 +16,7 @@ stages:
   - docker-build
   - image-scan
   - publish
+  - trigger-deployment
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
@@ -23,7 +24,9 @@ variables:
   GIT_DEPTH: "0"
   TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
   TRIVY_NO_PROGRESS: "true"
-  IMAGE_TAR: "image.tar"
+  IMAGE_OCI_ARCHIVE: "image.oci.tar"
+  IMAGE_METADATA: "image.env"
+  BUILDKITD_FLAGS: "--oci-worker-no-process-sandbox"
 
 default:
   interruptible: true
@@ -35,18 +38,38 @@ cache:
     - .m2/repository/
 
 .maven-job:
-  image: maven:3.9-eclipse-temurin-17
+  image: maven:3.9.9-eclipse-temurin-17
   before_script:
     - mkdir -p .m2/repository
     - mvn --version
 
-.kaniko-job:
+.buildkit-job:
   image:
-    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    name: moby/buildkit:rootless-v0.15.2
     entrypoint: [""]
   before_script:
-    - mkdir -p /kaniko/.docker
-    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > /kaniko/.docker/config.json
+    - mkdir -p "$HOME/.docker"
+    - umask 077
+    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > "$HOME/.docker/config.json"
+
+.skopeo-job:
+  image:
+    name: quay.io/skopeo/stable:v1.15.2
+    entrypoint: [""]
+  before_script:
+    - mkdir -p "$HOME/.docker"
+    - umask 077
+    - printf '{"auths":{"%s":{"username":"%s","password":"%s"}}}' "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > "$HOME/.docker/config.json"
+
+.trivy-job:
+  image:
+    name: aquasec/trivy:0.54.1
+    entrypoint: [""]
+  cache:
+    key: "${CI_PROJECT_NAME}-trivy"
+    policy: pull-push
+    paths:
+      - .trivycache/
 
 validate-backend:
   stage: validate
@@ -85,14 +108,7 @@ coverage-gate:
 
 dependency-scan-trivy:
   stage: dependency-scan
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
-  cache:
-    key: "${CI_PROJECT_NAME}-trivy"
-    policy: pull-push
-    paths:
-      - .trivycache/
+  extends: .trivy-job
   script:
     - mkdir -p target/trivy
     - trivy --version
@@ -106,14 +122,7 @@ dependency-scan-trivy:
 
 secret-scan-trivy:
   stage: secret-scan
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
-  cache:
-    key: "${CI_PROJECT_NAME}-trivy"
-    policy: pull-push
-    paths:
-      - .trivycache/
+  extends: .trivy-job
   script:
     - mkdir -p target/trivy
     - trivy --version
@@ -172,37 +181,39 @@ package-backend:
     paths:
       - target/*.jar
 
-docker-build-validate:
+docker-build-oci:
   stage: docker-build
-  extends: .kaniko-job
+  extends: .buildkit-job
   needs:
     - job: package-backend
       artifacts: true
   script:
-    - export IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
-    - /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile "$CI_PROJECT_DIR/Dockerfile" --destination "$CI_REGISTRY_IMAGE:$IMAGE_TAG" --no-push --tar-path "$IMAGE_TAR"
+    - test -n "$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*sources.jar' -print -quit)"
+    - rm -f "$IMAGE_OCI_ARCHIVE"
+    - >
+      buildctl-daemonless.sh build
+      --frontend dockerfile.v0
+      --local context="$CI_PROJECT_DIR"
+      --local dockerfile="$CI_PROJECT_DIR"
+      --opt filename=Dockerfile
+      --output "type=oci,dest=$IMAGE_OCI_ARCHIVE,name=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+    - test -s "$IMAGE_OCI_ARCHIVE"
   artifacts:
     expire_in: 1 day
     paths:
-      - image.tar
+      - image.oci.tar
 
 image-scan-trivy:
   stage: image-scan
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
+  extends: .trivy-job
   needs:
-    - job: docker-build-validate
+    - job: docker-build-oci
       artifacts: true
-  cache:
-    key: "${CI_PROJECT_NAME}-trivy"
-    policy: pull-push
-    paths:
-      - .trivycache/
   script:
+    - test -s "$IMAGE_OCI_ARCHIVE"
     - mkdir -p target/trivy
-    - trivy image --input "$IMAGE_TAR" --severity HIGH,CRITICAL --format table --output target/trivy/image-scan.txt
-    - trivy image --input "$IMAGE_TAR" --severity HIGH,CRITICAL --exit-code 1
+    - trivy image --input "$IMAGE_OCI_ARCHIVE" --severity HIGH,CRITICAL --format table --output target/trivy/image-scan.txt
+    - trivy image --input "$IMAGE_OCI_ARCHIVE" --severity HIGH,CRITICAL --exit-code 1
   artifacts:
     when: always
     expire_in: 1 week
@@ -211,9 +222,9 @@ image-scan-trivy:
 
 publish-image:
   stage: publish
-  extends: .kaniko-job
+  extends: .skopeo-job
   needs:
-    - job: package-backend
+    - job: docker-build-oci
       artifacts: true
     - job: image-scan-trivy
   rules:
@@ -221,9 +232,49 @@ publish-image:
     - if: '$CI_COMMIT_TAG =~ /^v/'
     - when: never
   script:
+    - test -s "$IMAGE_OCI_ARCHIVE"
+    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" "oci-archive:$IMAGE_OCI_ARCHIVE" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" "oci-archive:$IMAGE_OCI_ARCHIVE" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
     - |
-      DESTINATIONS="--destination $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
       if [ -n "${CI_COMMIT_TAG:-}" ]; then
-        DESTINATIONS="$DESTINATIONS --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG"
+        case "$CI_COMMIT_TAG" in
+          v*) skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" "oci-archive:$IMAGE_OCI_ARCHIVE" "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG" ;;
+        esac
       fi
-      /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile "$CI_PROJECT_DIR/Dockerfile" $DESTINATIONS
+    - IMAGE_DIGEST="$(skopeo inspect --creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" --format '{{.Digest}}' "docker://$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA")"
+    - |
+      {
+        echo "IMAGE_REPOSITORY=$CI_REGISTRY_IMAGE"
+        echo "IMAGE_TAG=$CI_COMMIT_SHA"
+        echo "IMAGE_DIGEST=$IMAGE_DIGEST"
+        echo "SOURCE_COMMIT_SHA=$CI_COMMIT_SHA"
+        echo "SOURCE_PROJECT_PATH=$CI_PROJECT_PATH"
+      } > "$IMAGE_METADATA"
+  artifacts:
+    expire_in: 1 week
+    reports:
+      dotenv: image.env
+    paths:
+      - image.env
+
+trigger-deployment:
+  stage: trigger-deployment
+  needs:
+    - job: publish-image
+      artifacts: true
+  resource_group: deployment-trigger
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+    - when: never
+  trigger:
+    project: mokaddemkarim89/deployment_industproject
+    branch: main
+    strategy: mirror
+  variables:
+    CHANGED_COMPONENT: "spring"
+    CHANGED_IMAGE_REPOSITORY: "$CI_REGISTRY_IMAGE"
+    CHANGED_IMAGE_TAG: "$CI_COMMIT_SHA"
+    SOURCE_PROJECT_PATH: "$CI_PROJECT_PATH"
+    SOURCE_COMMIT_SHA: "$CI_COMMIT_SHA"
+    SOURCE_PIPELINE_ID: "$CI_PIPELINE_ID"

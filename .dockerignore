@@ -19,9 +19,13 @@
 
 # Build outputs and caches
 target/
+!target/
+!target/*.jar
 .m2/
 .sonar/
 .trivycache/
+image.oci.tar
+image.env
 
 # Runtime and local compose state
 docker-compose*.yml

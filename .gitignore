@@ -40,3 +40,5 @@ build/
 .claude/
 .sonar/
 .m2/
+image.oci.tar
+image.env

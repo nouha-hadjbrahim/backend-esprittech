@@ -17,6 +17,7 @@ import tn.esprit.backend_esprittech.dto.industrialisation.ReponsesIndustrialisat
 import tn.esprit.backend_esprittech.dto.industrialisation.SubmitIndustrialisationRequest;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
+import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
 import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
@@ -48,6 +49,7 @@ import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRe
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
 import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
@@ -114,6 +116,9 @@ class IndustrialisationServiceTest {
 
     @Mock
     private LivrableCatalogueRepository livrableCatalogueRepository;
+
+    @Mock
+    private LivrableCatalogueService livrableCatalogueService;
 
     @InjectMocks
     private IndustrialisationService industrialisationService;
@@ -1064,8 +1069,7 @@ class IndustrialisationServiceTest {
         when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
-        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
-        when(livrableService.findByProjet(42L)).thenReturn(List.of());
+        when(livrableCatalogueService.findPublishedForPublicCatalogue(55L)).thenReturn(List.of());
 
         var response = industrialisationService.createForCatalogue(
                 55L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null, false));
@@ -1135,14 +1139,7 @@ class IndustrialisationServiceTest {
         when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
-        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
-        when(livrableService.findByProjet(42L)).thenReturn(List.of(
-                new LivrableResponse(
-                        99L, 42L, "Sujet IoT", tn.esprit.backend_esprittech.entity.livrable.TypeLivrable.RAPPORT,
-                        "Rapport", null, "rapport.pdf", "obj", "application/pdf", 10L, null,
-                        7L, "Ali Mansour", LocalDateTime.now(), true
-                )
-        ));
+        when(livrableCatalogueService.findPublishedForPublicCatalogue(55L)).thenReturn(List.of(catalogueLivrable()));
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L)).thenReturn(evaluation);
 
         var response = industrialisationService.detailForCi(18L);
@@ -1181,7 +1178,7 @@ class IndustrialisationServiceTest {
         when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
-        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
+        when(livrableCatalogueService.findPublishedForPublicCatalogue(55L)).thenReturn(List.of());
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
                 .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
 
@@ -1217,7 +1214,7 @@ class IndustrialisationServiceTest {
 
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(candidatureRepository.findById(18L)).thenReturn(Optional.of(converted));
-        when(livrableCatalogueRepository.existsByProjetIdAndActifTrue(55L)).thenReturn(true);
+        when(livrableCatalogueService.findPublishedForPublicCatalogue(55L)).thenReturn(List.of(catalogueLivrable()));
         when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
         when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
@@ -1227,7 +1224,6 @@ class IndustrialisationServiceTest {
         when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));
         when(historiqueService.findByEntity(EntityType.CANDIDATURE_INDUSTRIALISATION, 18L, Pageable.unpaged()))
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
-        when(livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(55L)).thenReturn(List.of());
 
         var response = industrialisationService.soumettre(18L, new SubmitIndustrialisationRequest(false));
 
@@ -1238,5 +1234,26 @@ class IndustrialisationServiceTest {
                 eq(9L), eq(NotificationType.CI_DEMANDE_SOUMISE),
                 eq("Demande d'industrialisation"), anyString(),
                 eq("/ci/industrialisation"));
+    }
+
+    private CataloguePublicLivrableResponse catalogueLivrable() {
+        return new CataloguePublicLivrableResponse(
+                99L,
+                55L,
+                "Catalogue IoT",
+                tn.esprit.backend_esprittech.entity.livrable.TypeLivrable.RAPPORT,
+                "Rapport",
+                null,
+                "rapport.pdf",
+                "obj",
+                "application/pdf",
+                10L,
+                null,
+                7L,
+                "Ali Mansour",
+                LocalDateTime.now(),
+                true,
+                false
+        );
     }
 }
