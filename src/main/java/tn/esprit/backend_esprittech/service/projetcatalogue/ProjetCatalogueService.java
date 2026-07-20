@@ -50,7 +50,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Logique métier du catalogue applicatif : dépôt d'un projet complet par un enseignant
@@ -306,7 +305,7 @@ public class ProjetCatalogueService {
         return Arrays.stream(csv.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Transactional(readOnly = true)

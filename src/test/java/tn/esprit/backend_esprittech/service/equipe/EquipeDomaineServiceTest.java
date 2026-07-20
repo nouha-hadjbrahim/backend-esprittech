@@ -125,7 +125,7 @@ class EquipeDomaineServiceTest {
         when(repository.findByNomIgnoreCase("Data Science")).thenReturn(Optional.empty());
         when(repository.save(domaine)).thenReturn(domaine);
 
-        EquipeDomaineResponse result = service.update(1L, new EquipeDomaineRequest("Data Science"));
+        service.update(1L, new EquipeDomaineRequest("Data Science"));
 
         assertEquals("Data Science", domaine.getNom());
         verify(repository).save(domaine);

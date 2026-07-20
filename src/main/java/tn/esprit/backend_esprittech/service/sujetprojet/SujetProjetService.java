@@ -170,33 +170,6 @@ public class SujetProjetService {
 
         return toResponses(enAttente);
     }
-/* 
-    public SujetProjetResponse validerSujet(Long id) {
-        SujetProjet sujet = getSujetEntiteOrThrow(id);
-        checkChefOuAdmin(sujet);
-
-        if (sujet.getStatut() != StatutSujet.SOUMIS_EN_VALIDATION) {
-            throw new IllegalStateException("Seul un sujet soumis en validation peut être validé.");
-        }
-
-        sujet.setStatut(StatutSujet.VALIDE);
-        sujet.setDateValidation(LocalDateTime.now());
-        return toResponse(sujetProjetRepository.save(sujet));
-    } */
-
-    private SujetProjet getSujetEntiteOrThrow(Long id) {
-        return sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable : " + id));
-    }
-
-    /** TEMPORAIRE : pas de filtrage par équipe tant que ce module n'est pas finalisé (voir plus haut). */
-    private void checkChefOuAdmin(SujetProjet sujet) {
-        User current = userService.getCurrentUser();
-        if (current.getRole() != Role.ROLE_ADMIN && current.getRole() != Role.ROLE_CHEF_EQUIPE) {
-            throw new AccessDeniedException("Vous n'êtes pas autorisé à valider ce sujet.");
-        }
-    }
-
     @Transactional(readOnly = true)
     public List<SujetProjetResponse> getMesSujets(CategorieSujet categorie, StatutSujet statut) {
         if (statut != null && STATUTS_PUBLIES_CATALOGUE.contains(statut)) {
@@ -418,14 +391,6 @@ public class SujetProjetService {
         User current = userService.getCurrentUser();
         if (current.getRole() != Role.ROLE_ENSEIGNANT && current.getRole() != Role.ROLE_CHEF_EQUIPE) {
             throw new AccessDeniedException("Seuls les enseignants et chefs d'équipe peuvent déposer ou gérer des sujets");
-        }
-        return current;
-    }
-
-    private User getCurrentEnseignant() {
-        User current = userService.getCurrentUser();
-        if (current.getRole() != Role.ROLE_ENSEIGNANT) {
-            throw new AccessDeniedException("Seuls les enseignants peuvent déposer ou gérer des sujets");
         }
         return current;
     }

@@ -67,8 +67,8 @@ class DomaineCritereTest {
     @Test
     void enumValues_canBeUsedInComparison() {
         DomaineCritere domaine = DomaineCritere.TECHNIQUE;
-        assertTrue(domaine == DomaineCritere.TECHNIQUE);
-        assertFalse(domaine == DomaineCritere.SECURITE);
+        assertSame(DomaineCritere.TECHNIQUE, domaine);
+        assertNotSame(DomaineCritere.SECURITE, domaine);
     }
 
     @Test

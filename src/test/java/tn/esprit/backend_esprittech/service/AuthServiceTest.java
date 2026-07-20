@@ -144,7 +144,7 @@ class AuthServiceTest {
     @Test
     void resendVerificationCode_delegatesToService() {
         authService.resendVerificationCode("test@esprit.tn");
-        verify(emailVerificationService).resendCode(eq("test@esprit.tn"));
+        verify(emailVerificationService).resendCode("test@esprit.tn");
     }
 
     // ---- login ----

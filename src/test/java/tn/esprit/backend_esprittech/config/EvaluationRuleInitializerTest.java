@@ -33,7 +33,7 @@ class EvaluationRuleInitializerTest {
     }
 
     @Test
-    void run_shouldSeedNoteLevelsAndApplyOnlyNoteDefaults() throws Exception {
+    void run_shouldSeedNoteLevelsAndApplyOnlyNoteDefaults() {
         CritereNote missingDefaults = note(null, 0.0, null);
         CritereNote configured = note(4, 10.0, 6.0);
 

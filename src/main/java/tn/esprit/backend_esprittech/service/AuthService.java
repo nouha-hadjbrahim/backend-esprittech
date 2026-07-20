@@ -50,13 +50,13 @@ public class AuthService {
      */
     @Transactional
     public void startRegistration(RegisterRequest request) {
-        // 1. Unicité du compte applicatif (avant l'appel réseau à Azure)
+        // 1. Unicité du compte applicatif, vérifiée avant l'appel réseau à Azure.
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Un compte existe déjà pour cet email");
         }
 
-        // 2. L'email doit appartenir à l'organisation ESPRIT (Azure Entra ID) ;
-        //    le rôle découle de l'appartenance aux groupes enseignant / étudiant.
+        // 2. L'email doit appartenir à l'organisation ESPRIT via Azure Entra ID.
+        //    Le rôle découle de l'appartenance aux groupes enseignant ou étudiant.
         AzureGraphService.GraphMember member = azureGraphService.resolveMember(request.email());
 
         // 3. Enregistre l'inscription en attente et envoie le code OTP par email.

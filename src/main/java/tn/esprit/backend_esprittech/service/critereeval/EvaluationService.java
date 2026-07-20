@@ -206,9 +206,10 @@ public class EvaluationService {
                 .orElse("Inconnu");
     }
 
-    // ── Évaluation directe d'un projet du catalogue applicatif (ProjetCatalogue) ──────────────
-    // Le moteur ML est le même que pour les sujets : seule la source des données projet/livrables
-    // change. Permet d'évaluer un projet catalogue déposé manuellement (sans sujet d'origine).
+    // ── Évaluation directe d'un projet du catalogue applicatif ──────────────
+    // Le moteur ML est le même que pour les sujets : seule la source des données projet
+    // ou livrables change. Permet d'évaluer un projet catalogue déposé manuellement,
+    // sans sujet d'origine.
 
     @Historise(action = ActionType.RECALCULER_EVALUATION, entityType = EntityType.EVALUATION, entityIdExpression = "#result.id()", newValuesExpression = "{'scoreFinal': #result.scoreFinal(), 'mlStatus': #result.mlStatus()}", summaryExpression = "'Évaluation automatique projet catalogue ' + @evaluationService.getProjetCatalogueTitreById(#projetId)")
     public EvaluationResponse calculateAutomaticEvaluationForCatalogue(Long projetId, String recalculationReason) {

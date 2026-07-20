@@ -146,7 +146,7 @@ public class HistoriqueService {
         return events.stream()
                 .sorted(Comparator.comparing(Historique::getCreatedAt).reversed())
                 .map(HistoriqueResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

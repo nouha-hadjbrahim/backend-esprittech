@@ -147,7 +147,7 @@ class MinioStorageServiceTest {
     }
 
     @Test
-    void delete_blankObjectName_shouldIgnoreRequest() throws Exception {
+    void delete_blankObjectName_shouldIgnoreRequest() {
         service.delete("  ");
 
         verifyNoInteractions(minioClient);

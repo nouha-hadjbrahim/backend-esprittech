@@ -93,9 +93,7 @@ public class LivrableCatalogueService {
         livrable.setSize(storedObject.size());
         livrable.setDeposant(current);
 
-        LivrableCatalogueResponse response = toResponse(livrableRepository.save(livrable));
-
-        return response;
+        return toResponse(livrableRepository.save(livrable));
     }
 
     public LivrableCatalogueResponse addLink(Long projetId, LivrableLinkRequest request) {
@@ -113,9 +111,7 @@ public class LivrableCatalogueService {
         livrable.setLienExterne(request.lienExterne().trim());
         livrable.setDeposant(current);
 
-        LivrableCatalogueResponse response = toResponse(livrableRepository.save(livrable));
-
-        return response;
+        return toResponse(livrableRepository.save(livrable));
     }
 
     @Transactional(readOnly = true)

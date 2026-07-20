@@ -14,6 +14,7 @@ import tn.esprit.backend_esprittech.dto.critereeval.EvaluationRequest;
 import tn.esprit.backend_esprittech.dto.critereeval.EvaluationValidationRequest;
 import tn.esprit.backend_esprittech.dto.critereeval.MlCriterionResult;
 import tn.esprit.backend_esprittech.dto.critereeval.MlDeliverableContent;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
 import tn.esprit.backend_esprittech.dto.critereeval.MlEvaluationResponse;
 import tn.esprit.backend_esprittech.dto.critereeval.MlEvidenceResponse;
 import tn.esprit.backend_esprittech.dto.critereeval.ResultatEliminatoireRequest;
@@ -57,8 +58,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -326,7 +325,7 @@ class EvaluationServiceTest {
         assertEquals(81L, latestResponse.id());
         assertNull(latestResponse.sujetProjetId());
         assertEquals(7L, latestResponse.projetCatalogueId());
-        assertEquals(List.of(81L, 80L), history.stream().map(response -> response.id()).toList());
+        assertEquals(List.of(81L, 80L), history.stream().map(EvaluationResponse::id).toList());
         verify(evaluationRepository).findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L);
         verify(evaluationRepository).findByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L);
     }

@@ -34,7 +34,7 @@ class DeliverableContentExtractionServiceTest {
     }
 
     @Test
-    void extract_marksSignatureMismatchAsCorruptedContent() throws Exception {
+    void extract_marksSignatureMismatchAsCorruptedContent() {
         Livrable livrable = new Livrable();
         livrable.setId(7L);
         livrable.setObjectName("livrables/report.pdf");

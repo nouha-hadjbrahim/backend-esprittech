@@ -1,13 +1,10 @@
 package tn.esprit.backend_esprittech.historique;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,11 +12,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tn.esprit.backend_esprittech.dto.critereeval.CritereEliminatoireRequest;
 import tn.esprit.backend_esprittech.dto.critereeval.CritereNoteRequest;
-import tn.esprit.backend_esprittech.dto.critereeval.OrdreCritereRequest;
 import tn.esprit.backend_esprittech.entity.critereeval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.User;
-import tn.esprit.backend_esprittech.enums.ActionType;
-import tn.esprit.backend_esprittech.enums.EntityType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.repository.UserRepository;
@@ -28,7 +22,6 @@ import tn.esprit.backend_esprittech.service.critereeval.CritereEliminatoireServi
 import tn.esprit.backend_esprittech.service.critereeval.CritereNoteService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,7 +55,6 @@ class HistorisationIntegrationTest {
     @Autowired private HistoriqueRepository historiqueRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private PasswordEncoder passwordEncoder;
-    @Autowired private ObjectMapper objectMapper;
     @MockitoBean private MinioStorageService minioStorageService;
 
     private User admin;
@@ -85,22 +77,6 @@ class HistorisationIntegrationTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
-    }
-
-    private JsonNode parseJson(String json) {
-        if (json == null) return null;
-        try {
-            // H2 JSON column may return the value as a quoted string; unwrap it
-            String cleaned = json.trim();
-            if (cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
-                cleaned = cleaned.substring(1, cleaned.length() - 1)
-                    .replace("\\\"", "\"").replace("\\n", "\n");
-            }
-            return objectMapper.readTree(cleaned);
-        } catch (Exception e) {
-            fail("Failed to parse JSON: " + json, e);
-            return null;
-        }
     }
 
     private CritereEliminatoireRequest elimReq(String libelle, String description, String domaine, int ordre, ReponseEliminatoire reponse, boolean actif) {
@@ -131,7 +107,8 @@ class HistorisationIntegrationTest {
                 elimReq("Critere-A", "Description test",
                         "Informatique", 1, ReponseEliminatoire.OK, true));
 
-        // No @Historise on CritereEliminatoire anymore, so no entries expected.
+        // Plus de @Historise sur CritereEliminatoire : aucune entree ne doit etre tracee.
+        assertEquals(0, historiqueRepository.count());
     }
 
     @Test
@@ -140,6 +117,7 @@ class HistorisationIntegrationTest {
                 noteReq("Note critere", "Description",
                         "Informatique", 1, 5.0, 1.0, 3.0, true));
 
-        // No @Historise on CritereNote anymore, so no entries expected.
+        // Plus de @Historise sur CritereNote : aucune entree ne doit etre tracee.
+        assertEquals(0, historiqueRepository.count());
     }
 }

@@ -95,9 +95,7 @@ public class LivrableService {
         livrable.setSize(storedObject.size());
         livrable.setDeposant(current);
 
-        LivrableResponse response = toResponse(livrableRepository.save(livrable));
-
-        return response;
+        return toResponse(livrableRepository.save(livrable));
     }
 
     @Historise(action = ActionType.LINK, entityType = EntityType.LIVRABLE, entityIdExpression = "#result.id()", summaryExpression = "'Ajout lien livrable ' + #result.nom()")
@@ -116,9 +114,7 @@ public class LivrableService {
         livrable.setLienExterne(request.lienExterne().trim());
         livrable.setDeposant(current);
 
-        LivrableResponse response = toResponse(livrableRepository.save(livrable));
-
-        return response;
+        return toResponse(livrableRepository.save(livrable));
     }
 
     @Transactional(readOnly = true)

@@ -24,7 +24,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 
@@ -190,14 +189,12 @@ public class DashboardService {
             long count = ((Number) row[2]).longValue();
             LocalDateTime date = LocalDateTime.of(year, month, 1, 0, 0);
             String key = date.format(MONTH_FORMATTER);
-            if (monthMap.containsKey(key)) {
-                monthMap.put(key, monthMap.get(key) + count);
-            }
+            monthMap.computeIfPresent(key, (k, current) -> current + count);
         }
 
         return monthMap.entrySet().stream()
                 .map(e -> new TrendItem(e.getKey(), e.getValue()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private List<SujetByStatutItem> buildSujetsByStatut() {
@@ -228,14 +225,14 @@ public class DashboardService {
                         ROLE_FRENCH_MAP.getOrDefault(r, r.name()),
                         userRepository.countByRole(r)
                 ))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private List<CatalogueByDomainItem> buildCatalogueByDomain() {
         List<Object[]> rows = projetCatalogueRepository.countByDomaine();
         return rows.stream()
                 .map(row -> new CatalogueByDomainItem((String) row[0], ((Number) row[1]).longValue()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private List<CatalogueByDomainItem> buildSujetsByDomaine() {
@@ -245,7 +242,7 @@ public class DashboardService {
                         shortenDomainLabel((String) row[0]),
                         ((Number) row[1]).longValue()
                 ))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private String shortenDomainLabel(String domaine) {
@@ -272,7 +269,7 @@ public class DashboardService {
             String relativeTime = computeRelativeTime(h.getCreatedAt());
             String type = ACTIVITY_TYPE_MAP.getOrDefault(h.getAction(), "en_attente");
             return new RecentActivityItem(h.getId(), message, actorName, relativeTime, type);
-        }).collect(Collectors.toList());
+        }).toList();
     }
 
     private String computeRelativeTime(LocalDateTime dateTime) {
