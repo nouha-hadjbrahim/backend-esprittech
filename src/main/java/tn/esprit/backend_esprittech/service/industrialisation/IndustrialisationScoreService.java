@@ -276,7 +276,7 @@ public class IndustrialisationScoreService {
                         "QUESTIONNAIRE_ELIMINATOIRE",
                         String.valueOf(question.getId()),
                         question.getLibelle(),
-                        result == null ? null : (result == ReponseEliminatoire.OK ? 100.0 : 0.0),
+                        scoreEliminatoire(result),
                         null,
                         result == null ? "EN_ATTENTE" : result.name(),
                         "Critere eliminatoire calcule automatiquement.",
@@ -402,10 +402,7 @@ public class IndustrialisationScoreService {
                 continue;
             }
             double weight = positiveWeight(resultat.getPoids());
-            double normalized = resultat.getNormalizedScore() != null
-                    ? clamp(resultat.getNormalizedScore() * 100.0)
-                    : clamp(((resultat.getNoteValue() != null ? (double) resultat.getNoteValue() : resultat.getNoteObtenue())
-                    / noteScale(resultat)) * 100.0);
+            double normalized = normalizedScore(resultat);
             weightedScores += normalized * weight;
             totalWeight += weight;
             details.add(new ScoreBreakdownDto(
@@ -479,6 +476,25 @@ public class IndustrialisationScoreService {
 
     private double positiveWeight(Double value) {
         return value == null || value <= 0.0 ? 1.0 : value;
+    }
+
+    /** Score d'un critere eliminatoire : 100 si OK, 0 sinon, {@code null} tant qu'il n'est pas evalue. */
+    private Double scoreEliminatoire(ReponseEliminatoire result) {
+        if (result == null) {
+            return null;
+        }
+        return result == ReponseEliminatoire.OK ? 100.0 : 0.0;
+    }
+
+    /** Score du critere ramene sur 100, en privilegiant le score normalise fourni par le moteur ML. */
+    private double normalizedScore(ResultatCritere resultat) {
+        if (resultat.getNormalizedScore() != null) {
+            return clamp(resultat.getNormalizedScore() * 100.0);
+        }
+        double note = resultat.getNoteValue() != null
+                ? (double) resultat.getNoteValue()
+                : resultat.getNoteObtenue();
+        return clamp((note / noteScale(resultat)) * 100.0);
     }
 
     private double noteScale(ResultatCritere resultat) {

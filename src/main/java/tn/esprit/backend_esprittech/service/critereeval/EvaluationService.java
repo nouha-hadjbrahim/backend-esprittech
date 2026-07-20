@@ -555,9 +555,7 @@ public class EvaluationService {
             ResultatCritere resultat = baseResult(critere, TypeCritere.ELIMINATOIRE);
             MlCriterionResult mlResult = mlResults.get(critere.getId());
             String state = eliminatoryState(mlResult);
-            ReponseEliminatoire resultatAuto = "OK".equals(state)
-                    ? ReponseEliminatoire.OK
-                    : (STATUT_NOT_OK.equals(state) ? ReponseEliminatoire.NOT_OK : null);
+            ReponseEliminatoire resultatAuto = reponseEliminatoireDepuisEtat(state);
             resultat.setRuleConfigured(resultatAuto != null);
             resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             resultat.setReponseEliminatoire(resultatAuto);
@@ -645,13 +643,7 @@ public class EvaluationService {
         boolean hasWarnings = !eliminatoryWarnings.isEmpty();
         String eligibilityStatus = eligibilityStatus(resultats, mlResponse, hasWarnings);
         boolean eligible = "ELIGIBLE".equals(eligibilityStatus);
-        String commentaire = hasWarnings
-                ? "Projet evalue avec alertes eliminatoires non bloquantes."
-                : ("NOT_EVALUABLE".equals(eligibilityStatus)
-                ? "Evaluation impossible avec les informations disponibles."
-                : ("REVIEW_REQUIRED".equals(eligibilityStatus)
-                ? "Projet evalue avec elements indetermines a revoir."
-                : "Projet evalue avec succes."));
+        String commentaire = commentaireEvaluation(hasWarnings, eligibilityStatus);
         return new EvaluationData(
                 resultats,
                 scoreFinal,
@@ -831,8 +823,7 @@ public class EvaluationService {
                                  String metadataUsed,
                                  String explanation) {
         resultat.setNoteValue(noteValue);
-        resultat.setNoteLabel(noteValue == null ? "Non calculé"
-                : (noteValue == 0 ? "Non évaluable" : noteLevelService.labelFor(noteValue)));
+        resultat.setNoteLabel(libelleNote(noteValue));
         resultat.setNoteObtenue(noteValue == null ? null : noteValue.doubleValue());
         resultat.setBareme((double) maxActiveNoteValue);
         resultat.setPoids(poids);
@@ -1436,6 +1427,53 @@ public class EvaluationService {
         return evidenceContradicts || reasonConfirms;
     }
 
+    /** Reponse eliminatoire deduite de l'etat ML, ou {@code null} si l'etat n'est pas concluant. */
+    private ReponseEliminatoire reponseEliminatoireDepuisEtat(String state) {
+        if ("OK".equals(state)) {
+            return ReponseEliminatoire.OK;
+        }
+        if (STATUT_NOT_OK.equals(state)) {
+            return ReponseEliminatoire.NOT_OK;
+        }
+        return null;
+    }
+
+    /** Commentaire de synthese affiche a l'utilisateur selon l'issue de l'evaluation. */
+    private String commentaireEvaluation(boolean hasWarnings, String eligibilityStatus) {
+        if (hasWarnings) {
+            return "Projet evalue avec alertes eliminatoires non bloquantes.";
+        }
+        if ("NOT_EVALUABLE".equals(eligibilityStatus)) {
+            return "Evaluation impossible avec les informations disponibles.";
+        }
+        if ("REVIEW_REQUIRED".equals(eligibilityStatus)) {
+            return "Projet evalue avec elements indetermines a revoir.";
+        }
+        return "Projet evalue avec succes.";
+    }
+
+    /** Origine de l'evaluation : sujet de projet, projet du catalogue, ou {@code null} si aucune. */
+    private String contexteEvaluation(Long sujetProjetId, Long projetCatalogueId) {
+        if (sujetProjetId != null) {
+            return "SUJET_PROJET";
+        }
+        if (projetCatalogueId != null) {
+            return "PROJET_CATALOGUE";
+        }
+        return null;
+    }
+
+    /** Libelle du niveau de note : la valeur 0 marque un critere non evaluable. */
+    private String libelleNote(Integer noteValue) {
+        if (noteValue == null) {
+            return "Non calculé";
+        }
+        if (noteValue == 0) {
+            return "Non évaluable";
+        }
+        return noteLevelService.labelFor(noteValue);
+    }
+
     private String eliminatoryState(MlCriterionResult mlResult) {
         String state = safeUpper(mlResult.eliminatoryState());
         if (Set.of("OK", STATUT_NOT_OK, STATUT_INDETERMINATE, "NOT_APPLICABLE").contains(state)) {
@@ -1866,9 +1904,7 @@ public class EvaluationService {
 
         Long sujetProjetId = evaluation.getSujetProjet() == null ? null : evaluation.getSujetProjet().getId();
         Long projetCatalogueId = evaluation.getProjetCatalogue() == null ? null : evaluation.getProjetCatalogue().getId();
-        String evaluationContext = sujetProjetId != null
-                ? "SUJET_PROJET"
-                : (projetCatalogueId != null ? "PROJET_CATALOGUE" : null);
+        String evaluationContext = contexteEvaluation(sujetProjetId, projetCatalogueId);
 
         return new EvaluationResponse(
                 evaluation.getId(),
