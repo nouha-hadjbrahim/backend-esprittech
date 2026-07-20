@@ -274,7 +274,7 @@ public class IndustrialisationService {
         } else {
             ProjetCatalogue projet = candidature.getProjetCatalogue();
             projetTitre = projet.getTitre();
-            hasActiveLivrables = livrableCatalogueRepository.existsByProjetIdAndActifTrue(projet.getId());
+            hasActiveLivrables = hasActiveCatalogueOrSujetLivrables(projet);
 
             validateCompleteness(candidature);
             List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
@@ -750,10 +750,7 @@ public class IndustrialisationService {
                     ? catalogueEvaluation.bloqueParEliminatoire()
                     : null;
             livrables = includeDetails
-                    ? livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetCatalogue.getId())
-                        .stream()
-                        .map(this::toLivrableResponse)
-                        .toList()
+                    ? resolveCatalogueLivrablesIncludingSujetFallback(projetCatalogue)
                     : List.of();
             latestEvaluation = catalogueEvaluation;
         } else {
@@ -808,6 +805,27 @@ public class IndustrialisationService {
 
     private String joinNoms(java.util.stream.Stream<String> noms) {
         return noms.sorted().collect(Collectors.joining(", "));
+    }
+
+    private boolean hasActiveCatalogueOrSujetLivrables(ProjetCatalogue projet) {
+        if (livrableCatalogueRepository.existsByProjetIdAndActifTrue(projet.getId())) {
+            return true;
+        }
+        return projet.getSujetId() != null && livrableService.hasActiveLivrables(projet.getSujetId());
+    }
+
+    private List<LivrableResponse> resolveCatalogueLivrablesIncludingSujetFallback(ProjetCatalogue projetCatalogue) {
+        List<LivrableCatalogue> catalogueLivrables =
+                livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetCatalogue.getId());
+        if (!catalogueLivrables.isEmpty()) {
+            return catalogueLivrables.stream()
+                    .map(this::toLivrableResponse)
+                    .toList();
+        }
+        if (projetCatalogue.getSujetId() == null) {
+            return List.of();
+        }
+        return livrableService.findByProjet(projetCatalogue.getSujetId());
     }
 
     private LivrableResponse toLivrableResponse(LivrableCatalogue livrable) {
