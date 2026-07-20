@@ -4,11 +4,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.CreateProjetRequest;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.RefuserProjetRequest;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetCardResponse;
@@ -16,6 +21,8 @@ import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetCatalogue
 import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetDetailsResponse;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
+import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 
 import java.util.List;
@@ -32,9 +39,15 @@ import java.util.List;
 public class ProjetCatalogueController {
 
     private final ProjetCatalogueService projetService;
+    private final EvaluationService evaluationService;
+    private final LivrableCatalogueService livrableCatalogueService;
 
-    public ProjetCatalogueController(ProjetCatalogueService projetService) {
+    public ProjetCatalogueController(ProjetCatalogueService projetService,
+                                    EvaluationService evaluationService,
+                                    LivrableCatalogueService livrableCatalogueService) {
         this.projetService = projetService;
+        this.evaluationService = evaluationService;
+        this.livrableCatalogueService = livrableCatalogueService;
     }
 
     // ── Enseignant affilié ────────────────────────────────────────────────────
@@ -147,5 +160,43 @@ public class ProjetCatalogueController {
     public ResponseEntity<ProjetDetailsResponse> detailsCatalogue(
             @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
         return ResponseEntity.ok(projetService.detailsCatalogue(id));
+    }
+
+    @GetMapping("/api/catalogue/{id}/evaluation")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Évaluation catalogue",
+            description = "Dernière évaluation ML du projet publié (catalogue ou sujet d'origine).")
+    public EvaluationResponse evaluationCatalogue(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        return evaluationService.getLatestEvaluationForPublishedCatalogue(id);
+    }
+
+    @GetMapping("/api/catalogue/{id}/livrables")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Livrables catalogue",
+            description = "Livrables du projet publié ; sinon ceux du sujet d'origine.")
+    public List<CataloguePublicLivrableResponse> livrablesCatalogue(
+            @PathVariable @Positive(message = "L'identifiant doit être positif") Long id) {
+        return livrableCatalogueService.findPublishedForPublicCatalogue(id);
+    }
+
+    @GetMapping("/api/catalogue/{projetId}/livrables/{livrableId}/download")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Télécharger un livrable catalogue",
+            description = "Télécharge un fichier catalogue ou hérité du sujet (fromSujet=true).")
+    public ResponseEntity<InputStreamResource> downloadLivrableCatalogue(
+            @PathVariable @Positive Long projetId,
+            @PathVariable @Positive Long livrableId,
+            @RequestParam(defaultValue = "false") boolean fromSujet) {
+        LivrableCatalogueService.LivrableDownload download =
+                livrableCatalogueService.downloadPublished(projetId, livrableId, fromSujet);
+        MediaType mediaType = download.contentType() == null
+                ? MediaType.APPLICATION_OCTET_STREAM
+                : MediaType.parseMediaType(download.contentType());
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .contentLength(download.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.filename() + "\"")
+                .body(new InputStreamResource(download.inputStream()));
     }
 }

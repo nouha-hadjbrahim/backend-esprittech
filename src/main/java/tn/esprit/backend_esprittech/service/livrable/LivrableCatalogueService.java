@@ -6,10 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableCatalogueResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableLinkRequest;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableUpdateRequest;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.livrable.Livrable;
 import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
 import tn.esprit.backend_esprittech.entity.livrable.TypeLivrable;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
@@ -19,6 +21,7 @@ import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
+import tn.esprit.backend_esprittech.repository.livrable.LivrableRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
@@ -55,6 +58,7 @@ public class LivrableCatalogueService {
     );
 
     private final LivrableCatalogueRepository livrableRepository;
+    private final LivrableRepository sujetLivrableRepository;
     private final ProjetCatalogueRepository projetRepository;
     private final UserService userService;
     private final MinioStorageService storageService;
@@ -199,13 +203,129 @@ public class LivrableCatalogueService {
         if (isEncadrant(current, projet) || isChefDeLEquipe(current, projet)) {
             return;
         }
-        // Projet publié au catalogue : ses livrables sont visibles par l'audience du catalogue
-        // (enseignants et chefs d'équipe), en cohérence avec la visibilité du projet lui-même.
-        if (StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())
-                && (current.getRole() == Role.ROLE_ENSEIGNANT || current.getRole() == Role.ROLE_CHEF_EQUIPE)) {
+        // Projet publié : livrables visibles par tout utilisateur authentifié (détail catalogue).
+        if (StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())) {
             return;
         }
         throw new AccessDeniedException("Acces refuse au livrable");
+    }
+
+    /**
+     * Livrables d'un projet publié au catalogue : dépôt catalogue s'il existe,
+     * sinon livrables du sujet d'origine (après terminaison / publication automatique).
+     */
+    @Transactional(readOnly = true)
+    public List<CataloguePublicLivrableResponse> findPublishedForPublicCatalogue(Long projetId) {
+        ProjetCatalogue projet = getProjet(projetId);
+        if (!StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())) {
+            throw new ResourceNotFoundException("Projet introuvable dans le catalogue (id=" + projetId + ")");
+        }
+
+        List<LivrableCatalogue> catalogueLivrables =
+                livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetId);
+        if (!catalogueLivrables.isEmpty()) {
+            return catalogueLivrables.stream()
+                    .map(livrable -> toPublicResponse(livrable, false))
+                    .toList();
+        }
+
+        Long sujetId = projet.getSujetId();
+        if (sujetId == null) {
+            return List.of();
+        }
+
+        return sujetLivrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(sujetId)
+                .stream()
+                .map(livrable -> toPublicResponseFromSujet(livrable, projet))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public LivrableDownload downloadPublished(Long projetId, Long livrableId, boolean fromSujet) {
+        ProjetCatalogue projet = getProjet(projetId);
+        if (!StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())) {
+            throw new ResourceNotFoundException("Projet introuvable dans le catalogue (id=" + projetId + ")");
+        }
+
+        if (fromSujet) {
+            if (projet.getSujetId() == null) {
+                throw new ResourceNotFoundException("Livrable introuvable avec id: " + livrableId);
+            }
+            Livrable livrable = sujetLivrableRepository.findById(livrableId)
+                    .filter(item -> Boolean.TRUE.equals(item.getActif()))
+                    .filter(item -> item.getSujetProjet() != null
+                            && projet.getSujetId().equals(item.getSujetProjet().getId()))
+                    .orElseThrow(() -> new ResourceNotFoundException("Livrable introuvable avec id: " + livrableId));
+            if (!StringUtils.hasText(livrable.getObjectName())) {
+                throw new BusinessException("Ce livrable est un lien externe et ne contient pas de fichier.");
+            }
+            MinioStorageService.DownloadedObject file = storageService.download(livrable.getObjectName());
+            return new LivrableDownload(
+                    file.inputStream(),
+                    StringUtils.hasText(livrable.getOriginalFileName()) ? livrable.getOriginalFileName() : livrable.getNom(),
+                    file.contentType(),
+                    file.size()
+            );
+        }
+
+        LivrableCatalogue livrable = getLivrable(livrableId);
+        if (!projet.getId().equals(livrable.getProjet().getId())) {
+            throw new ResourceNotFoundException("Livrable introuvable avec id: " + livrableId);
+        }
+        if (!StringUtils.hasText(livrable.getObjectName())) {
+            throw new BusinessException("Ce livrable est un lien externe et ne contient pas de fichier.");
+        }
+        MinioStorageService.DownloadedObject file = storageService.download(livrable.getObjectName());
+        return new LivrableDownload(
+                file.inputStream(),
+                StringUtils.hasText(livrable.getOriginalFileName()) ? livrable.getOriginalFileName() : livrable.getNom(),
+                file.contentType(),
+                file.size()
+        );
+    }
+
+    private CataloguePublicLivrableResponse toPublicResponse(LivrableCatalogue livrable, boolean fromSujet) {
+        User deposant = livrable.getDeposant();
+        return new CataloguePublicLivrableResponse(
+                livrable.getId(),
+                livrable.getProjet().getId(),
+                livrable.getProjet().getTitre(),
+                livrable.getTypeLivrable(),
+                livrable.getNom(),
+                livrable.getDescription(),
+                livrable.getOriginalFileName(),
+                livrable.getObjectName(),
+                livrable.getContentType(),
+                livrable.getSize(),
+                livrable.getLienExterne(),
+                deposant.getId(),
+                deposant.getPrenom() + " " + deposant.getNom(),
+                livrable.getDateDepot(),
+                livrable.getActif(),
+                fromSujet
+        );
+    }
+
+    private CataloguePublicLivrableResponse toPublicResponseFromSujet(Livrable livrable, ProjetCatalogue projet) {
+        User deposant = livrable.getDeposant();
+        return new CataloguePublicLivrableResponse(
+                livrable.getId(),
+                projet.getId(),
+                projet.getTitre(),
+                livrable.getTypeLivrable(),
+                livrable.getNom(),
+                livrable.getDescription(),
+                livrable.getOriginalFileName(),
+                livrable.getObjectName(),
+                livrable.getContentType(),
+                livrable.getSize(),
+                livrable.getLienExterne(),
+                deposant.getId(),
+                deposant.getPrenom() + " " + deposant.getNom(),
+                livrable.getDateDepot(),
+                livrable.getActif(),
+                true
+        );
     }
 
     private void ensureCanManage(User current, ProjetCatalogue projet) {
