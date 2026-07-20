@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.CreateProjetRequest;
@@ -18,7 +19,9 @@ import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetDomaine;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetPrerequis;
+import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetTechnologie;
+import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
 import tn.esprit.backend_esprittech.enums.NotificationType;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
@@ -553,6 +556,51 @@ class ProjetCatalogueServiceTest {
     // ═════════════════════════════════════════════════════════════════════
     // detailsProjet (encadrant / chef / admin)
     // ═════════════════════════════════════════════════════════════════════
+
+    @Test
+    void publierDepuisSujetTermine_preservesSujetOriginOnCreatedCatalogueProject() {
+        SujetProjet sujet = new SujetProjet();
+        sujet.setId(42L);
+        sujet.setTitre("Sujet IA");
+        sujet.setCategorie(CategorieSujet.RDI);
+        sujet.setDescription("Description du sujet");
+        sujet.setObjectifs("Objectifs du sujet");
+        sujet.setDomaine("IA");
+        sujet.setTechnologies("Spring Boot");
+        sujet.setPrerequis("Java");
+        sujet.setEncadrantId(enseignant.getId());
+        sujet.setDateDebutRealisation(LocalDateTime.of(2026, 1, 1, 9, 0));
+        sujet.setDateTerminaison(LocalDateTime.of(2026, 3, 1, 18, 0));
+        sujet.setScoreFinalEvaluation(84.6);
+
+        SujetPrerequis prerequis = SujetPrerequis.builder().id(2L).nom("Java").build();
+        when(projetRepository.existsBySujetId(42L)).thenReturn(false);
+        when(userRepository.findById(enseignant.getId())).thenReturn(Optional.of(enseignant));
+        when(sujetReferenceService.findOrCreateDomaine("IA"))
+                .thenReturn(new ReferenceItemResponse(1L, "IA", null));
+        when(domaineRepository.findById(1L)).thenReturn(Optional.of(domaine));
+        when(sujetReferenceService.findOrCreateTechnologie("Spring Boot"))
+                .thenReturn(new ReferenceItemResponse(1L, "Spring Boot", null));
+        when(technologieRepository.findById(1L)).thenReturn(Optional.of(technologie));
+        when(sujetReferenceService.findOrCreatePrerequis("Java"))
+                .thenReturn(new ReferenceItemResponse(2L, "Java", null));
+        when(prerequisRepository.findById(2L)).thenReturn(Optional.of(prerequis));
+        when(projetRepository.save(any(ProjetCatalogue.class))).thenAnswer(invocation -> {
+            ProjetCatalogue saved = invocation.getArgument(0);
+            saved.setId(100L);
+            return saved;
+        });
+        when(mapper.toResponse(any(ProjetCatalogue.class))).thenReturn(dummyResponse());
+
+        service.publierDepuisSujetTermine(sujet, null, null);
+
+        ArgumentCaptor<ProjetCatalogue> captor = ArgumentCaptor.forClass(ProjetCatalogue.class);
+        verify(projetRepository).save(captor.capture());
+        ProjetCatalogue saved = captor.getValue();
+        assertEquals(42L, saved.getSujetId());
+        assertEquals(StatutProjet.VALIDE, saved.getStatut());
+        assertEquals(85, saved.getScore());
+    }
 
     @Nested
     class DetailsProjet {
