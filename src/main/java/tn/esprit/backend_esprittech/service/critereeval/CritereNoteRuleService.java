@@ -75,17 +75,11 @@ public class CritereNoteRuleService {
         if (request.metadataKey() == null || request.metadataKey().isBlank()) {
             throw new BadRequestException("La cle metadata est obligatoire.");
         }
-        if (request.operator() == null) {
-            throw new BadRequestException("L'operateur est obligatoire.");
-        }
-        if (request.noteValue() == null) {
-            throw new BadRequestException("La note de regle est obligatoire.");
-        }
         if (request.noteValue() < 1) {
             throw new BadRequestException("La note de regle doit etre superieure ou egale a 1.");
         }
         noteLevelService.requireActiveValue(request.noteValue(), "La note de regle");
-        if (request.priority() == null || request.priority() < 1) {
+        if (request.priority() < 1) {
             throw new BadRequestException("La priorite doit etre superieure ou egale a 1.");
         }
         RuleOperator operator = request.operator();

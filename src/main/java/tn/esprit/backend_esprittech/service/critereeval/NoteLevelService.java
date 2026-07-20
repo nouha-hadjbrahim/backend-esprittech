@@ -141,13 +141,13 @@ public class NoteLevelService {
     }
 
     private void validate(NoteLevelRequest request, Long id) {
-        if (request.value() == null || request.value() < 1) {
+        if (request.value() < 1) {
             throw new BadRequestException("La valeur du niveau doit etre superieure ou egale a 1.");
         }
         if (request.label() == null || request.label().isBlank()) {
             throw new BadRequestException("Le libelle du niveau est obligatoire.");
         }
-        if (request.order() == null || request.order() < 1) {
+        if (request.order() < 1) {
             throw new BadRequestException("L'ordre du niveau doit etre superieur ou egal a 1.");
         }
         repository.findByValue(request.value())

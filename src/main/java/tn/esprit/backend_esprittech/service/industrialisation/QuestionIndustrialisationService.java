@@ -83,7 +83,7 @@ public class QuestionIndustrialisationService {
         if (!StringUtils.hasText(request.libelle())) {
             throw new BusinessException("Le libelle est obligatoire.");
         }
-        if (request.ordre() == null || request.ordre() < 1) {
+        if (request.ordre() < 1) {
             throw new BusinessException("L'ordre doit etre superieur ou egal a 1.");
         }
         if (request.poids() != null && request.poids() < 0) {

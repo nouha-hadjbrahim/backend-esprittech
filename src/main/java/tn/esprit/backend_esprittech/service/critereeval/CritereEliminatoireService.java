@@ -134,7 +134,7 @@ public class CritereEliminatoireService {
     }
 
     private void validateRequest(CritereEliminatoireRequest request) {
-        if (request.ordre() == null || request.ordre() < 1) {
+        if (request.ordre() < 1) {
             throw new BadRequestException("L'ordre doit être supérieur ou égal à 1.");
         }
 
