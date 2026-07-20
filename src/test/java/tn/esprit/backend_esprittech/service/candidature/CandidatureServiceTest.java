@@ -158,8 +158,9 @@ class CandidatureServiceTest {
         when(userService.getCurrentUser()).thenReturn(etudiant);
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetValide));
 
+        var request = new CandidatureRequest(10L, "Je candidate");
         assertThrows(IllegalStateException.class,
-                () -> candidatureService.deposerCandidature(new CandidatureRequest(10L, "Je candidate")));
+                () -> candidatureService.deposerCandidature(request));
 
         verify(candidatureRepository, never()).save(any());
     }
@@ -171,8 +172,9 @@ class CandidatureServiceTest {
         when(affectationRepository.countActiveByEtudiantIdOnOngoingProjects(1L)).thenReturn(0L);
         when(candidatureRepository.existsBySujetIdAndEtudiantIdAndStatutIn(10L, 1L, List.of(StatutCandidature.DEPOSEE, StatutCandidature.ACCEPTEE))).thenReturn(true);
 
+        var request = new CandidatureRequest(10L, "Je candidate");
         assertThrows(IllegalStateException.class,
-                () -> candidatureService.deposerCandidature(new CandidatureRequest(10L, "Je candidate")));
+                () -> candidatureService.deposerCandidature(request));
 
         verify(candidatureRepository, never()).save(any());
     }
@@ -230,8 +232,9 @@ class CandidatureServiceTest {
         when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
 
+        var request = new DecisionCandidatureRequest(false, "  ");
         assertThrows(IllegalArgumentException.class,
-                () -> candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(false, "  ")));
+                () -> candidatureService.deciderCandidature(100L, request));
     }
 
     @Test
@@ -240,8 +243,9 @@ class CandidatureServiceTest {
         when(candidatureRepository.findById(100L)).thenReturn(Optional.of(candidatureDeposee));
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
 
+        var request = new DecisionCandidatureRequest(true, null);
         assertThrows(IllegalStateException.class,
-                () -> candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(true, null)));
+                () -> candidatureService.deciderCandidature(100L, request));
     }
 
     // ── US-19 + US-20 : Fermeture + Réalisation ───────────────────
@@ -296,8 +300,9 @@ class CandidatureServiceTest {
         when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetEnRealisation));
 
+        var request = new RetraitEtudiantRequest("Retrait");
         assertThrows(IllegalStateException.class,
-                () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
+                () -> candidatureService.retirerEtudiant(200L, request));
     }
 
     @Test
@@ -305,8 +310,9 @@ class CandidatureServiceTest {
         when(affectationRepository.findById(200L)).thenReturn(Optional.of(affectationActive));
         when(sujetProjetRepository.findById(10L)).thenReturn(Optional.of(sujetOuvert));
 
+        var request = new RetraitEtudiantRequest("Retrait");
         assertThrows(IllegalStateException.class,
-                () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
+                () -> candidatureService.retirerEtudiant(200L, request));
     }
 
     // ── US-24 : Terminaison ──────────────────────────────────────────
@@ -437,16 +443,18 @@ class CandidatureServiceTest {
     void deciderCandidature_inexistante_leveException() {
         when(candidatureRepository.findById(100L)).thenReturn(Optional.empty());
 
+        var request = new DecisionCandidatureRequest(true, null);
         assertThrows(IllegalArgumentException.class,
-                () -> candidatureService.deciderCandidature(100L, new DecisionCandidatureRequest(true, null)));
+                () -> candidatureService.deciderCandidature(100L, request));
     }
 
     @Test
     void retirerEtudiant_affectationInexistante_leveException() {
         when(affectationRepository.findById(200L)).thenReturn(Optional.empty());
 
+        var request = new RetraitEtudiantRequest("Retrait");
         assertThrows(IllegalArgumentException.class,
-                () -> candidatureService.retirerEtudiant(200L, new RetraitEtudiantRequest("Retrait")));
+                () -> candidatureService.retirerEtudiant(200L, request));
     }
 
     // ---- getOldValues ----

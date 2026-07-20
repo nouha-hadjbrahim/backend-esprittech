@@ -37,13 +37,13 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class HistorisationAspectTest {
 
-    @Mock(lenient = true) private HistoriqueService historiqueService;
-    @Mock(lenient = true) private ObjectMapper objectMapper;
-    @Mock(lenient = true) private BeanFactory beanFactory;
-    @Mock(lenient = true) private ProceedingJoinPoint joinPoint;
-    @Mock(lenient = true) private MethodSignature methodSignature;
-    @Mock(lenient = true) private Historise historise;
-    @Mock(lenient = true) private Authentication authentication;
+    @Mock(strictness = Mock.Strictness.LENIENT) private HistoriqueService historiqueService;
+    @Mock(strictness = Mock.Strictness.LENIENT) private ObjectMapper objectMapper;
+    @Mock(strictness = Mock.Strictness.LENIENT) private BeanFactory beanFactory;
+    @Mock(strictness = Mock.Strictness.LENIENT) private ProceedingJoinPoint joinPoint;
+    @Mock(strictness = Mock.Strictness.LENIENT) private MethodSignature methodSignature;
+    @Mock(strictness = Mock.Strictness.LENIENT) private Historise historise;
+    @Mock(strictness = Mock.Strictness.LENIENT) private Authentication authentication;
 
     @Captor private ArgumentCaptor<LogRequest> logCaptor;
 
@@ -54,7 +54,9 @@ class HistorisationAspectTest {
 
     @SuppressWarnings("unused")
     private static class DummyService {
-        public void handle() {}
+        public void handle() {
+            // Methode cible factice : seule sa signature est utilisee par les tests de l'aspect.
+        }
     }
 
     HistorisationAspectTest() throws NoSuchMethodException {

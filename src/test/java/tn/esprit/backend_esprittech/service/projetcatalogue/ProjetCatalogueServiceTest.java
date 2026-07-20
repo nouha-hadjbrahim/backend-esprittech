@@ -424,8 +424,9 @@ class ProjetCatalogueServiceTest {
             stubCurrentChef();
             when(projetRepository.findById(99L)).thenReturn(Optional.empty());
 
+            var request = new RefuserProjetRequest("motif");
             assertThrows(ResourceNotFoundException.class,
-                    () -> service.refuser(99L, new RefuserProjetRequest("motif")));
+                    () -> service.refuser(99L, request));
         }
 
         @Test
@@ -436,8 +437,9 @@ class ProjetCatalogueServiceTest {
             when(userRepository.findById(20L)).thenReturn(Optional.of(autreChef));
             when(projetRepository.findById(1L)).thenReturn(Optional.of(projet));
 
+            var request = new RefuserProjetRequest("motif");
             assertThrows(ForbiddenException.class,
-                    () -> service.refuser(1L, new RefuserProjetRequest("motif")));
+                    () -> service.refuser(1L, request));
         }
 
         @Test
@@ -446,8 +448,9 @@ class ProjetCatalogueServiceTest {
             projet.setStatut(StatutProjet.VALIDE);
             when(projetRepository.findById(1L)).thenReturn(Optional.of(projet));
 
+            var request = new RefuserProjetRequest("motif");
             assertThrows(ConflictException.class,
-                    () -> service.refuser(1L, new RefuserProjetRequest("motif")));
+                    () -> service.refuser(1L, request));
         }
     }
 

@@ -195,8 +195,9 @@ class SujetProjetAdminServiceTest {
         entity.setStatut(StatutSujet.INVALIDE);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
 
+        var request = new SujetInvalidationRequest("Motif");
         assertThrows(IllegalArgumentException.class,
-                () -> service.invaliderSujetAsAdmin(1L, new SujetInvalidationRequest("Motif")));
+                () -> service.invaliderSujetAsAdmin(1L, request));
     }
 
     @Test

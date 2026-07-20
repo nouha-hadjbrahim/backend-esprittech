@@ -307,8 +307,9 @@ class SujetProjetServiceTest {
         entity.setStatut(StatutSujet.VALIDE);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
 
+        var request = new SujetInvalidationRequest("Motif");
         assertThrows(IllegalArgumentException.class,
-                () -> service.invaliderSujet(1L, new SujetInvalidationRequest("Motif")));
+                () -> service.invaliderSujet(1L, request));
     }
 
     @Test

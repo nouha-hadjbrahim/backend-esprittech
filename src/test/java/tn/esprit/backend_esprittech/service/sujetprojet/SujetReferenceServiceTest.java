@@ -78,8 +78,9 @@ class SujetReferenceServiceTest {
     void createDomaine_duplicateName_shouldRejectWithoutSaving() {
         when(domaineRepository.existsByNomIgnoreCase("IA")).thenReturn(true);
 
+        var request = new ReferenceItemRequest(" IA ");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.createDomaine(new ReferenceItemRequest(" IA ")));
+                () -> service.createDomaine(request));
 
         assertEquals("Ce domaine existe déjà", ex.getMessage());
         verify(domaineRepository, never()).save(any());
@@ -92,8 +93,9 @@ class SujetReferenceServiceTest {
         when(domaineRepository.findById(1L)).thenReturn(Optional.of(current));
         when(domaineRepository.findByNomIgnoreCase("IA")).thenReturn(Optional.of(duplicate));
 
+        var request = new ReferenceItemRequest("IA");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.updateDomaine(1L, new ReferenceItemRequest("IA")));
+                () -> service.updateDomaine(1L, request));
 
         assertEquals("Ce domaine existe déjà", ex.getMessage());
         verify(domaineRepository, never()).save(any());
@@ -215,8 +217,9 @@ class SujetReferenceServiceTest {
         when(prerequisRepository.findById(1L)).thenReturn(Optional.of(current));
         when(prerequisRepository.findByNomIgnoreCase("Spring")).thenReturn(Optional.of(duplicate));
 
+        var request = new ReferenceItemRequest("Spring");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.updatePrerequis(1L, new ReferenceItemRequest("Spring")));
+                () -> service.updatePrerequis(1L, request));
 
         assertEquals("Ce pr\u00e9requis existe d\u00e9j\u00e0", ex.getMessage());
         verify(prerequisRepository, never()).save(any());
@@ -283,8 +286,9 @@ class SujetReferenceServiceTest {
         when(technologieRepository.findById(2L)).thenReturn(Optional.of(current));
         when(technologieRepository.findByNomIgnoreCase("React")).thenReturn(Optional.of(duplicate));
 
+        var request = new ReferenceItemRequest("React");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.updateTechnologie(2L, new ReferenceItemRequest("React")));
+                () -> service.updateTechnologie(2L, request));
 
         assertEquals("Cette technologie existe d\u00e9j\u00e0", ex.getMessage());
         verify(technologieRepository, never()).save(any());
@@ -301,8 +305,9 @@ class SujetReferenceServiceTest {
 
     @Test
     void createReference_blankName_shouldReject() {
+        var request = new ReferenceItemRequest(" ");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.createTechnologie(new ReferenceItemRequest(" ")));
+                () -> service.createTechnologie(request));
 
         assertEquals("Le nom est obligatoire", ex.getMessage());
         verify(technologieRepository, never()).save(any());
@@ -312,8 +317,9 @@ class SujetReferenceServiceTest {
     void createTechnology_duplicate_shouldRejectWithoutSaving() {
         when(technologieRepository.existsByNomIgnoreCase("Angular")).thenReturn(true);
 
+        var request = new ReferenceItemRequest("Angular");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.createTechnologie(new ReferenceItemRequest("Angular")));
+                () -> service.createTechnologie(request));
 
         assertEquals("Cette technologie existe d\u00e9j\u00e0", ex.getMessage());
         verify(technologieRepository, never()).save(any());

@@ -230,8 +230,9 @@ class IndustrialisationServiceTest {
         when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
         when(candidatureRepository.findBySujetProjetIdOrderByDateDemandeDesc(42L)).thenReturn(List.of(candidature));
 
+        var request = new CandidatureIndustrialisationRequest(TypeIndustrialisation.EXTERNE, null);
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.create(42L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.EXTERNE, null)));
+                () -> industrialisationService.create(42L, request));
 
         assertEquals("Une demande d'industrialisation est deja en cours pour ce projet.", ex.getMessage());
     }
@@ -265,8 +266,9 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(otherTeacher);
         when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
 
+        var request = new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null);
         assertThrows(AccessDeniedException.class,
-                () -> industrialisationService.create(42L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null)));
+                () -> industrialisationService.create(42L, request));
 
         verify(candidatureRepository, never()).save(any());
     }
@@ -277,8 +279,9 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(sujetProjetRepository.findById(42L)).thenReturn(Optional.of(projet));
 
+        var request = new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null);
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.create(42L, new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null)));
+                () -> industrialisationService.create(42L, request));
 
         assertEquals("Le projet doit etre termine avant une demande d'industrialisation.", ex.getMessage());
         verify(candidatureRepository, never()).save(any());
@@ -291,9 +294,10 @@ class IndustrialisationServiceTest {
         when(candidatureRepository.findBySujetProjetIdOrderByDateDemandeDesc(42L)).thenReturn(List.of());
         when(evaluationService.getLatestEvaluationByProjet(42L)).thenReturn(evaluationWithWarning());
 
+        var request = new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null);
         EliminatoryWarningsConfirmationRequiredException ex = assertThrows(EliminatoryWarningsConfirmationRequiredException.class,
                 () -> industrialisationService.create(42L,
-                        new CandidatureIndustrialisationRequest(TypeIndustrialisation.INTERNE, null)));
+                        request));
 
         assertEquals(1, ex.getCount());
         assertEquals("Licence incompatible", ex.getDetails().get(0).libelle());
@@ -405,8 +409,9 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(encadrant);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
 
+        var request = new ReponsesIndustrialisationRequest(List.of());
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.saveReponses(11L, new ReponsesIndustrialisationRequest(List.of())));
+                () -> industrialisationService.saveReponses(11L, request));
 
         assertEquals("La demande n'est plus editable.", ex.getMessage());
     }
@@ -809,8 +814,9 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(ci);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
 
+        var request = new DecisionGoRequest(null, null);
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.decideGo(11L, new DecisionGoRequest(null, null)));
+                () -> industrialisationService.decideGo(11L, request));
 
         assertEquals("L'orientation est obligatoire pour une decision Go.", ex.getMessage());
     }
@@ -821,8 +827,9 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(ci);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
 
+        var request = new DecisionGoRequest(OrientationIndustrialisation.DSI, null);
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.decideGo(11L, new DecisionGoRequest(OrientationIndustrialisation.DSI, null)));
+                () -> industrialisationService.decideGo(11L, request));
 
         assertEquals("La demande n'est pas en attente de decision CI.", ex.getMessage());
     }
@@ -831,8 +838,9 @@ class IndustrialisationServiceTest {
     void decideGo_nonCiUser_shouldReject() {
         when(userService.getCurrentUser()).thenReturn(encadrant);
 
+        var request = new DecisionGoRequest(OrientationIndustrialisation.DSI, null);
         assertThrows(AccessDeniedException.class,
-                () -> industrialisationService.decideGo(11L, new DecisionGoRequest(OrientationIndustrialisation.DSI, null)));
+                () -> industrialisationService.decideGo(11L, request));
     }
 
     @Test
@@ -841,8 +849,9 @@ class IndustrialisationServiceTest {
         when(userService.getCurrentUser()).thenReturn(ci);
         when(candidatureRepository.findById(11L)).thenReturn(Optional.of(candidature));
 
+        var request = new DecisionNoGoRequest("  ");
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> industrialisationService.decideNoGo(11L, new DecisionNoGoRequest("  ")));
+                () -> industrialisationService.decideNoGo(11L, request));
 
         assertEquals("Le motif est obligatoire pour une decision No Go.", ex.getMessage());
     }
