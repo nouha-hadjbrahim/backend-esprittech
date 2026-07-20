@@ -19,6 +19,28 @@ public record LivrableResponse(
         Long deposantId,
         String deposantNom,
         LocalDateTime dateDepot,
-        Boolean actif
+        Boolean actif,
+        Long catalogueProjetId,
+        Boolean fromSujet
 ) {
+    public LivrableResponse(
+            Long id,
+            Long sujetProjetId,
+            String projetTitre,
+            TypeLivrable typeLivrable,
+            String nom,
+            String description,
+            String originalFileName,
+            String objectName,
+            String contentType,
+            Long size,
+            String lienExterne,
+            Long deposantId,
+            String deposantNom,
+            LocalDateTime dateDepot,
+            Boolean actif
+    ) {
+        this(id, sujetProjetId, projetTitre, typeLivrable, nom, description, originalFileName, objectName,
+                contentType, size, lienExterne, deposantId, deposantNom, dateDepot, actif, null, false);
+    }
 }
