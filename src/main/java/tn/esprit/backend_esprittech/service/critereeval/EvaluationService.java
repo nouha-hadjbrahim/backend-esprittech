@@ -455,12 +455,13 @@ public class EvaluationService {
             resultat.setModeEvaluation(ModeEvaluation.MANUAL_ADMIN_VALUE);
             resultat.setRuleConfigured(true);
             applyNoteResult(resultat, noteValue, poids, scoreCritere, maxActiveNoteValue,
-                    "MANUAL_ADMIN_VALUE", "Valeur saisie manuellement.", "Note saisie manuellement.");
+                    new TraceCalcul("MANUAL_ADMIN_VALUE", "Valeur saisie manuellement.",
+                            "Note saisie manuellement."));
             resultat.setCommentaire(resultatRequest.commentaire());
             resultats.add(resultat);
         }
 
-        return buildEvaluationData(resultats, warnings, sommeScoresCriteres, sommePoids);
+        return buildEvaluationData(resultats, warnings, new ScoreAgregat(sommeScoresCriteres, sommePoids));
     }
 
     private EvaluationData buildAutomaticEvaluationFromMl(SujetProjet projet,
@@ -470,11 +471,12 @@ public class EvaluationService {
         List<MlDeliverableContent> extractedContent = contentExtractionService.extract(livrables);
         List<MlExternalSourceRequest> externalSources = buildExternalSources(livrables);
         return buildAutomaticEvaluationFromMl(
-                projet.getId(),
-                projet.getTitre(),
-                projet.getDomaine(),
-                projet.getTechnologies(),
-                projet.getCategorie() == null ? null : projet.getCategorie().name(),
+                new ProjetContexte(
+                        projet.getId(),
+                        projet.getTitre(),
+                        projet.getDomaine(),
+                        projet.getTechnologies(),
+                        projet.getCategorie() == null ? null : projet.getCategorie().name()),
                 extractedContent,
                 externalSources,
                 trigger,
@@ -489,11 +491,12 @@ public class EvaluationService {
         List<MlDeliverableContent> extractedContent = contentExtractionService.extractCatalogue(livrables);
         List<MlExternalSourceRequest> externalSources = buildExternalSourcesCatalogue(livrables);
         return buildAutomaticEvaluationFromMl(
-                projet.getId(),
-                projet.getTitre(),
-                joinDomaineNoms(projet),
-                joinTechnologieNoms(projet),
-                projet.getTypeProjet() == null ? null : projet.getTypeProjet().name(),
+                new ProjetContexte(
+                        projet.getId(),
+                        projet.getTitre(),
+                        joinDomaineNoms(projet),
+                        joinTechnologieNoms(projet),
+                        projet.getTypeProjet() == null ? null : projet.getTypeProjet().name()),
                 extractedContent,
                 externalSources,
                 trigger,
@@ -505,11 +508,7 @@ public class EvaluationService {
      * Cœur du calcul ML, commun aux sujets et aux projets catalogue : ne dépend que des champs
      * projet (id, titre, domaine, technologies, catégorie) et des livrables déjà extraits.
      */
-    private EvaluationData buildAutomaticEvaluationFromMl(Long projetId,
-                                                          String titre,
-                                                          String domaine,
-                                                          String technologies,
-                                                          String categorieName,
+    private EvaluationData buildAutomaticEvaluationFromMl(ProjetContexte projet,
                                                           List<MlDeliverableContent> extractedContent,
                                                           List<MlExternalSourceRequest> externalSources,
                                                           EvaluationTrigger trigger,
@@ -518,24 +517,18 @@ public class EvaluationService {
         List<CritereNote> criteresNotes = critereNoteRepository.findByActifTrueOrderByOrdreAsc();
         Set<Integer> activeNoteValues = activeNoteValuesFor(criteresNotes);
         int maxActiveNoteValue = maxActiveNoteValue(activeNoteValues);
-        String projectSnapshotHash = projectSnapshotHash(projetId, titre, domaine, technologies, categorieName, criteresEliminatoires, criteresNotes);
+        CriteresActifs criteres = new CriteresActifs(criteresEliminatoires, criteresNotes, maxActiveNoteValue);
+        String projectSnapshotHash = projectSnapshotHash(projet, criteresEliminatoires, criteresNotes);
         String deliverableSnapshotHash = deliverableSnapshotHash(extractedContent, externalSources);
         String inputSnapshotHash = sha256(projectSnapshotHash + ":" + deliverableSnapshotHash + ":" + criteriaVersion + ":" + evaluationEngine);
+        SnapshotHashes hashes = new SnapshotHashes(projectSnapshotHash, deliverableSnapshotHash, inputSnapshotHash);
         MlEvaluationRequest mlRequest = buildMlRequest(
-                projetId,
-                titre,
-                domaine,
-                technologies,
-                categorieName,
-                criteresEliminatoires,
-                criteresNotes,
+                projet,
+                criteres,
                 extractedContent,
                 externalSources,
-                maxActiveNoteValue,
                 correlationId,
-                projectSnapshotHash,
-                deliverableSnapshotHash,
-                inputSnapshotHash
+                hashes
         );
         MlEvaluationResponse mlResponse = mlEvaluationClient.evaluate(
                 mlRequest
@@ -582,7 +575,7 @@ public class EvaluationService {
             resultat.setRuleConfigured(normalized != null);
             resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             applyNoteResult(resultat, noteValue, poids, score, maxActiveNoteValue,
-                    "ML_CONTENT_ANALYSIS", null, mlResult.justification());
+                    new TraceCalcul("ML_CONTENT_ANALYSIS", null, mlResult.justification()));
             applyMlResult(resultat, mlResult, evidenceSummary(mlResult), evidenceLivrableIds(mlResult));
             resultat.setCommentaire(mlResult.justification());
             resultats.add(resultat);
@@ -591,54 +584,30 @@ public class EvaluationService {
         return buildEvaluationData(
                 resultats,
                 warnings,
-                sommeScoresCriteres,
-                sommePoids,
+                new ScoreAgregat(sommeScoresCriteres, sommePoids),
                 mlResponse,
                 trigger,
                 correlationId,
-                projectSnapshotHash,
-                deliverableSnapshotHash,
-                inputSnapshotHash
+                hashes
         );
     }
 
     private EvaluationData buildEvaluationData(List<ResultatCritere> resultats,
                                                List<String> eliminatoryWarnings,
-                                               double sommeScoresCriteres,
-                                               double sommePoids) {
-        return buildEvaluationData(resultats, eliminatoryWarnings, sommeScoresCriteres, sommePoids, null);
+                                               ScoreAgregat agregat) {
+        return buildEvaluationData(resultats, eliminatoryWarnings, agregat, null, null, null, null);
     }
 
     private EvaluationData buildEvaluationData(List<ResultatCritere> resultats,
                                                List<String> eliminatoryWarnings,
-                                               double sommeScoresCriteres,
-                                               double sommePoids,
-                                               MlEvaluationResponse mlResponse) {
-        return buildEvaluationData(
-                resultats,
-                eliminatoryWarnings,
-                sommeScoresCriteres,
-                sommePoids,
-                mlResponse,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-    }
-
-    private EvaluationData buildEvaluationData(List<ResultatCritere> resultats,
-                                               List<String> eliminatoryWarnings,
-                                               double sommeScoresCriteres,
-                                               double sommePoids,
+                                               ScoreAgregat agregat,
                                                MlEvaluationResponse mlResponse,
                                                EvaluationTrigger trigger,
                                                String correlationId,
-                                               String projectSnapshotHash,
-                                               String deliverableSnapshotHash,
-                                               String inputSnapshotHash) {
-        Double scoreFinal = sommePoids > 0 ? round((sommeScoresCriteres / sommePoids) * 100) : null;
+                                               SnapshotHashes hashes) {
+        Double scoreFinal = agregat.sommePoids() > 0
+                ? round((agregat.sommeScores() / agregat.sommePoids()) * 100)
+                : null;
         boolean hasWarnings = !eliminatoryWarnings.isEmpty();
         String eligibilityStatus = eligibilityStatus(resultats, mlResponse, hasWarnings);
         boolean eligible = "ELIGIBLE".equals(eligibilityStatus);
@@ -658,9 +627,9 @@ public class EvaluationService {
                 mlResponse == null ? null : mlResponse.modelVersion(),
                 mlResponse == null ? null : safeValue(mlResponse.effectivePipelineVersion()),
                 mlResponse == null || !StringUtils.hasText(mlResponse.criteriaVersion()) ? criteriaVersion : mlResponse.criteriaVersion(),
-                projectSnapshotHash,
-                deliverableSnapshotHash,
-                inputSnapshotHash,
+                hashes == null ? null : hashes.projet(),
+                hashes == null ? null : hashes.livrables(),
+                hashes == null ? null : hashes.input(),
                 mlResponse == null ? "MANUAL" : mlResponse.effectiveStatus(),
                 eligibilityStatus,
                 mlResponse == null ? null : mlResponse.globalConfidence(),
@@ -818,38 +787,28 @@ public class EvaluationService {
                                  Double poids,
                                  Double scoreCritere,
                                  int maxActiveNoteValue,
-                                 String matchedRule,
-                                 String metadataUsed,
-                                 String explanation) {
+                                 TraceCalcul trace) {
         resultat.setNoteValue(noteValue);
         resultat.setNoteLabel(libelleNote(noteValue));
         resultat.setNoteObtenue(noteValue == null ? null : noteValue.doubleValue());
         resultat.setBareme((double) maxActiveNoteValue);
         resultat.setPoids(poids);
         resultat.setScorePondere(scoreCritere == null ? null : round(scoreCritere));
-        resultat.setMatchedRule(matchedRule);
-        resultat.setMetadataUsed(metadataUsed);
-        resultat.setExplanation(explanation);
-        resultat.setEvidenceSummary(metadataUsed);
+        resultat.setMatchedRule(trace.matchedRule());
+        resultat.setMetadataUsed(trace.metadataUsed());
+        resultat.setExplanation(trace.explanation());
+        resultat.setEvidenceSummary(trace.metadataUsed());
     }
 
-    private MlEvaluationRequest buildMlRequest(Long projetId,
-                                               String titre,
-                                               String domaine,
-                                               String technologies,
-                                               String categorieName,
-                                               List<CritereEliminatoire> criteresEliminatoires,
-                                               List<CritereNote> criteresNotes,
+    private MlEvaluationRequest buildMlRequest(ProjetContexte projet,
+                                               CriteresActifs criteres,
                                                List<MlDeliverableContent> extractedContent,
                                                List<MlExternalSourceRequest> externalSources,
-                                               int maxActiveNoteValue,
                                                String correlationId,
-                                               String projectSnapshotHash,
-                                               String deliverableSnapshotHash,
-                                               String inputSnapshotHash) {
+                                               SnapshotHashes hashes) {
         List<MlCriterionRequest> criteria = new ArrayList<>();
 
-        for (CritereEliminatoire critere : criteresEliminatoires) {
+        for (CritereEliminatoire critere : criteres.eliminatoires()) {
             criteria.add(buildMlCriterionRequest(
                     critere,
                     TypeCritere.ELIMINATOIRE,
@@ -859,8 +818,8 @@ public class EvaluationService {
             ));
         }
 
-        for (CritereNote critere : criteresNotes) {
-            double maximumScore = positiveMaximumScore(critere.getBareme(), maxActiveNoteValue);
+        for (CritereNote critere : criteres.notes()) {
+            double maximumScore = positiveMaximumScore(critere.getBareme(), criteres.maxNoteValue());
             criteria.add(buildMlCriterionRequest(
                     critere,
                     TypeCritere.NOTE,
@@ -871,19 +830,19 @@ public class EvaluationService {
         }
 
         return new MlEvaluationRequest(
-                projetId,
+                projet.id(),
                 correlationId,
                 criteriaVersion,
                 evaluationEngine,
-                inputSnapshotHash,
-                projectSnapshotHash,
-                deliverableSnapshotHash,
+                hashes.input(),
+                hashes.projet(),
+                hashes.livrables(),
                 new MlProjectContext(
-                        projetId,
-                        safeValue(titre),
-                        safeValue(domaine),
-                        safeValue(technologies),
-                        categorieName
+                        projet.id(),
+                        safeValue(projet.titre()),
+                        safeValue(projet.domaine()),
+                        safeValue(projet.technologies()),
+                        projet.categorieName()
                 ),
                 criteria,
                 extractedContent,
@@ -1070,11 +1029,7 @@ public class EvaluationService {
                 .toList();
     }
 
-    private String projectSnapshotHash(Long projetId,
-                                       String titre,
-                                       String domaine,
-                                       String technologies,
-                                       String categorieName,
+    private String projectSnapshotHash(ProjetContexte projet,
                                        List<CritereEliminatoire> criteresEliminatoires,
                                        List<CritereNote> criteresNotes) {
         List<CritereEvaluation> allCriteria = new ArrayList<>();
@@ -1095,9 +1050,9 @@ public class EvaluationService {
                         + "|" + safeValue(critere.getNegativeEvidenceExpectations())
                         + "|" + safeValue(critere.getSourceAuthorityRules()))
                 .collect(Collectors.joining(";"));
-        return sha256(projetId + "|" + safeValue(titre) + "|"
-                + safeValue(domaine) + "|" + safeValue(technologies)
-                + "|" + safeValue(categorieName)
+        return sha256(projet.id() + "|" + safeValue(projet.titre()) + "|"
+                + safeValue(projet.domaine()) + "|" + safeValue(projet.technologies())
+                + "|" + safeValue(projet.categorieName())
                 + "|" + criteriaVersion + "|" + criteria);
     }
 
@@ -2096,6 +2051,29 @@ public class EvaluationService {
             return normalized.substring(normalized.lastIndexOf('/') + 1);
         }
         return normalized;
+    }
+
+    /** Champs projet exploites par le moteur ML, communs aux sujets et aux projets catalogue. */
+    private record ProjetContexte(Long id, String titre, String domaine,
+                                  String technologies, String categorieName) {
+    }
+
+    /** Criteres actifs au moment du calcul, avec la note maximale active associee. */
+    private record CriteresActifs(List<CritereEliminatoire> eliminatoires,
+                                  List<CritereNote> notes,
+                                  int maxNoteValue) {
+    }
+
+    /** Empreintes des entrees, tracees pour rendre une evaluation reproductible. */
+    private record SnapshotHashes(String projet, String livrables, String input) {
+    }
+
+    /** Agregat pondere intermediaire du calcul de score. */
+    private record ScoreAgregat(double sommeScores, double sommePoids) {
+    }
+
+    /** Tracabilite du calcul d'une note : regle appliquee, metadonnees et explication. */
+    private record TraceCalcul(String matchedRule, String metadataUsed, String explanation) {
     }
 
     private record EvaluationData(
