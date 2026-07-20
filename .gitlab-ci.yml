@@ -99,7 +99,7 @@ coverage-gate:
       artifacts: true
   script:
     - test -f target/site/jacoco/jacoco.xml
-    - mvn $MAVEN_CLI_OPTS -DskipTests jacoco:check
+    - mvn $MAVEN_CLI_OPTS -DskipTests jacoco:check@coverage-check
   artifacts:
     when: always
     expire_in: 1 week
