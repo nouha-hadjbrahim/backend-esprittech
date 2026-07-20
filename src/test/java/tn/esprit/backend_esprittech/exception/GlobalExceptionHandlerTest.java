@@ -190,8 +190,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleCritereEvalNotFound_returns404() {
-        tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex =
-                new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("Critère non trouvé");
+        tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException ex =
+                new tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException("Critère non trouvé");
 
         ProblemDetail pd = handler.handleCritereEvalNotFound(ex);
 
@@ -203,8 +203,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleCritereEvalBadRequest_returns400() {
-        tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException ex =
-                new tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException("Requête invalide");
+        tn.esprit.backend_esprittech.exception.critereeval.BadRequestException ex =
+                new tn.esprit.backend_esprittech.exception.critereeval.BadRequestException("Requête invalide");
 
         ProblemDetail pd = handler.handleCritereEvalBadRequest(ex);
 

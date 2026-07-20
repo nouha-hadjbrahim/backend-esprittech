@@ -141,13 +141,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, TITRE_RESSOURCE_INTROUVABLE, ex.getMessage());
     }
 
-    @ExceptionHandler(tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException.class)
-    public ProblemDetail handleCritereEvalNotFound(tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex) {
+    @ExceptionHandler(tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException.class)
+    public ProblemDetail handleCritereEvalNotFound(tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, TITRE_RESSOURCE_INTROUVABLE, ex.getMessage());
     }
 
-    @ExceptionHandler(tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException.class)
-    public ProblemDetail handleCritereEvalBadRequest(tn.esprit.backend_esprittech.exception.CritereEval.BadRequestException ex) {
+    @ExceptionHandler(tn.esprit.backend_esprittech.exception.critereeval.BadRequestException.class)
+    public ProblemDetail handleCritereEvalBadRequest(tn.esprit.backend_esprittech.exception.critereeval.BadRequestException ex) {
         return build(HttpStatus.BAD_REQUEST, TITRE_REQUETE_INVALIDE, ex.getMessage());
     }
 

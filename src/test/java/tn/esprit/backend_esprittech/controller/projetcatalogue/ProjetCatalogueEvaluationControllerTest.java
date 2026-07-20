@@ -6,8 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 
 import java.time.LocalDateTime;
 import java.util.List;

@@ -7,8 +7,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 
 import java.util.List;
 

@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
 import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.CreateProjetRequest;
 import tn.esprit.backend_esprittech.dto.projetcatalogue.request.RefuserProjetRequest;
@@ -21,7 +21,7 @@ import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetCatalogue
 import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetDetailsResponse;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 

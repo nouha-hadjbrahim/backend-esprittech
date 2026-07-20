@@ -1,8 +1,8 @@
 package tn.esprit.backend_esprittech.service.industrialisation;
 
 import org.junit.jupiter.api.Test;
-import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.ReponseIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeReponseIndustrialisation;

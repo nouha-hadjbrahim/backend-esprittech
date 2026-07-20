@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeReponseIndustrialisation;
 
 public record QuestionIndustrialisationRequest(

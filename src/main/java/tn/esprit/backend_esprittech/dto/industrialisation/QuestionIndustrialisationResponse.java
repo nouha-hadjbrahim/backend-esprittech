@@ -1,6 +1,6 @@
 package tn.esprit.backend_esprittech.dto.industrialisation;
 
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeReponseIndustrialisation;
 
 import java.time.LocalDateTime;

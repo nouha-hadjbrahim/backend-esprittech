@@ -3,7 +3,7 @@ package tn.esprit.backend_esprittech.entity.industrialisation;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 
 import java.time.LocalDateTime;
 

@@ -8,7 +8,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.industrialisation.QuestionIndustrialisationRequest;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeReponseIndustrialisation;
 import tn.esprit.backend_esprittech.exception.BusinessException;

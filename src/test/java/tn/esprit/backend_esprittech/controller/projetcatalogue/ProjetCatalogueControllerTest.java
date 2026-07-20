@@ -17,7 +17,7 @@ import tn.esprit.backend_esprittech.dto.projetcatalogue.response.ProjetDetailsRe
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.ReferenceItemResponse;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.projetcatalogue.ProjetCatalogueService;
 

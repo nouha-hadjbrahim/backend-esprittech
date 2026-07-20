@@ -1,7 +1,7 @@
 package tn.esprit.backend_esprittech.dto.industrialisation;
 
 import jakarta.validation.constraints.NotNull;
-import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.critereeval.ReponseEliminatoire;
 
 public record ReponseIndustrialisationRequest(
         @NotNull Long questionId,

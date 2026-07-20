@@ -9,7 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.industrialisation.CandidatureIndustrialisationResponse;
 import tn.esprit.backend_esprittech.dto.industrialisation.QuestionIndustrialisationRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.QuestionIndustrialisationResponse;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.StatutIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeReponseIndustrialisation;

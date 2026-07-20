@@ -15,12 +15,12 @@ import tn.esprit.backend_esprittech.dto.industrialisation.DecisionNoGoRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.ReponseIndustrialisationRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.ReponsesIndustrialisationRequest;
 import tn.esprit.backend_esprittech.dto.industrialisation.SubmitIndustrialisationRequest;
-import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
-import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.critereeval.ResultatCritereResponse;
 import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
-import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.entity.critereeval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.CandidatureIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.OrientationIndustrialisation;
@@ -48,7 +48,7 @@ import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueReposit
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
 import tn.esprit.backend_esprittech.service.notification.NotificationService;
@@ -1060,7 +1060,7 @@ class IndustrialisationServiceTest {
         when(projetCatalogueRepository.findById(55L)).thenReturn(Optional.of(catalogue));
         when(candidatureRepository.findByProjetCatalogueIdOrderByDateDemandeDesc(55L)).thenReturn(List.of());
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
-                .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
+                .thenThrow(new tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException("none"));
         when(candidatureRepository.save(any(CandidatureIndustrialisation.class))).thenAnswer(invocation -> {
             CandidatureIndustrialisation saved = invocation.getArgument(0);
             saved.setId(18L);
@@ -1180,7 +1180,7 @@ class IndustrialisationServiceTest {
                 .thenReturn(new PagedResponse<>(List.of(), 0, 20, 0, 0, true, true));
         when(livrableCatalogueService.findPublishedForPublicCatalogue(55L)).thenReturn(List.of());
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
-                .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
+                .thenThrow(new tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException("none"));
 
         var response = industrialisationService.decideNoGo(18L, new DecisionNoGoRequest("refus catalogue"));
 
@@ -1218,7 +1218,7 @@ class IndustrialisationServiceTest {
         when(questionRepository.findByActifTrueOrderByOrdreAsc()).thenReturn(List.of());
         when(reponseRepository.findByCandidatureIndustrialisationId(18L)).thenReturn(List.of());
         when(evaluationService.getLatestEvaluationByProjetCatalogue(55L))
-                .thenThrow(new tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException("none"));
+                .thenThrow(new tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException("none"));
         when(projetCatalogueRepository.save(catalogue)).thenReturn(catalogue);
         when(candidatureRepository.save(converted)).thenReturn(converted);
         when(userRepository.findByRole(Role.ROLE_CI)).thenReturn(List.of(ci));

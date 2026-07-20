@@ -1,7 +1,7 @@
 package tn.esprit.backend_esprittech.dto.industrialisation;
 
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
-import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
 import tn.esprit.backend_esprittech.entity.industrialisation.OrientationIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.StatutIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.TypeIndustrialisation;

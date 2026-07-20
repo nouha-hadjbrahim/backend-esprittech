@@ -6,7 +6,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tn.esprit.backend_esprittech.config.ApplicationContextProvider;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.StatutSujet;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 
 public class SujetProjetEvaluationListener {
 

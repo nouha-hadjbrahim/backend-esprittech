@@ -10,10 +10,10 @@ import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.industrialisation.*;
 import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
-import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
-import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
-import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
-import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
+import tn.esprit.backend_esprittech.dto.critereeval.EvaluationResponse;
+import tn.esprit.backend_esprittech.dto.critereeval.ResultatCritereResponse;
+import tn.esprit.backend_esprittech.entity.critereeval.ReponseEliminatoire;
+import tn.esprit.backend_esprittech.entity.critereeval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.*;
 import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
@@ -35,7 +35,7 @@ import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustri
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
-import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
+import tn.esprit.backend_esprittech.service.critereeval.EvaluationService;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
@@ -560,7 +560,7 @@ public class IndustrialisationService {
         if (typeError != null) {
             return typeError;
         }
-        if (question.getTypeCritere() == tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere.ELIMINATOIRE
+        if (question.getTypeCritere() == tn.esprit.backend_esprittech.entity.critereeval.TypeCritere.ELIMINATOIRE
                 && IndustrialisationQuestionEvaluator.eliminatoryResult(question, reponse) == null) {
             return "Reponse eliminatoire OK/NOT_OK manquante pour: " + question.getLibelle();
         }
@@ -874,7 +874,7 @@ public class IndustrialisationService {
     private EvaluationResponse findLatestEvaluation(Long projetId) {
         try {
             return evaluationService.getLatestEvaluationByProjet(projetId);
-        } catch (tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException
+        } catch (tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException
                  | ResourceNotFoundException ex) {
             return null;
         }
@@ -883,7 +883,7 @@ public class IndustrialisationService {
     private EvaluationResponse findLatestEvaluationForCatalogue(ProjetCatalogue projet) {
         try {
             return evaluationService.getLatestEvaluationByProjetCatalogue(projet.getId());
-        } catch (tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException
+        } catch (tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException
                  | ResourceNotFoundException ex) {
             return null;
         }

@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
-import tn.esprit.backend_esprittech.entity.CritereEval.NoteLevel;
-import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
-import tn.esprit.backend_esprittech.repository.CritereEval.NoteLevelRepository;
+import tn.esprit.backend_esprittech.entity.critereeval.CritereNote;
+import tn.esprit.backend_esprittech.entity.critereeval.NoteLevel;
+import tn.esprit.backend_esprittech.repository.critereeval.CritereNoteRepository;
+import tn.esprit.backend_esprittech.repository.critereeval.NoteLevelRepository;
 
 import java.util.List;
 

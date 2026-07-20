@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tn.esprit.backend_esprittech.entity.CritereEval.CritereNote;
-import tn.esprit.backend_esprittech.repository.CritereEval.CritereNoteRepository;
-import tn.esprit.backend_esprittech.repository.CritereEval.NoteLevelRepository;
+import tn.esprit.backend_esprittech.entity.critereeval.CritereNote;
+import tn.esprit.backend_esprittech.repository.critereeval.CritereNoteRepository;
+import tn.esprit.backend_esprittech.repository.critereeval.NoteLevelRepository;
 
 import java.util.List;
 
