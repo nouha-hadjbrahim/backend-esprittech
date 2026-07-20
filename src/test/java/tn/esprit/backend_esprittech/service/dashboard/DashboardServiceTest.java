@@ -147,6 +147,7 @@ class DashboardServiceTest {
         assertEquals(812L, response.etudiants());
         assertEquals(20L, response.encadrants());
         assertEquals(8L, response.equipesRdi());
+        assertEquals(6L, response.industrialises());
     }
 
     @Test

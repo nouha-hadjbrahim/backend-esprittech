@@ -81,8 +81,9 @@ public class DashboardService {
         long encadrants = userRepository.countByRole(Role.ROLE_ENSEIGNANT)
                 + userRepository.countByRole(Role.ROLE_CHEF_EQUIPE);
         long equipesRdi = equipeRechercheRepository.count();
+        long industrialises = candidatureIndustrialisationRepository.countByDecisionGoNoGoTrue();
 
-        return new AccueilStatsResponse(projetsActifs, etudiants, encadrants, equipesRdi);
+        return new AccueilStatsResponse(projetsActifs, etudiants, encadrants, equipesRdi, industrialises);
     }
 
     public DashboardResponse getDashboard() {

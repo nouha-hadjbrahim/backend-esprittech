@@ -4,5 +4,6 @@ public record AccueilStatsResponse(
         long projetsActifs,
         long etudiants,
         long encadrants,
-        long equipesRdi
+        long equipesRdi,
+        long industrialises
 ) {}
