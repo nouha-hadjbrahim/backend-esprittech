@@ -24,6 +24,7 @@ import tn.esprit.backend_esprittech.enums.StatutAffectation;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
+import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.TerminaisonSujetRequest;
 import tn.esprit.backend_esprittech.service.UserService;
@@ -74,6 +75,7 @@ public class SujetProjetService {
     private final SujetReferenceService referenceService;
     private final EquipeRechercheRepository equipeRechercheRepository;
     private final AffectationRepository affectationRepository;
+    private final CandidatureRepository candidatureRepository;
     private final ProjetCatalogueService projetCatalogueService;
     private final NotificationService notificationService;
 
@@ -84,6 +86,7 @@ public class SujetProjetService {
                               SujetReferenceService referenceService,
                               EquipeRechercheRepository equipeRechercheRepository,
                               AffectationRepository affectationRepository,
+                              CandidatureRepository candidatureRepository,
                               ProjetCatalogueService projetCatalogueService,
                               NotificationService notificationService) {
         this.sujetProjetRepository = sujetProjetRepository;
@@ -93,6 +96,7 @@ public class SujetProjetService {
         this.referenceService = referenceService;
         this.equipeRechercheRepository = equipeRechercheRepository;
         this.affectationRepository = affectationRepository;
+        this.candidatureRepository = candidatureRepository;
         this.projetCatalogueService = projetCatalogueService;
         this.notificationService = notificationService;
     }
@@ -239,12 +243,21 @@ public class SujetProjetService {
         boolean isOwner = sujet.getEncadrantId().equals(current.getId());
         boolean isPublic = sujet.getCatalogue() && STATUTS_DISPONIBLES.contains(sujet.getStatut());
         boolean isChefValidator = canChefAccessSujet(current, sujet);
+        // Étudiant ayant candidaté / été affecté : accès lecture même après terminaison / publication catalogue.
+        boolean isRelatedStudent = isRelatedStudentOnSujet(sujet.getId(), current.getId());
 
-        if (!isOwner && !isPublic && !isChefValidator) {
+        if (!isOwner && !isPublic && !isChefValidator && !isRelatedStudent) {
             throw new AccessDeniedException("Accès refusé à ce sujet");
         }
 
         return toResponse(sujet);
+    }
+
+    private boolean isRelatedStudentOnSujet(Long sujetId, Long userId) {
+        if (candidatureRepository.findBySujetIdAndEtudiantId(sujetId, userId).isPresent()) {
+            return true;
+        }
+        return affectationRepository.findBySujetIdAndEtudiantId(sujetId, userId).isPresent();
     }
 
     @Transactional(readOnly = true)
