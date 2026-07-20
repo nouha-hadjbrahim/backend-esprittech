@@ -38,6 +38,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class IndustrialisationScoreService {
+    private static final String CATEGORIE_CRITERES_NOTES = "CRITERES_NOTES";
+
 
     private static final double QUESTIONS_WEIGHT = 0.0;
     private static final double LIVRABLES_WEIGHT = 0.0;
@@ -334,7 +336,7 @@ public class IndustrialisationScoreService {
             Double snapshot = project.scoreSnapshot();
             if (snapshot != null) {
                 details.add(new ScoreBreakdownDto(
-                        "CRITERES_NOTES",
+                        CATEGORIE_CRITERES_NOTES,
                         "SNAPSHOT",
                         "Score evaluation projet",
                         round(snapshot),
@@ -355,7 +357,7 @@ public class IndustrialisationScoreService {
             }
             elementsManquants.add("Evaluation projet absente.");
             details.add(new ScoreBreakdownDto(
-                    "CRITERES_NOTES",
+                    CATEGORIE_CRITERES_NOTES,
                     "EVALUATION",
                     "Evaluation projet",
                     0.0,
@@ -370,7 +372,7 @@ public class IndustrialisationScoreService {
         Evaluation evaluation = latestEvaluation.get();
         if (evaluation.getFinalValidatedScore() != null) {
             details.add(new ScoreBreakdownDto(
-                    "CRITERES_NOTES",
+                    CATEGORIE_CRITERES_NOTES,
                     String.valueOf(evaluation.getId()),
                     "Score final valide",
                     round(evaluation.getFinalValidatedScore()),
@@ -407,7 +409,7 @@ public class IndustrialisationScoreService {
             weightedScores += normalized * weight;
             totalWeight += weight;
             details.add(new ScoreBreakdownDto(
-                    "CRITERES_NOTES",
+                    CATEGORIE_CRITERES_NOTES,
                     String.valueOf(resultat.getCritereId()),
                     resultat.getCritereLibelle(),
                     round(normalized),
@@ -424,7 +426,7 @@ public class IndustrialisationScoreService {
             return new ComponentScore(round(weightedScores / totalWeight), true);
         }
         details.add(new ScoreBreakdownDto(
-                "CRITERES_NOTES",
+                CATEGORIE_CRITERES_NOTES,
                 String.valueOf(evaluation.getId()),
                 "Evaluation projet",
                 round(nullToZero(evaluation.getScoreFinal())),

@@ -45,6 +45,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class CandidatureService {
+    private static final String VALEUR_INCONNU = "Inconnu";
+    private static final String LIEN_MES_CANDIDATURES = "/frontoffice/mes-candidatures";
+
 
     private final CandidatureRepository candidatureRepository;
     private final AffectationRepository affectationRepository;
@@ -116,19 +119,19 @@ public class CandidatureService {
 
     public String getCandidatureLabel(Long id) {
         Candidature c = candidatureRepository.findById(id).orElse(null);
-        if (c == null) return "Inconnu";
+        if (c == null) return VALEUR_INCONNU;
         SujetProjet sujet = sujetProjetRepository.findById(c.getSujetId()).orElse(null);
-        String etudiantNom = c.getEtudiant() != null ? c.getEtudiant().getPrenom() + " " + c.getEtudiant().getNom() : "Inconnu";
-        String sujetTitre = sujet != null ? sujet.getTitre() : "Inconnu";
+        String etudiantNom = c.getEtudiant() != null ? c.getEtudiant().getPrenom() + " " + c.getEtudiant().getNom() : VALEUR_INCONNU;
+        String sujetTitre = sujet != null ? sujet.getTitre() : VALEUR_INCONNU;
         return etudiantNom + " - sujet " + sujetTitre;
     }
 
     public String getAffectationLabel(Long id) {
         Affectation a = affectationRepository.findById(id).orElse(null);
-        if (a == null) return "Inconnu";
+        if (a == null) return VALEUR_INCONNU;
         SujetProjet sujet = sujetProjetRepository.findById(a.getSujetId()).orElse(null);
-        String etudiantNom = a.getEtudiant() != null ? a.getEtudiant().getPrenom() + " " + a.getEtudiant().getNom() : "Inconnu";
-        String sujetTitre = sujet != null ? sujet.getTitre() : "Inconnu";
+        String etudiantNom = a.getEtudiant() != null ? a.getEtudiant().getPrenom() + " " + a.getEtudiant().getNom() : VALEUR_INCONNU;
+        String sujetTitre = sujet != null ? sujet.getTitre() : VALEUR_INCONNU;
         return etudiantNom + " - sujet " + sujetTitre;
     }
 
@@ -200,7 +203,7 @@ public class CandidatureService {
                     NotificationType.CANDIDATURE_ACCEPTEE,
                     "Candidature acceptee",
                     "Votre candidature sur le sujet \"" + getSujetOrThrow(candidature.getSujetId()).getTitre() + "\" a ete acceptee.",
-                    "/frontoffice/mes-candidatures");
+                    LIEN_MES_CANDIDATURES);
         } else {
             if (request.motifRefus() == null || request.motifRefus().isBlank()) {
                 throw new IllegalArgumentException("Le motif de refus est obligatoire.");
@@ -214,7 +217,7 @@ public class CandidatureService {
                     NotificationType.CANDIDATURE_REJETEE,
                     "Candidature refusee",
                     "Votre candidature sur le sujet \"" + getSujetOrThrow(candidature.getSujetId()).getTitre() + "\" a ete refusee. Motif : " + request.motifRefus(),
-                    "/frontoffice/mes-candidatures");
+                    LIEN_MES_CANDIDATURES);
         }
         return candidatureMapper.toResponse(candidatureRepository.save(candidature));
     }
@@ -243,7 +246,7 @@ public class CandidatureService {
                     NotificationType.CANDIDATURE_REJETEE,
                     "Candidature archivee",
                     "Les candidatures pour le sujet \"" + sujet.getTitre() + "\" ont ete fermees. Votre candidature a ete archivee.",
-                    "/frontoffice/mes-candidatures");
+                    LIEN_MES_CANDIDATURES);
         }
 
         sujetProjetRepository.save(sujet);
@@ -278,7 +281,7 @@ public class CandidatureService {
                 NotificationType.CANDIDATURE_REJETEE,
                 "Retrait du projet",
                 "Vous avez ete retire du projet \"" + sujet.getTitre() + "\". Motif : " + request.motifRetrait(),
-                "/frontoffice/mes-candidatures");
+                LIEN_MES_CANDIDATURES);
 
         return affectationMapper.toResponse(affectationRepository.save(affectation));
     }

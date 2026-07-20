@@ -45,6 +45,10 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class SujetProjetService {
+    private static final String MSG_SUJET_INTROUVABLE = "Sujet introuvable";
+    private static final String PREFIXE_VOTRE_SUJET = "Votre sujet \"";
+    private static final String LIEN_MES_SUJETS = "/frontoffice/sujets/mes-sujets";
+
 
     private static final List<StatutSujet> STATUTS_DISPONIBLES = List.of(
             StatutSujet.VALIDE,
@@ -210,7 +214,7 @@ public class SujetProjetService {
     @Transactional(readOnly = true)
     public SujetProjetResponse getSujetById(Long id) {
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
 
         User current = userService.getCurrentUser();
         boolean isOwner = sujet.getEncadrantId().equals(current.getId());
@@ -321,8 +325,8 @@ public class SujetProjetService {
                 sujet.getEncadrantId(),
                 NotificationType.SUJET_VALIDE,
                 "Sujet accepté",
-                "Votre sujet \"" + sujet.getTitre() + "\" a été accepté par le chef d'équipe. Vous pouvez ouvrir les candidatures quand vous le souhaitez.",
-                "/frontoffice/sujets/mes-sujets");
+                PREFIXE_VOTRE_SUJET + sujet.getTitre() + "\" a été accepté par le chef d'équipe. Vous pouvez ouvrir les candidatures quand vous le souhaitez.",
+                LIEN_MES_SUJETS);
 
         return response;
     }
@@ -347,8 +351,8 @@ public class SujetProjetService {
                 sujet.getEncadrantId(),
                 NotificationType.SUJET_REJETE,
                 "Sujet refuse",
-                "Votre sujet \"" + sujet.getTitre() + "\" a ete refuse. Motif : " + request.motif(),
-                "/frontoffice/sujets/mes-sujets");
+                PREFIXE_VOTRE_SUJET + sujet.getTitre() + "\" a ete refuse. Motif : " + request.motif(),
+                LIEN_MES_SUJETS);
 
         return response;
     }
@@ -358,7 +362,7 @@ public class SujetProjetService {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
         sujetProjetMapper.updateEntity(sujet, request);
         return toResponse(sujetProjetRepository.save(sujet));
     }
@@ -368,7 +372,7 @@ public class SujetProjetService {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
         sujetProjetRepository.delete(sujet);
     }
 
@@ -476,7 +480,7 @@ public class SujetProjetService {
 
     private SujetProjet findSujetForValidation(User chef, Long id) {
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
 
         if (!STATUTS_A_VALIDER.contains(sujet.getStatut())) {
             throw new IllegalArgumentException("Ce sujet n'est pas en attente de validation");
@@ -605,7 +609,7 @@ public class SujetProjetService {
     public SujetProjetResponse validerSujetAsAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
 
         if (!STATUTS_A_VALIDER.contains(sujet.getStatut())) {
             throw new IllegalArgumentException("Ce sujet n'est pas en attente de validation");
@@ -622,8 +626,8 @@ public class SujetProjetService {
                 sujet.getEncadrantId(),
                 NotificationType.SUJET_VALIDE,
                 "Sujet accepté",
-                "Votre sujet \"" + sujet.getTitre() + "\" a été accepté par un administrateur. Vous pouvez ouvrir les candidatures quand vous le souhaitez.",
-                "/frontoffice/sujets/mes-sujets");
+                PREFIXE_VOTRE_SUJET + sujet.getTitre() + "\" a été accepté par un administrateur. Vous pouvez ouvrir les candidatures quand vous le souhaitez.",
+                LIEN_MES_SUJETS);
 
         return response;
     }
@@ -632,7 +636,7 @@ public class SujetProjetService {
     public SujetProjetResponse invaliderSujetAsAdmin(Long id, SujetInvalidationRequest request) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
 
         if (!STATUTS_A_VALIDER.contains(sujet.getStatut())) {
             throw new IllegalArgumentException("Ce sujet n'est pas en attente de validation");
@@ -649,8 +653,8 @@ public class SujetProjetService {
                 sujet.getEncadrantId(),
                 NotificationType.SUJET_REJETE,
                 "Sujet refuse par admin",
-                "Votre sujet \"" + sujet.getTitre() + "\" a ete refuse par un administrateur. Motif : " + request.motif(),
-                "/frontoffice/sujets/mes-sujets");
+                PREFIXE_VOTRE_SUJET + sujet.getTitre() + "\" a ete refuse par un administrateur. Motif : " + request.motif(),
+                LIEN_MES_SUJETS);
 
         return response;
     }
@@ -659,7 +663,7 @@ public class SujetProjetService {
     public SujetProjetResponse getSujetForAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
         return toResponse(sujet);
     }
 
@@ -667,7 +671,7 @@ public class SujetProjetService {
     public SujetProjetResponse modifierSujetAsAdmin(Long id, SujetProjetRequest request) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
         sujetProjetMapper.updateEntity(sujet, request);
         return toResponse(sujetProjetRepository.save(sujet));
     }
@@ -676,7 +680,7 @@ public class SujetProjetService {
     public void supprimerSujetAsAdmin(Long id) {
         getCurrentAdmin();
         SujetProjet sujet = sujetProjetRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
         sujetProjetRepository.delete(sujet);
     }
 
@@ -725,7 +729,7 @@ public class SujetProjetService {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
-                .orElseThrow(() -> new IllegalArgumentException("Sujet introuvable"));
+                .orElseThrow(() -> new IllegalArgumentException(MSG_SUJET_INTROUVABLE));
 
         if (sujet.getStatut() != StatutSujet.REALISATION_EN_COURS) {
             throw new IllegalStateException("Impossible de déclarer la terminaison : le sujet n'est pas en cours de réalisation.");

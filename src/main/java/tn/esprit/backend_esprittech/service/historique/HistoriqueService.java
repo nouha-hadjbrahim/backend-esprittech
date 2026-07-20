@@ -33,6 +33,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class HistoriqueService {
+    private static final String TYPE_SUJET = "SUJET";
+
 
     public record LogRequest(
             ActionType action,
@@ -115,7 +117,7 @@ public class HistoriqueService {
         String normalized = filter == null || filter.isBlank() ? "TOUT" : filter.trim().toUpperCase();
         List<Historique> events = new ArrayList<>();
 
-        if ("TOUT".equals(normalized) || "SUJET".equals(normalized)) {
+        if ("TOUT".equals(normalized) || TYPE_SUJET.equals(normalized)) {
             events.addAll(repository.findAllBySujetProjetId(sujetId));
         }
 
@@ -132,13 +134,13 @@ public class HistoriqueService {
                 candidatureEvents = candidatureEvents.stream()
                         .filter(h -> h.getAction() == ActionType.ACCEPT || h.getAction() == ActionType.REFUSE)
                         .toList();
-            } else if ("SUJET".equals(normalized)) {
+            } else if (TYPE_SUJET.equals(normalized)) {
                 candidatureEvents = candidatureEvents.stream()
                         .filter(h -> h.getAction() != ActionType.ACCEPT && h.getAction() != ActionType.REFUSE)
                         .toList();
             }
 
-            if ("TOUT".equals(normalized) || "SUJET".equals(normalized) || "CANDIDATURE".equals(normalized)) {
+            if ("TOUT".equals(normalized) || TYPE_SUJET.equals(normalized) || "CANDIDATURE".equals(normalized)) {
                 events.addAll(candidatureEvents);
             }
         }

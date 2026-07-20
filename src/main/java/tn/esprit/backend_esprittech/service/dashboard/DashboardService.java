@@ -30,23 +30,28 @@ import org.springframework.data.domain.PageRequest;
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
+    private static final String TYPE_VALIDATION = "validation";
+    private static final String TYPE_REFUS = "refus";
+    private static final String TYPE_EN_ATTENTE = "en_attente";
+    private static final String PREFIXE_IL_Y_A = "Il y a ";
+
 
     private static final List<StatutSujet> SUJET_STATUTS_EN_ATTENTE =
             List.of(StatutSujet.SOUMIS_EN_VALIDATION, StatutSujet.EN_ATTENTE);
 
     private static final Map<ActionType, String> ACTIVITY_TYPE_MAP = Map.ofEntries(
-            Map.entry(ActionType.VALIDATE, "validation"),
-            Map.entry(ActionType.INVALIDATE, "refus"),
+            Map.entry(ActionType.VALIDATE, TYPE_VALIDATION),
+            Map.entry(ActionType.INVALIDATE, TYPE_REFUS),
             Map.entry(ActionType.ACCEPT, "acceptation"),
-            Map.entry(ActionType.REFUSE, "refus"),
-            Map.entry(ActionType.DECISION_GO, "validation"),
-            Map.entry(ActionType.DECISION_NOGO, "refus"),
+            Map.entry(ActionType.REFUSE, TYPE_REFUS),
+            Map.entry(ActionType.DECISION_GO, TYPE_VALIDATION),
+            Map.entry(ActionType.DECISION_NOGO, TYPE_REFUS),
             Map.entry(ActionType.CREATE, "creation"),
-            Map.entry(ActionType.DEMANDER_AFFILIATION, "en_attente"),
-            Map.entry(ActionType.TRAITER_AFFILIATION, "validation"),
-            Map.entry(ActionType.AJOUTER_MEMBRE, "validation"),
-            Map.entry(ActionType.RETIRER_MEMBRE, "refus"),
-            Map.entry(ActionType.SUBMIT, "en_attente")
+            Map.entry(ActionType.DEMANDER_AFFILIATION, TYPE_EN_ATTENTE),
+            Map.entry(ActionType.TRAITER_AFFILIATION, TYPE_VALIDATION),
+            Map.entry(ActionType.AJOUTER_MEMBRE, TYPE_VALIDATION),
+            Map.entry(ActionType.RETIRER_MEMBRE, TYPE_REFUS),
+            Map.entry(ActionType.SUBMIT, TYPE_EN_ATTENTE)
     );
 
     private static final Map<Role, String> ROLE_FRENCH_MAP = Map.of(
@@ -267,7 +272,7 @@ public class DashboardService {
                     ? h.getSummary()
                     : h.getAction().name() + " " + h.getEntityType().name().toLowerCase();
             String relativeTime = computeRelativeTime(h.getCreatedAt());
-            String type = ACTIVITY_TYPE_MAP.getOrDefault(h.getAction(), "en_attente");
+            String type = ACTIVITY_TYPE_MAP.getOrDefault(h.getAction(), TYPE_EN_ATTENTE);
             return new RecentActivityItem(h.getId(), message, actorName, relativeTime, type);
         }).toList();
     }
@@ -277,13 +282,13 @@ public class DashboardService {
         long seconds = duration.getSeconds();
         if (seconds < 60) return "À l'instant";
         long minutes = seconds / 60;
-        if (minutes < 60) return "Il y a " + minutes + " min";
+        if (minutes < 60) return PREFIXE_IL_Y_A + minutes + " min";
         long hours = minutes / 60;
-        if (hours < 24) return "Il y a " + hours + "h";
+        if (hours < 24) return PREFIXE_IL_Y_A + hours + "h";
         long days = hours / 24;
-        if (days < 30) return "Il y a " + days + "j";
+        if (days < 30) return PREFIXE_IL_Y_A + days + "j";
         long months = days / 30;
-        if (months < 12) return "Il y a " + months + "mois";
-        return "Il y a " + (months / 12) + "ans";
+        if (months < 12) return PREFIXE_IL_Y_A + months + "mois";
+        return PREFIXE_IL_Y_A + (months / 12) + "ans";
     }
 }

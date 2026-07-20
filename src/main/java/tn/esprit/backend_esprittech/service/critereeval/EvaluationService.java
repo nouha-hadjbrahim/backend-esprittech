@@ -85,6 +85,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class EvaluationService {
+    private static final String VERSION_MOTEUR_ML = "multimodal-semantic-v2";
+    private static final String MSG_PROJET_INTROUVABLE = "Projet introuvable avec id: ";
+    private static final String MSG_AUCUNE_EVALUATION = "Aucune evaluation trouvee pour le projet id: ";
+    private static final String SUFFIXE_SUR_CENT = "/100.";
+    private static final String PREFIXE_EVALUATION_PROJET = "L'evaluation de votre projet \"";
+    private static final String LIEN_MES_PROJETS = "/frontoffice/mes-projets";
+    private static final String STATUT_NOT_OK = "NOT_OK";
+    private static final String STATUT_INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE";
+    private static final String STATUT_INDETERMINATE = "INDETERMINATE";
+    private static final String STATUT_FAILED_RETRYABLE = "FAILED_RETRYABLE";
+    private static final String STATUT_CONFIGURATION_INCOMPLETE = "CONFIGURATION_INCOMPLETE";
+
 
     private final SujetProjetRepository sujetProjetRepository;
     private final CritereEliminatoireRepository critereEliminatoireRepository;
@@ -105,7 +117,7 @@ public class EvaluationService {
     private long recalculationCooldownSeconds;
 
     @Value("${evaluation.engine:multimodal-semantic-v2}")
-    private String evaluationEngine = "multimodal-semantic-v2";
+    private String evaluationEngine = VERSION_MOTEUR_ML;
 
     @Value("${evaluation.criteria-version:2026-07}")
     private String criteriaVersion = "2026-07";
@@ -174,11 +186,11 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public EvaluationResponse getLatestEvaluationByProjet(Long projetId) {
         SujetProjet projet = sujetProjetRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         ensureCanView(userService.getCurrentUser(), projet);
 
         Evaluation evaluation = evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_AUCUNE_EVALUATION + projetId));
 
         return toResponse(evaluation);
     }
@@ -186,7 +198,7 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public List<EvaluationResponse> getEvaluationHistoryByProjet(Long projetId) {
         SujetProjet projet = sujetProjetRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         ensureCanView(userService.getCurrentUser(), projet);
         return evaluationRepository.findBySujetProjetIdOrderByDateCalculDescIdDesc(projetId)
                 .stream()
@@ -231,7 +243,7 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public EvaluationResponse getLatestEvaluationByProjetCatalogue(Long projetId) {
         ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         ensureCanViewCatalogue(userService.getCurrentUser(), projet);
         return resolveLatestCatalogueOrSujetEvaluation(projet);
     }
@@ -243,7 +255,7 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public EvaluationResponse getLatestEvaluationForPublishedCatalogue(Long projetId) {
         ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         if (!StatutProjet.STATUTS_CATALOGUE.contains(projet.getStatut())) {
             throw new ResourceNotFoundException("Projet introuvable dans le catalogue (id=" + projetId + ")");
         }
@@ -262,13 +274,13 @@ public class EvaluationService {
                             .map(this::toResponse);
                 })
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Aucune evaluation trouvee pour le projet id: " + projet.getId()));
+                        MSG_AUCUNE_EVALUATION + projet.getId()));
     }
 
     @Transactional(readOnly = true)
     public List<EvaluationResponse> getEvaluationHistoryByProjetCatalogue(Long projetId) {
         ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         ensureCanViewCatalogue(userService.getCurrentUser(), projet);
         return evaluationRepository.findByProjetCatalogueIdOrderByDateCalculDescIdDesc(projetId)
                 .stream()
@@ -279,7 +291,7 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public EvaluationResponse getEvaluationDetailByProjetCatalogue(Long projetId, Long evaluationId) {
         ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         ensureCanViewCatalogue(userService.getCurrentUser(), projet);
         Evaluation evaluation = evaluationRepository.findByIdAndProjetCatalogueId(evaluationId, projetId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -319,8 +331,8 @@ public class EvaluationService {
                 projet.getEncadrantId(),
                 NotificationType.EVALUATION_TERMINEE,
                 "Evaluation terminee",
-                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete validee avec un score de " + evaluation.getScoreFinal() + "/100.",
-                "/frontoffice/mes-projets");
+                PREFIXE_EVALUATION_PROJET + projet.getTitre() + "\" a ete validee avec un score de " + evaluation.getScoreFinal() + SUFFIXE_SUR_CENT,
+                LIEN_MES_PROJETS);
 
         return response;
     }
@@ -343,8 +355,8 @@ public class EvaluationService {
                 projet.getEncadrantId(),
                 NotificationType.EVALUATION_TERMINEE,
                 "Evaluation refusee",
-                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete refusee.",
-                "/frontoffice/mes-projets");
+                PREFIXE_EVALUATION_PROJET + projet.getTitre() + "\" a ete refusee.",
+                LIEN_MES_PROJETS);
 
         return response;
     }
@@ -368,8 +380,8 @@ public class EvaluationService {
                 projet.getEncadrantId(),
                 NotificationType.EVALUATION_TERMINEE,
                 "Evaluation surchargee",
-                "L'evaluation de votre projet \"" + projet.getTitre() + "\" a ete surchargee avec le score " + evaluation.getFinalValidatedScore() + "/100.",
-                "/frontoffice/mes-projets");
+                PREFIXE_EVALUATION_PROJET + projet.getTitre() + "\" a ete surchargee avec le score " + evaluation.getFinalValidatedScore() + SUFFIXE_SUR_CENT,
+                LIEN_MES_PROJETS);
 
         return response;
     }
@@ -385,12 +397,12 @@ public class EvaluationService {
 
     private SujetProjet getProjet(Long projetId) {
         return sujetProjetRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
     }
 
     private Evaluation latestEvaluation(Long projetId) {
         return evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Aucune evaluation trouvee pour le projet id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_AUCUNE_EVALUATION + projetId));
     }
 
     private EvaluationData buildManualEvaluation(EvaluationRequest request) {
@@ -545,7 +557,7 @@ public class EvaluationService {
             String state = eliminatoryState(mlResult);
             ReponseEliminatoire resultatAuto = "OK".equals(state)
                     ? ReponseEliminatoire.OK
-                    : ("NOT_OK".equals(state) ? ReponseEliminatoire.NOT_OK : null);
+                    : (STATUT_NOT_OK.equals(state) ? ReponseEliminatoire.NOT_OK : null);
             resultat.setRuleConfigured(resultatAuto != null);
             resultat.setModeEvaluation(ModeEvaluation.CONTENT_ANALYSIS);
             resultat.setReponseEliminatoire(resultatAuto);
@@ -730,8 +742,8 @@ public class EvaluationService {
                     projet.getEncadrantId(),
                     NotificationType.EVALUATION_CALCULEE,
                     "Evaluation calculee",
-                    "L'evaluation automatique du projet \"" + projet.getTitre() + "\" est terminee. Score : " + String.format("%.1f", data.scoreFinal()) + "/100.",
-                    "/frontoffice/mes-projets");
+                    "L'evaluation automatique du projet \"" + projet.getTitre() + "\" est terminee. Score : " + String.format("%.1f", data.scoreFinal()) + SUFFIXE_SUR_CENT,
+                    LIEN_MES_PROJETS);
         }
 
         return toResponse(savedEvaluation);
@@ -1146,8 +1158,8 @@ public class EvaluationService {
                 && !request.inputSnapshotHash().equals(response.inputSnapshotHash())) {
             throw new BusinessException("La reponse ML ne correspond pas au snapshot demande.");
         }
-        if ("multimodal-semantic-v2".equals(request.engineVersion())
-                && !"multimodal-semantic-v2".equals(response.effectivePipelineVersion())) {
+        if (VERSION_MOTEUR_ML.equals(request.engineVersion())
+                && !VERSION_MOTEUR_ML.equals(response.effectivePipelineVersion())) {
             throw new BusinessException("La version de pipeline ML est invalide.");
         }
 
@@ -1178,11 +1190,11 @@ public class EvaluationService {
                 .collect(Collectors.toSet());
         response.effectiveResults().forEach(result -> {
             boolean scoreMissingAllowed = Set.of(
-                            "INSUFFICIENT_EVIDENCE",
-                            "INDETERMINATE",
+                            STATUT_INSUFFICIENT_EVIDENCE,
+                            STATUT_INDETERMINATE,
                             "MODEL_UNAVAILABLE",
-                            "FAILED_RETRYABLE",
-                            "CONFIGURATION_INCOMPLETE"
+                            STATUT_FAILED_RETRYABLE,
+                            STATUT_CONFIGURATION_INCOMPLETE
                     )
                     .contains(safeUpper(result.status()));
             if (scoreMissingAllowed && (result.normalizedScore() != null || result.score() != null)) {
@@ -1227,7 +1239,7 @@ public class EvaluationService {
                 }
             }
             if (eliminatoryIds.contains(result.criterionId())
-                    && "NOT_OK".equals(safeUpper(result.eliminatoryState()))
+                    && STATUT_NOT_OK.equals(safeUpper(result.eliminatoryState()))
                     && !hasConfirmedNegativeEvidence(result)) {
                 throw new BusinessException("La reponse ML declare NOT_OK sans preuve negative confirmee pour le critere " + result.criterionId());
             }
@@ -1263,7 +1275,7 @@ public class EvaluationService {
 
     private List<String> criterionWeaknesses(MlCriterionResult mlResult) {
         List<String> values = new ArrayList<>(safeList(mlResult.weaknesses()));
-        if ("CONFIGURATION_INCOMPLETE".equals(safeUpper(mlResult.status()))) {
+        if (STATUT_CONFIGURATION_INCOMPLETE.equals(safeUpper(mlResult.status()))) {
             values.addAll(safeList(mlResult.reasonCodes()));
         }
         return values.stream()
@@ -1276,7 +1288,7 @@ public class EvaluationService {
         if (mlResult.normalizedScore() != null) {
             return clamp01(mlResult.normalizedScore());
         }
-        if (Set.of("INSUFFICIENT_EVIDENCE", "INDETERMINATE").contains(safeUpper(mlResult.status()))) {
+        if (Set.of(STATUT_INSUFFICIENT_EVIDENCE, STATUT_INDETERMINATE).contains(safeUpper(mlResult.status()))) {
             return null;
         }
         double maxScore = nullToZero(mlResult.maxScore());
@@ -1291,8 +1303,8 @@ public class EvaluationService {
             return null;
         }
         String status = safeUpper(mlResult == null ? null : mlResult.status());
-        if (Set.of("INSUFFICIENT_EVIDENCE", "INDETERMINATE", "MODEL_UNAVAILABLE", "FAILED_RETRYABLE",
-                        "FAILED_PERMANENT", "NOT_EVALUABLE_NO_DELIVERABLE", "CONFIGURATION_INCOMPLETE")
+        if (Set.of(STATUT_INSUFFICIENT_EVIDENCE, STATUT_INDETERMINATE, "MODEL_UNAVAILABLE", STATUT_FAILED_RETRYABLE,
+                        "FAILED_PERMANENT", "NOT_EVALUABLE_NO_DELIVERABLE", STATUT_CONFIGURATION_INCOMPLETE)
                 .contains(status)) {
             return null;
         }
@@ -1426,26 +1438,26 @@ public class EvaluationService {
 
     private String eliminatoryState(MlCriterionResult mlResult) {
         String state = safeUpper(mlResult.eliminatoryState());
-        if (Set.of("OK", "NOT_OK", "INDETERMINATE", "NOT_APPLICABLE").contains(state)) {
+        if (Set.of("OK", STATUT_NOT_OK, STATUT_INDETERMINATE, "NOT_APPLICABLE").contains(state)) {
             return state;
         }
         if (Boolean.TRUE.equals(mlResult.satisfied())) {
             return "OK";
         }
         if (Boolean.FALSE.equals(mlResult.satisfied())) {
-            return "NOT_OK";
+            return STATUT_NOT_OK;
         }
         String status = safeUpper(mlResult.status());
-        if (Set.of("OK", "NOT_OK", "INDETERMINATE").contains(status)) {
+        if (Set.of("OK", STATUT_NOT_OK, STATUT_INDETERMINATE).contains(status)) {
             return status;
         }
-        return "INDETERMINATE";
+        return STATUT_INDETERMINATE;
     }
 
     private String eligibilityStatus(List<ResultatCritere> resultats,
                                      MlEvaluationResponse mlResponse,
                                      boolean hasConfirmedFailure) {
-        if (mlResponse != null && Set.of("FAILED_RETRYABLE", "FAILED_PERMANENT", "NOT_EVALUABLE_NO_DELIVERABLE")
+        if (mlResponse != null && Set.of(STATUT_FAILED_RETRYABLE, "FAILED_PERMANENT", "NOT_EVALUABLE_NO_DELIVERABLE")
                 .contains(safeUpper(mlResponse.effectiveStatus()))) {
             return "NOT_EVALUABLE";
         }
@@ -1455,7 +1467,7 @@ public class EvaluationService {
         boolean indeterminate = resultats.stream()
                 .filter(resultat -> resultat.getTypeCritere() == TypeCritere.ELIMINATOIRE)
                 .anyMatch(resultat -> resultat.getReponseEliminatoire() == null
-                        || "INDETERMINATE".equals(safeUpper(resultat.getEliminatoryState())));
+                        || STATUT_INDETERMINATE.equals(safeUpper(resultat.getEliminatoryState())));
         return indeterminate ? "REVIEW_REQUIRED" : "ELIGIBLE";
     }
 
@@ -1638,7 +1650,7 @@ public class EvaluationService {
 
     private ProjetCatalogue getProjetCatalogueAndValidateValide(Long projetId) {
         ProjetCatalogue projet = projetCatalogueRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable avec id: " + projetId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROJET_INTROUVABLE + projetId));
         if (projet.getStatut() != StatutProjet.VALIDE) {
             throw new BadRequestException("Le projet doit etre valide pour etre evalue.");
         }
@@ -1832,7 +1844,7 @@ public class EvaluationService {
         int eliminatoiresIndetermines = (int) resultats.stream()
                 .filter(r -> r.typeCritere() == TypeCritere.ELIMINATOIRE)
                 .filter(r -> r.reponseEliminatoire() == null
-                        || "INDETERMINATE".equals(safeUpper(r.eliminatoryState())))
+                        || STATUT_INDETERMINATE.equals(safeUpper(r.eliminatoryState())))
                 .count();
         int eliminatoiresConfigurationIncomplete = (int) resultats.stream()
                 .filter(r -> r.typeCritere() == TypeCritere.ELIMINATOIRE)
@@ -1923,7 +1935,7 @@ public class EvaluationService {
             return false;
         }
 
-        if ("CONFIGURATION_INCOMPLETE".equals(status)) {
+        if (STATUT_CONFIGURATION_INCOMPLETE.equals(status)) {
             return true;
         }
 

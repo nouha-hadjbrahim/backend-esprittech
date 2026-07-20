@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class IndustrialisationService {
+    private static final String VALEUR_INCONNU = "Inconnu";
+
 
     private static final String MISSING_LIVRABLE_WARNING =
             "Aucun livrable nest déposé pour ce projet. La CI verra cette alerte.";
@@ -353,19 +355,19 @@ public class IndustrialisationService {
     public String getProjetTitreById(Long projetId) {
         return sujetProjetRepository.findById(projetId)
                 .map(SujetProjet::getTitre)
-                .orElse("Inconnu");
+                .orElse(VALEUR_INCONNU);
     }
 
     public String getProjetCatalogueTitreById(Long projetId) {
         return projetCatalogueRepository.findById(projetId)
                 .map(ProjetCatalogue::getTitre)
-                .orElse("Inconnu");
+                .orElse(VALEUR_INCONNU);
     }
 
     public String getProjetTitreByCandidatureId(Long candidatureId) {
         return candidatureRepository.findById(candidatureId)
                 .map(c -> c.getSujetProjet() != null ? c.getSujetProjet().getTitre() : c.getProjetCatalogue().getTitre())
-                .orElse("Inconnu");
+                .orElse(VALEUR_INCONNU);
     }
 
     public Map<String, Object> getOldValues(Long id) {

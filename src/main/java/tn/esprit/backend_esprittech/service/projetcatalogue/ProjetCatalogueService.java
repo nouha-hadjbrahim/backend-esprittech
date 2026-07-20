@@ -60,6 +60,8 @@ import java.util.Set;
 @Service
 @Transactional
 public class ProjetCatalogueService {
+    private static final String TYPE_IMAGE_JPEG = "image/jpeg";
+
 
     private final ProjetCatalogueRepository projetRepository;
     private final ProjetCatalogueMapper mapper;
@@ -485,7 +487,7 @@ public class ProjetCatalogueService {
     }
 
     /** Types MIME autorisés pour l'image de couverture. */
-    private static final Set<String> ALLOWED_COVER_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
+    private static final Set<String> ALLOWED_COVER_TYPES = Set.of("image/png", TYPE_IMAGE_JPEG, "image/jpg");
 
     /**
      * Taille maximale (octets décodés) de l'image de couverture.
@@ -531,7 +533,7 @@ public class ProjetCatalogueService {
             throw new BusinessException("Format d'image non autorisé. Formats acceptés : PNG, JPG.");
         }
         projet.setCoverImage(bytes);
-        projet.setCoverImageContentType("image/jpg".equals(type) ? "image/jpeg" : type);
+        projet.setCoverImageContentType("image/jpg".equals(type) ? TYPE_IMAGE_JPEG : type);
     }
 
     private String detectImageContentType(byte[] bytes) {
@@ -539,7 +541,7 @@ public class ProjetCatalogueService {
                 && (bytes[0] & 0xFF) == 0xFF
                 && (bytes[1] & 0xFF) == 0xD8
                 && (bytes[2] & 0xFF) == 0xFF) {
-            return "image/jpeg";
+            return TYPE_IMAGE_JPEG;
         }
         if (bytes.length >= 8
                 && (bytes[0] & 0xFF) == 0x89

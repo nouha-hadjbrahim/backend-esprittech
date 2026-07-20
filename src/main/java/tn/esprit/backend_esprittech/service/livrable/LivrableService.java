@@ -38,6 +38,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class LivrableService {
+    private static final String MSG_NOM_LIVRABLE_OBLIGATOIRE = "Le nom du livrable est obligatoire.";
+
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             "pdf", "doc", "docx", "png", "jpg", "jpeg", "txt", "md", "markdown", "html", "htm", "json", "xml", "lcov"
@@ -78,7 +80,7 @@ public class LivrableService {
         SujetProjet projet = getProjet(projetId);
         ensureCanDeposit(current, projet);
         validateFile(file);
-        validateText(nom, "Le nom du livrable est obligatoire.");
+        validateText(nom, MSG_NOM_LIVRABLE_OBLIGATOIRE);
 
         String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
         String objectName = buildObjectName(projetId, originalFileName);
@@ -103,7 +105,7 @@ public class LivrableService {
         User current = userService.getCurrentUser();
         SujetProjet projet = getProjet(projetId);
         ensureCanDeposit(current, projet);
-        validateText(request.nom(), "Le nom du livrable est obligatoire.");
+        validateText(request.nom(), MSG_NOM_LIVRABLE_OBLIGATOIRE);
         validateUrl(request.lienExterne());
 
         Livrable livrable = new Livrable();
@@ -163,7 +165,7 @@ public class LivrableService {
     public LivrableResponse update(Long id, LivrableUpdateRequest request) {
         Livrable livrable = getLivrable(id);
         ensureCanManage(userService.getCurrentUser(), livrable.getSujetProjet());
-        validateText(request.nom(), "Le nom du livrable est obligatoire.");
+        validateText(request.nom(), MSG_NOM_LIVRABLE_OBLIGATOIRE);
         if (StringUtils.hasText(request.lienExterne())) {
             validateUrl(request.lienExterne());
         }

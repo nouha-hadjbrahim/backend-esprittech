@@ -38,6 +38,8 @@ import java.util.Set;
  */
 @Service
 public class EquipeRechercheService {
+    private static final String LIEN_EQUIPES_RECHERCHE = "/frontoffice/equipes-recherche/";
+
 
     private final EquipeRechercheRepository equipeRepository;
     private final UserRepository userRepository;
@@ -157,7 +159,7 @@ public class EquipeRechercheService {
                 NotificationType.EQUIPE_INVITATION,
                 "Chef d'equipe designé",
                 "Vous etes maintenant chef de l'equipe \"" + equipe.getNom() + "\".",
-                "/frontoffice/equipes-recherche/" + equipeId);
+                LIEN_EQUIPES_RECHERCHE + equipeId);
 
         return equipeMapper.toResponse(equipe, compterMembres(equipe));
     }
@@ -178,7 +180,7 @@ public class EquipeRechercheService {
                         NotificationType.EQUIPE_REJOINTE,
                         "Ajout dans une equipe",
                         "Vous avez ete ajoute a l'equipe \"" + equipe.getNom() + "\".",
-                        "/frontoffice/equipes-recherche/" + equipeId);
+                        LIEN_EQUIPES_RECHERCHE + equipeId);
             }
         }
 
@@ -220,7 +222,7 @@ public class EquipeRechercheService {
                 NotificationType.EQUIPE_INVITATION,
                 "Retrait de l'equipe",
                 "Vous avez ete retire de l'equipe \"" + equipe.getNom() + "\".",
-                "/frontoffice/equipes-recherche/" + equipeId);
+                LIEN_EQUIPES_RECHERCHE + equipeId);
 
         return equipeMapper.toResponse(saved, compterMembres(equipe));
     }
@@ -242,7 +244,7 @@ public class EquipeRechercheService {
                     NotificationType.EQUIPE_INVITATION,
                     "Retrait du role de chef",
                     "Vous n'etes plus chef de l'equipe \"" + equipe.getNom() + "\".",
-                    "/frontoffice/equipes-recherche/" + equipeId);
+                    LIEN_EQUIPES_RECHERCHE + equipeId);
         }
         return equipeMapper.toResponse(saved, compterMembres(equipe));
     }
