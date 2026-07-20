@@ -100,30 +100,6 @@ public class SujetProjet {
     @Column(columnDefinition = "TEXT")
     private String motifInvalidation;
 
-    public SujetProjet(long id, String titre, CategorieSujet categorie, String description, String objectifs, String prerequis, String domaine, String technologies, int capaciteAccueil, StatutSujet statut, double scoreFinalEvaluation, boolean bloqueParEliminatoire, boolean eligibleIndustrialisation, long encadrantId, LocalDateTime dateCreation, LocalDateTime dateSoumission, LocalDateTime dateValidation, LocalDateTime dateDebutRealisation, LocalDateTime dateTerminaison, String motifInvalidation) {
-        this.id = id;
-        this.titre = titre;
-        this.categorie = categorie;
-        this.description = description;
-        this.objectifs = objectifs;
-        this.prerequis = prerequis;
-        this.domaine = domaine;
-        this.technologies = technologies;
-        this.capaciteAccueil = capaciteAccueil;
-        this.statut = statut;
-        this.scoreFinalEvaluation = scoreFinalEvaluation;
-        this.bloqueParEliminatoire = bloqueParEliminatoire;
-        this.eligibleIndustrialisation = eligibleIndustrialisation;
-        this.catalogue = false;
-        this.encadrantId = encadrantId;
-        this.dateCreation = dateCreation;
-        this.dateSoumission = dateSoumission;
-        this.dateValidation = dateValidation;
-        this.dateDebutRealisation = dateDebutRealisation;
-        this.dateTerminaison = dateTerminaison;
-        this.motifInvalidation = motifInvalidation;
-    }
-
     @PrePersist
     void onCreate() {
         if (dateCreation == null) {

@@ -144,13 +144,17 @@ class SujetProjetTest {
     }
 
     @Test
-    void allArgsConstructor_andGettersSetters() {
+    void builder_andGettersSetters() {
         LocalDateTime now = LocalDateTime.now();
-        SujetProjet sujet = new SujetProjet(
-                1L, "Titre", CategorieSujet.RDI, "Desc", "Obj", "Pre", "Domaine",
-                "Java", 3, StatutSujet.VALIDE, 9.5, true, true, 1001L,
-                now, now, now, now, now, "Motif"
-        );
+        SujetProjet sujet = SujetProjet.builder()
+                .id(1L).titre("Titre").categorie(CategorieSujet.RDI)
+                .description("Desc").objectifs("Obj").prerequis("Pre").domaine("Domaine")
+                .technologies("Java").capaciteAccueil(3).statut(StatutSujet.VALIDE)
+                .scoreFinalEvaluation(9.5).bloqueParEliminatoire(true).eligibleIndustrialisation(true)
+                .encadrantId(1001L)
+                .dateCreation(now).dateSoumission(now).dateValidation(now)
+                .dateDebutRealisation(now).dateTerminaison(now).motifInvalidation("Motif")
+                .build();
 
         assertEquals(1L, sujet.getId());
         assertEquals("Titre", sujet.getTitre());
