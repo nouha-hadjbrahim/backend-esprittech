@@ -16,6 +16,7 @@ import tn.esprit.backend_esprittech.repository.notification.NotificationReposito
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 public class NotificationService {
@@ -61,6 +62,14 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public long getNombreNonLues(Long userId) {
         return repository.countByUserIdAndReadFalse(userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NotificationDTO> getNonLuesParType(Long userId, NotificationType type) {
+        return repository.findByUserIdAndTypeAndReadFalseOrderByCreatedAtDesc(userId, type)
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     @Transactional

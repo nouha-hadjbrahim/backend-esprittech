@@ -84,6 +84,10 @@ class DashboardServiceTest {
         lenient().when(candidatureIndustrialisationRepository.countByDecisionGoNoGoTrue()).thenReturn(6L);
         lenient().when(candidatureIndustrialisationRepository.countByDecisionGoNoGoFalse()).thenReturn(2L);
         lenient().when(candidatureIndustrialisationRepository.averageScoreEvaluationProjet()).thenReturn(78.456);
+        lenient().when(candidatureIndustrialisationRepository.countIndustrialisationsByMonth()).thenReturn(List.of());
+
+        lenient().when(sujetProjetRepository.countByCategorie(any())).thenReturn(0L);
+        lenient().when(sujetProjetRepository.countTopDomaines()).thenReturn(List.of());
 
         lenient().when(userRepository.count()).thenReturn(50L);
         lenient().when(userRepository.countByRole(Role.ROLE_ENSEIGNANT)).thenReturn(15L);
@@ -184,9 +188,12 @@ class DashboardServiceTest {
         assertNotNull(response.trendsSujets());
         assertNotNull(response.trendsCandidatures());
         assertNotNull(response.trendsEquipes());
+        assertNotNull(response.trendsIndustrialisation());
         assertNotNull(response.sujetsByStatut());
+        assertNotNull(response.sujetsByCategorie());
         assertNotNull(response.usersByRole());
         assertNotNull(response.catalogueByDomain());
+        assertNotNull(response.sujetsByDomaine());
         assertNotNull(response.recentActivity());
 
         assertEquals(50L, response.kpis().usersTotal());
@@ -206,6 +213,7 @@ class DashboardServiceTest {
         assertEquals(78.46, response.kpis().scoreMoyen());
 
         assertEquals(3, response.sujetsByStatut().size());
+        assertEquals(3, response.sujetsByCategorie().size());
         assertEquals(5, response.usersByRole().size());
         assertTrue(response.recentActivity().isEmpty());
     }

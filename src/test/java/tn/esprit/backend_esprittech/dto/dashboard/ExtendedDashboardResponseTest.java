@@ -26,17 +26,20 @@ class ExtendedDashboardResponseTest {
         List<RecentActivityItem> activity = List.of(new RecentActivityItem(1L, "msg", "actor", "now", "validation"));
 
         ExtendedDashboardResponse response = new ExtendedDashboardResponse(
-                kpis, trends, trends, trends,
-                sujets, roles, domaines, activity
+                kpis, trends, trends, trends, trends,
+                sujets, List.of(new SujetByCategorieItem("PFE", 3, "#E23E3E")), roles, domaines, domaines, activity
         );
 
         assertEquals(kpis, response.kpis());
         assertEquals(trends, response.trendsSujets());
         assertEquals(trends, response.trendsCandidatures());
+        assertEquals(trends, response.trendsIndustrialisation());
         assertEquals(trends, response.trendsEquipes());
         assertEquals(sujets, response.sujetsByStatut());
+        assertEquals(1, response.sujetsByCategorie().size());
         assertEquals(roles, response.usersByRole());
         assertEquals(domaines, response.catalogueByDomain());
+        assertEquals(domaines, response.sujetsByDomaine());
         assertEquals(activity, response.recentActivity());
     }
 
@@ -51,9 +54,9 @@ class ExtendedDashboardResponseTest {
 
         ExtendedDashboardResponse response = new ExtendedDashboardResponse(
                 kpis,
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
                 Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList()
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList()
         );
 
         assertNotNull(response.kpis());

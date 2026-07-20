@@ -8,13 +8,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import tn.esprit.backend_esprittech.entity.notification.Notification;
+import tn.esprit.backend_esprittech.enums.NotificationType;
 
 import java.time.Instant;
+import java.util.List;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
     Page<Notification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+
+    List<Notification> findByUserIdAndTypeAndReadFalseOrderByCreatedAtDesc(Long userId, NotificationType type);
 
     long countByUserIdAndReadFalse(Long userId);
 

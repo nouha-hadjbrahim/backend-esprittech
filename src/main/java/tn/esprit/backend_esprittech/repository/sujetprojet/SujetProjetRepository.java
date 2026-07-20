@@ -17,6 +17,18 @@ public interface SujetProjetRepository extends JpaRepository<SujetProjet, Long> 
 
     long countByStatut(StatutSujet statut);
 
+    long countByCategorie(CategorieSujet categorie);
+
+    @Query(value = """
+            SELECT domaine, COUNT(*) AS total
+            FROM sujet_projets
+            WHERE domaine IS NOT NULL AND TRIM(domaine) <> ''
+            GROUP BY domaine
+            ORDER BY total DESC
+            LIMIT 20
+            """, nativeQuery = true)
+    List<Object[]> countTopDomaines();
+
     @Query("SELECT FUNCTION('YEAR', s.dateCreation) as y, FUNCTION('MONTH', s.dateCreation) as m, COUNT(s) FROM SujetProjet s GROUP BY y, m ORDER BY y, m")
     List<Object[]> countSujetsByMonth();
 

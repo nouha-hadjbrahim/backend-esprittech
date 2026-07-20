@@ -103,6 +103,23 @@ class NotificationControllerTest {
     }
 
     @Test
+    void getUnreadByType_returnsFilteredList() {
+        NotificationDTO valide = new NotificationDTO(
+                2L, NotificationType.SUJET_VALIDE,
+                "Sujet accepté", "Votre sujet \"IA\" a été accepté.",
+                "/frontoffice/sujets/mes-sujets", false,
+                Instant.parse("2026-07-15T11:00:00Z"));
+        when(notificationService.getNonLuesParType(10L, NotificationType.SUJET_VALIDE))
+                .thenReturn(List.of(valide));
+
+        List<NotificationDTO> result = controller.getUnreadByType(user, NotificationType.SUJET_VALIDE);
+
+        assertEquals(1, result.size());
+        assertEquals(NotificationType.SUJET_VALIDE, result.get(0).type());
+        verify(notificationService).getNonLuesParType(10L, NotificationType.SUJET_VALIDE);
+    }
+
+    @Test
     void markAsRead_delegatesToService() {
         controller.markAsRead(1L, user);
 
