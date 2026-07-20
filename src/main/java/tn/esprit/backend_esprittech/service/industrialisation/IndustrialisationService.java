@@ -42,6 +42,7 @@ import tn.esprit.backend_esprittech.service.livrable.LivrableService;
 import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -665,8 +666,6 @@ public class IndustrialisationService {
     private CandidatureIndustrialisationResponse toResponse(CandidatureIndustrialisation candidature,
                                                             boolean includeDetails,
                                                             boolean forceMissingLivrablesWarning) {
-        SujetProjet sujetProjet = candidature.getSujetProjet();
-        ProjetCatalogue projetCatalogue = candidature.getProjetCatalogue();
         User demandeur = candidature.getDemandeur();
         User decideur = candidature.getCiDecideur();
         List<ReponseIndustrialisationResponse> reponses = includeDetails
@@ -683,101 +682,29 @@ public class IndustrialisationService {
                     .toList()
                 : List.of();
 
-        Long projetId;
-        String projetTitre;
-        StatutSujet projetStatut;
-        CategorieSujet projetCategorie;
-        String projetDomaine;
-        String projetDescription;
-        String projetObjectifs;
-        String projetTechnologies;
-        String projetPrerequis;
-        java.time.LocalDateTime projetDateCreation;
-        java.time.LocalDateTime projetDateSoumission;
-        java.time.LocalDateTime projetDateValidation;
-        java.time.LocalDateTime projetDateTerminaison;
-        Double scoreEvaluationProjet;
-        Boolean eligibleIndustrialisation;
-        Boolean bloqueParEliminatoire;
-        List<LivrableResponse> livrables;
-        EvaluationResponse latestEvaluation;
-
-        if (sujetProjet != null) {
-            projetId = sujetProjet.getId();
-            projetTitre = sujetProjet.getTitre();
-            projetStatut = sujetProjet.getStatut();
-            projetCategorie = sujetProjet.getCategorie();
-            projetDomaine = sujetProjet.getDomaine();
-            projetDescription = sujetProjet.getDescription();
-            projetObjectifs = sujetProjet.getObjectifs();
-            projetTechnologies = sujetProjet.getTechnologies();
-            projetPrerequis = sujetProjet.getPrerequis();
-            projetDateCreation = sujetProjet.getDateCreation();
-            projetDateSoumission = sujetProjet.getDateSoumission();
-            projetDateValidation = sujetProjet.getDateValidation();
-            projetDateTerminaison = sujetProjet.getDateTerminaison();
-            scoreEvaluationProjet = sujetProjet.getScoreFinalEvaluation() != null
-                    ? sujetProjet.getScoreFinalEvaluation()
-                    : candidature.getScoreEvaluationProjet();
-            eligibleIndustrialisation = sujetProjet.getEligibleIndustrialisation();
-            bloqueParEliminatoire = sujetProjet.getBloqueParEliminatoire();
-            livrables = includeDetails ? findEffectiveLivrables(candidature) : List.of();
-            latestEvaluation = includeDetails ? findLatestEvaluation(sujetProjet.getId()) : null;
-        } else if (projetCatalogue != null) {
-            projetId = projetCatalogue.getId();
-            projetTitre = projetCatalogue.getTitre();
-            // Les valeurs de StatutProjet/CategorieSujet portent les memes noms que StatutSujet/CategorieSujet :
-            // on reutilise ces enums cote reponse pour ne pas dupliquer le DTO pour les deux sources possibles.
-            projetStatut = StatutSujet.valueOf(projetCatalogue.getStatut().name());
-            projetCategorie = CategorieSujet.valueOf(projetCatalogue.getTypeProjet().name());
-            projetDomaine = joinNoms(projetCatalogue.getDomaines().stream().map(d -> d.getNom()));
-            projetDescription = projetCatalogue.getDescription();
-            projetObjectifs = projetCatalogue.getObjectifs();
-            projetTechnologies = joinNoms(projetCatalogue.getTechnologies().stream().map(t -> t.getNom()));
-            projetPrerequis = joinNoms(projetCatalogue.getPrerequis().stream().map(p -> p.getNom()));
-            projetDateCreation = projetCatalogue.getDateCreation();
-            projetDateSoumission = null;
-            projetDateValidation = projetCatalogue.getDateValidation();
-            projetDateTerminaison = null;
-            scoreEvaluationProjet = candidature.getScoreEvaluationProjet() != null
-                    ? candidature.getScoreEvaluationProjet()
-                    : resolveCatalogueScoreSnapshot(projetCatalogue);
-            EvaluationResponse catalogueEvaluation = includeDetails
-                    ? findLatestEvaluationForCatalogue(projetCatalogue)
-                    : null;
-            eligibleIndustrialisation = catalogueEvaluation != null
-                    ? catalogueEvaluation.eligibleIndustrialisation()
-                    : null;
-            bloqueParEliminatoire = catalogueEvaluation != null
-                    ? catalogueEvaluation.bloqueParEliminatoire()
-                    : null;
-            livrables = includeDetails ? findEffectiveLivrables(candidature) : List.of();
-            latestEvaluation = catalogueEvaluation;
-        } else {
-            throw new BusinessException(
-                    "La demande d'industrialisation n'est associee ni a un sujet ni a un projet catalogue.");
-        }
+        ProjetSnapshot projet = resolveProjetSnapshot(candidature, includeDetails);
+        List<LivrableResponse> livrables = projet.livrables();
 
         List<String> warnings = collectSubmissionWarnings(livrables, includeDetails, forceMissingLivrablesWarning);
 
         return new CandidatureIndustrialisationResponse(
                 candidature.getId(),
-                projetId,
-                projetTitre,
-                projetStatut,
-                projetCategorie,
-                projetDomaine,
-                projetDescription,
-                projetObjectifs,
-                projetTechnologies,
-                projetPrerequis,
-                projetDateCreation,
-                projetDateSoumission,
-                projetDateValidation,
-                projetDateTerminaison,
-                scoreEvaluationProjet,
-                eligibleIndustrialisation,
-                bloqueParEliminatoire,
+                projet.id(),
+                projet.titre(),
+                projet.statut(),
+                projet.categorie(),
+                projet.domaine(),
+                projet.description(),
+                projet.objectifs(),
+                projet.technologies(),
+                projet.prerequis(),
+                projet.dateCreation(),
+                projet.dateSoumission(),
+                projet.dateValidation(),
+                projet.dateTerminaison(),
+                projet.scoreEvaluation(),
+                projet.eligibleIndustrialisation(),
+                projet.bloqueParEliminatoire(),
                 candidature.getHasEliminatoryWarnings(),
                 candidature.getEliminatoryWarningsCount(),
                 parseWarnings(candidature.getEliminatoryWarningsDetails()),
@@ -798,8 +725,92 @@ public class IndustrialisationService {
                 reponses,
                 livrables,
                 historique,
-                latestEvaluation,
+                projet.latestEvaluation(),
                 warnings
+        );
+    }
+
+    /** Champs projet de la reponse, resolus depuis un sujet ou depuis un projet catalogue. */
+    private record ProjetSnapshot(Long id, String titre, StatutSujet statut, CategorieSujet categorie,
+                                  String domaine, String description, String objectifs, String technologies,
+                                  String prerequis, LocalDateTime dateCreation, LocalDateTime dateSoumission,
+                                  LocalDateTime dateValidation, LocalDateTime dateTerminaison,
+                                  Double scoreEvaluation, Boolean eligibleIndustrialisation,
+                                  Boolean bloqueParEliminatoire, List<LivrableResponse> livrables,
+                                  EvaluationResponse latestEvaluation) {
+    }
+
+    private ProjetSnapshot resolveProjetSnapshot(CandidatureIndustrialisation candidature, boolean includeDetails) {
+        SujetProjet sujetProjet = candidature.getSujetProjet();
+        if (sujetProjet != null) {
+            return snapshotDepuisSujet(candidature, sujetProjet, includeDetails);
+        }
+        ProjetCatalogue projetCatalogue = candidature.getProjetCatalogue();
+        if (projetCatalogue != null) {
+            return snapshotDepuisCatalogue(candidature, projetCatalogue, includeDetails);
+        }
+        throw new BusinessException(
+                "La demande d'industrialisation n'est associee ni a un sujet ni a un projet catalogue.");
+    }
+
+    private ProjetSnapshot snapshotDepuisSujet(CandidatureIndustrialisation candidature,
+                                               SujetProjet sujetProjet,
+                                               boolean includeDetails) {
+        Double scoreEvaluation = sujetProjet.getScoreFinalEvaluation() != null
+                ? sujetProjet.getScoreFinalEvaluation()
+                : candidature.getScoreEvaluationProjet();
+        return new ProjetSnapshot(
+                sujetProjet.getId(),
+                sujetProjet.getTitre(),
+                sujetProjet.getStatut(),
+                sujetProjet.getCategorie(),
+                sujetProjet.getDomaine(),
+                sujetProjet.getDescription(),
+                sujetProjet.getObjectifs(),
+                sujetProjet.getTechnologies(),
+                sujetProjet.getPrerequis(),
+                sujetProjet.getDateCreation(),
+                sujetProjet.getDateSoumission(),
+                sujetProjet.getDateValidation(),
+                sujetProjet.getDateTerminaison(),
+                scoreEvaluation,
+                sujetProjet.getEligibleIndustrialisation(),
+                sujetProjet.getBloqueParEliminatoire(),
+                includeDetails ? findEffectiveLivrables(candidature) : List.of(),
+                includeDetails ? findLatestEvaluation(sujetProjet.getId()) : null
+        );
+    }
+
+    private ProjetSnapshot snapshotDepuisCatalogue(CandidatureIndustrialisation candidature,
+                                                   ProjetCatalogue projetCatalogue,
+                                                   boolean includeDetails) {
+        Double scoreEvaluation = candidature.getScoreEvaluationProjet() != null
+                ? candidature.getScoreEvaluationProjet()
+                : resolveCatalogueScoreSnapshot(projetCatalogue);
+        EvaluationResponse catalogueEvaluation = includeDetails
+                ? findLatestEvaluationForCatalogue(projetCatalogue)
+                : null;
+        // Les valeurs de StatutProjet/CategorieSujet portent les memes noms que StatutSujet/CategorieSujet :
+        // on reutilise ces enums cote reponse pour ne pas dupliquer le DTO pour les deux sources possibles.
+        return new ProjetSnapshot(
+                projetCatalogue.getId(),
+                projetCatalogue.getTitre(),
+                StatutSujet.valueOf(projetCatalogue.getStatut().name()),
+                CategorieSujet.valueOf(projetCatalogue.getTypeProjet().name()),
+                joinNoms(projetCatalogue.getDomaines().stream().map(d -> d.getNom())),
+                projetCatalogue.getDescription(),
+                projetCatalogue.getObjectifs(),
+                joinNoms(projetCatalogue.getTechnologies().stream().map(t -> t.getNom())),
+                joinNoms(projetCatalogue.getPrerequis().stream().map(p -> p.getNom())),
+                projetCatalogue.getDateCreation(),
+                null,
+                projetCatalogue.getDateValidation(),
+                null,
+                scoreEvaluation,
+                catalogueEvaluation != null ? catalogueEvaluation.eligibleIndustrialisation() : null,
+                catalogueEvaluation != null ? catalogueEvaluation.bloqueParEliminatoire() : null,
+                includeDetails ? findEffectiveLivrables(candidature) : List.of(),
+                catalogueEvaluation
         );
     }
 

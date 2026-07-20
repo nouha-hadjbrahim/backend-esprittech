@@ -612,6 +612,8 @@ public class EvaluationService {
         String eligibilityStatus = eligibilityStatus(resultats, mlResponse, hasWarnings);
         boolean eligible = "ELIGIBLE".equals(eligibilityStatus);
         String commentaire = commentaireEvaluation(hasWarnings, eligibilityStatus);
+        MlSynthese ml = mlSynthese(mlResponse);
+        SnapshotHashes empreintes = hashes == null ? new SnapshotHashes(null, null, null) : hashes;
         return new EvaluationData(
                 resultats,
                 scoreFinal,
@@ -619,27 +621,54 @@ public class EvaluationService {
                 hasWarnings,
                 eliminatoryWarnings,
                 commentaire,
-                mlResponse == null ? "MANUAL" : safeValue(mlResponse.effectiveStatus()),
+                ml.statut(),
                 trigger == null ? null : trigger.name(),
                 correlationId,
-                mlResponse == null ? null : mlResponse.engineType(),
-                mlResponse == null ? null : mlResponse.modelName(),
-                mlResponse == null ? null : mlResponse.modelVersion(),
-                mlResponse == null ? null : safeValue(mlResponse.effectivePipelineVersion()),
-                mlResponse == null || !StringUtils.hasText(mlResponse.criteriaVersion()) ? criteriaVersion : mlResponse.criteriaVersion(),
-                hashes == null ? null : hashes.projet(),
-                hashes == null ? null : hashes.livrables(),
-                hashes == null ? null : hashes.input(),
-                mlResponse == null ? "MANUAL" : mlResponse.effectiveStatus(),
+                ml.engineType(),
+                ml.modelName(),
+                ml.modelVersion(),
+                ml.pipelineVersion(),
+                ml.criteriaVersion(),
+                empreintes.projet(),
+                empreintes.livrables(),
+                empreintes.input(),
+                ml.effectiveStatus(),
                 eligibilityStatus,
-                mlResponse == null ? null : mlResponse.globalConfidence(),
+                ml.globalConfidence(),
                 scoreFinal,
-                mlResponse == null ? List.of() : safeList(mlResponse.warnings()),
-                mlResponse == null ? List.of() : safeList(mlResponse.strengths()),
-                mlResponse == null ? List.of() : safeList(mlResponse.weaknesses()),
-                mlResponse == null ? List.of() : safeList(mlResponse.recommendations()),
+                ml.warnings(),
+                ml.strengths(),
+                ml.weaknesses(),
+                ml.recommendations(),
                 null
         );
+    }
+
+    /**
+     * Valeurs derivees de la reponse ML, ramenees a des valeurs neutres lorsque l'evaluation
+     * est manuelle (aucune reponse du moteur).
+     */
+    private MlSynthese mlSynthese(MlEvaluationResponse mlResponse) {
+        if (mlResponse == null) {
+            return new MlSynthese("MANUAL", null, null, null, null, criteriaVersion, "MANUAL", null,
+                    List.of(), List.of(), List.of(), List.of());
+        }
+        String version = StringUtils.hasText(mlResponse.criteriaVersion())
+                ? mlResponse.criteriaVersion()
+                : criteriaVersion;
+        return new MlSynthese(
+                safeValue(mlResponse.effectiveStatus()),
+                mlResponse.engineType(),
+                mlResponse.modelName(),
+                mlResponse.modelVersion(),
+                safeValue(mlResponse.effectivePipelineVersion()),
+                version,
+                mlResponse.effectiveStatus(),
+                mlResponse.globalConfidence(),
+                safeList(mlResponse.warnings()),
+                safeList(mlResponse.strengths()),
+                safeList(mlResponse.weaknesses()),
+                safeList(mlResponse.recommendations()));
     }
 
     private EvaluationResponse persistEvaluation(SujetProjet projet,
@@ -1495,35 +1524,51 @@ public class EvaluationService {
         }
         return evidence.stream()
                 .limit(8)
-                .map(item -> "{"
-                        + "\"evidenceId\":\"" + jsonEscape(item.evidenceId()) + "\","
-                        + "\"deliverableId\":" + (item.deliverableId() == null ? "null" : item.deliverableId())
-                        + ",\"sourceType\":\"" + jsonEscape(item.sourceType()) + "\""
-                        + ",\"source\":\"" + jsonEscape(item.source()) + "\""
-                        + ",\"page\":" + (item.page() == null ? "null" : item.page())
-                        + ",\"path\":\"" + jsonEscape(item.path()) + "\""
-                        + ",\"contentHash\":\"" + jsonEscape(item.contentHash()) + "\""
-                        + ",\"relevance\":" + (item.relevance() == null ? "null" : item.relevance())
-                        + ",\"rawSemanticSimilarity\":" + (item.rawSemanticSimilarity() == null ? "null" : item.rawSemanticSimilarity())
-                        + ",\"calibratedRelevance\":" + (item.calibratedRelevance() == null ? "null" : item.calibratedRelevance())
-                        + ",\"projectRelevanceScore\":" + (item.projectRelevanceScore() == null ? "null" : item.projectRelevanceScore())
-                        + ",\"rankingMargin\":" + (item.rankingMargin() == null ? "null" : item.rankingMargin())
-                        + ",\"stance\":\"" + jsonEscape(item.stance()) + "\""
-                        + ",\"projectRelevanceType\":\"" + jsonEscape(item.projectRelevanceType()) + "\""
-                        + ",\"stanceConfidence\":" + (item.stanceConfidence() == null ? "null" : item.stanceConfidence())
-                        + ",\"sourceAuthority\":" + (item.sourceAuthority() == null ? "null" : item.sourceAuthority())
-                        + ",\"contradictionStrength\":" + (item.contradictionStrength() == null ? "null" : item.contradictionStrength())
-                        + ",\"evidenceQuality\":" + (item.evidenceQuality() == null ? "null" : item.evidenceQuality())
-                        + ",\"extractionQuality\":" + (item.extractionQuality() == null ? "null" : item.extractionQuality())
-                        + ",\"documentCategory\":\"" + jsonEscape(item.documentCategory()) + "\""
-                        + ",\"documentCategoryConfidence\":" + (item.documentCategoryConfidence() == null ? "null" : item.documentCategoryConfidence())
-                        + ",\"documentCategoryReasonCodes\":[" + safeList(item.documentCategoryReasonCodes()).stream()
-                        .map(reason -> "\"" + jsonEscape(reason) + "\"")
-                        .collect(Collectors.joining(",")) + "]"
-                        + ",\"evidenceNature\":\"" + jsonEscape(item.evidenceNature()) + "\""
-                        + ",\"excerpt\":\"" + jsonEscape(item.excerpt()) + "\""
-                        + "}")
+                .map(this::evidenceJson)
                 .collect(Collectors.joining(",", "[", "]"));
+    }
+
+    /** Serialise une preuve ML en JSON compact. */
+    private String evidenceJson(MlEvidenceResponse item) {
+        String reasonCodes = safeList(item.documentCategoryReasonCodes()).stream()
+                .map(reason -> "\"" + jsonEscape(reason) + "\"")
+                .collect(Collectors.joining(","));
+        return "{" + String.join(",",
+                jsonText("evidenceId", item.evidenceId()),
+                jsonNumber("deliverableId", item.deliverableId()),
+                jsonText("sourceType", item.sourceType()),
+                jsonText("source", item.source()),
+                jsonNumber("page", item.page()),
+                jsonText("path", item.path()),
+                jsonText("contentHash", item.contentHash()),
+                jsonNumber("relevance", item.relevance()),
+                jsonNumber("rawSemanticSimilarity", item.rawSemanticSimilarity()),
+                jsonNumber("calibratedRelevance", item.calibratedRelevance()),
+                jsonNumber("projectRelevanceScore", item.projectRelevanceScore()),
+                jsonNumber("rankingMargin", item.rankingMargin()),
+                jsonText("stance", item.stance()),
+                jsonText("projectRelevanceType", item.projectRelevanceType()),
+                jsonNumber("stanceConfidence", item.stanceConfidence()),
+                jsonNumber("sourceAuthority", item.sourceAuthority()),
+                jsonNumber("contradictionStrength", item.contradictionStrength()),
+                jsonNumber("evidenceQuality", item.evidenceQuality()),
+                jsonNumber("extractionQuality", item.extractionQuality()),
+                jsonText("documentCategory", item.documentCategory()),
+                jsonNumber("documentCategoryConfidence", item.documentCategoryConfidence()),
+                "\"documentCategoryReasonCodes\":[" + reasonCodes + "]",
+                jsonText("evidenceNature", item.evidenceNature()),
+                jsonText("excerpt", item.excerpt())
+        ) + "}";
+    }
+
+    /** Champ JSON textuel, valeur echappee. */
+    private String jsonText(String name, String value) {
+        return "\"" + name + "\":\"" + jsonEscape(value) + "\"";
+    }
+
+    /** Champ JSON numerique ; le litteral null est emis lorsque la valeur est absente. */
+    private String jsonNumber(String name, Object value) {
+        return "\"" + name + "\":" + (value == null ? "null" : value);
     }
 
     private String jsonEscape(String value) {
@@ -2051,6 +2096,13 @@ public class EvaluationService {
             return normalized.substring(normalized.lastIndexOf('/') + 1);
         }
         return normalized;
+    }
+
+    /** Synthese des champs issus du moteur ML, ou valeurs neutres en mode manuel. */
+    private record MlSynthese(String statut, String engineType, String modelName, String modelVersion,
+                              String pipelineVersion, String criteriaVersion, String effectiveStatus,
+                              Double globalConfidence, List<String> warnings, List<String> strengths,
+                              List<String> weaknesses, List<String> recommendations) {
     }
 
     /** Champs projet exploites par le moteur ML, communs aux sujets et aux projets catalogue. */
