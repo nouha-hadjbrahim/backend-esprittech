@@ -150,11 +150,17 @@ public class IndustrialisationService {
             throw new BusinessException("Une demande d'industrialisation est deja en cours pour ce projet.");
         }
 
+        List<BlocageEliminatoireDto> warnings = collectCatalogueEvaluationWarnings(projet);
+        requireConfirmationIfNeeded(warnings, request.isConfirmed());
+
         CandidatureIndustrialisation candidature = new CandidatureIndustrialisation();
         candidature.setProjetCatalogue(projet);
+        // Traceability: ProjetCatalogue.sujetId keeps the origin SujetProjet when conversion created the catalogue entry.
         candidature.setTypeIndustrialisation(request.typeIndustrialisation());
         candidature.setDemandeur(current);
         candidature.setCommentaire(trimToNull(request.commentaire()));
+        candidature.setScoreEvaluationProjet(resolveCatalogueScoreSnapshot(projet));
+        applyWarnings(candidature, warnings);
 
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
         return toResponse(saved, true);
@@ -432,11 +438,14 @@ public class IndustrialisationService {
         candidature.setDateDecisionCI(java.time.LocalDateTime.now());
         CandidatureIndustrialisation saved = candidatureRepository.save(candidature);
 
+        String projetTitre = candidature.getSujetProjet() != null
+                ? candidature.getSujetProjet().getTitre()
+                : candidature.getProjetCatalogue().getTitre();
         notificationService.creerNotification(
                 candidature.getDemandeur().getId(),
                 NotificationType.CI_DEMANDE_REJETEE,
                 "Demande industrialisation refusee",
-                "Votre demande d'industrialisation pour le projet \"" + candidature.getSujetProjet().getTitre() + "\" a ete refusee. Motif : " + request.motif(),
+                "Votre demande d'industrialisation pour le projet \"" + projetTitre + "\" a ete refusee. Motif : " + request.motif(),
                 "/frontoffice/demandes-industrialisation");
 
         return toResponse(saved, true);
@@ -462,11 +471,12 @@ public class IndustrialisationService {
     }
 
     private List<BlocageEliminatoireDto> collectEliminatoryWarnings(CandidatureIndustrialisation candidature) {
-        List<BlocageEliminatoireDto> warnings = new java.util.ArrayList<>(
-                candidature.getSujetProjet() != null
-                        ? collectProjectEvaluationWarnings(candidature.getSujetProjet())
-                        : List.of()
-        );
+        List<BlocageEliminatoireDto> warnings = new java.util.ArrayList<>();
+        if (candidature.getSujetProjet() != null) {
+            warnings.addAll(collectProjectEvaluationWarnings(candidature.getSujetProjet()));
+        } else if (candidature.getProjetCatalogue() != null) {
+            warnings.addAll(collectCatalogueEvaluationWarnings(candidature.getProjetCatalogue()));
+        }
         Map<Long, ReponseIndustrialisation> reponsesByQuestion = reponseRepository
                 .findByCandidatureIndustrialisationId(candidature.getId())
                 .stream()
@@ -704,12 +714,14 @@ public class IndustrialisationService {
             projetDateSoumission = sujetProjet.getDateSoumission();
             projetDateValidation = sujetProjet.getDateValidation();
             projetDateTerminaison = sujetProjet.getDateTerminaison();
-            scoreEvaluationProjet = sujetProjet.getScoreFinalEvaluation();
+            scoreEvaluationProjet = sujetProjet.getScoreFinalEvaluation() != null
+                    ? sujetProjet.getScoreFinalEvaluation()
+                    : candidature.getScoreEvaluationProjet();
             eligibleIndustrialisation = sujetProjet.getEligibleIndustrialisation();
             bloqueParEliminatoire = sujetProjet.getBloqueParEliminatoire();
             livrables = includeDetails ? livrableService.findByProjet(sujetProjet.getId()) : List.of();
             latestEvaluation = includeDetails ? findLatestEvaluation(sujetProjet.getId()) : null;
-        } else {
+        } else if (projetCatalogue != null) {
             projetId = projetCatalogue.getId();
             projetTitre = projetCatalogue.getTitre();
             // Les valeurs de StatutProjet/CategorieSujet portent les memes noms que StatutSujet/CategorieSujet :
@@ -725,16 +737,28 @@ public class IndustrialisationService {
             projetDateSoumission = null;
             projetDateValidation = projetCatalogue.getDateValidation();
             projetDateTerminaison = null;
-            scoreEvaluationProjet = null;
-            eligibleIndustrialisation = null;
-            bloqueParEliminatoire = null;
+            scoreEvaluationProjet = candidature.getScoreEvaluationProjet() != null
+                    ? candidature.getScoreEvaluationProjet()
+                    : resolveCatalogueScoreSnapshot(projetCatalogue);
+            EvaluationResponse catalogueEvaluation = includeDetails
+                    ? findLatestEvaluationForCatalogue(projetCatalogue)
+                    : null;
+            eligibleIndustrialisation = catalogueEvaluation != null
+                    ? catalogueEvaluation.eligibleIndustrialisation()
+                    : null;
+            bloqueParEliminatoire = catalogueEvaluation != null
+                    ? catalogueEvaluation.bloqueParEliminatoire()
+                    : null;
             livrables = includeDetails
                     ? livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetCatalogue.getId())
                         .stream()
                         .map(this::toLivrableResponse)
                         .toList()
                     : List.of();
-            latestEvaluation = null;
+            latestEvaluation = catalogueEvaluation;
+        } else {
+            throw new BusinessException(
+                    "La demande d'industrialisation n'est associee ni a un sujet ni a un projet catalogue.");
         }
 
         List<String> warnings = collectSubmissionWarnings(livrables, includeDetails, forceMissingLivrablesWarning);
@@ -819,9 +843,43 @@ public class IndustrialisationService {
     private EvaluationResponse findLatestEvaluation(Long projetId) {
         try {
             return evaluationService.getLatestEvaluationByProjet(projetId);
-        } catch (tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException ex) {
+        } catch (tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException
+                 | ResourceNotFoundException ex) {
             return null;
         }
+    }
+
+    private EvaluationResponse findLatestEvaluationForCatalogue(ProjetCatalogue projet) {
+        try {
+            return evaluationService.getLatestEvaluationByProjetCatalogue(projet.getId());
+        } catch (tn.esprit.backend_esprittech.exception.CritereEval.ResourceNotFoundException
+                 | ResourceNotFoundException ex) {
+            return null;
+        }
+    }
+
+    private Double resolveCatalogueScoreSnapshot(ProjetCatalogue projet) {
+        if (projet.getScore() != null && projet.getScore() > 0) {
+            return projet.getScore().doubleValue();
+        }
+        if (projet.getSujetId() == null) {
+            return null;
+        }
+        return sujetProjetRepository.findById(projet.getSujetId())
+                .map(SujetProjet::getScoreFinalEvaluation)
+                .orElse(null);
+    }
+
+    private List<BlocageEliminatoireDto> collectCatalogueEvaluationWarnings(ProjetCatalogue projet) {
+        EvaluationResponse latestEvaluation = findLatestEvaluationForCatalogue(projet);
+        if (latestEvaluation == null || latestEvaluation.resultats() == null) {
+            return List.of();
+        }
+        return latestEvaluation.resultats().stream()
+                .filter(resultat -> resultat.typeCritere() == TypeCritere.ELIMINATOIRE)
+                .filter(resultat -> resultat.reponseEliminatoire() == ReponseEliminatoire.NOT_OK)
+                .map(this::toWarning)
+                .toList();
     }
 
     private List<String> parseWarnings(String value) {

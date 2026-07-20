@@ -15,11 +15,16 @@ import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.industrialisation.CandidatureIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.QuestionIndustrialisation;
 import tn.esprit.backend_esprittech.entity.industrialisation.ReponseIndustrialisation;
+import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
+import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
+import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.exception.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.repository.CritereEval.EvaluationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
+import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
+import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.CritereEval.NoteLevelService;
 
 import java.util.ArrayList;
@@ -42,22 +47,26 @@ public class IndustrialisationScoreService {
     private final QuestionIndustrialisationRepository questionRepository;
     private final ReponseIndustrialisationRepository reponseRepository;
     private final EvaluationRepository evaluationRepository;
+    private final ProjetCatalogueRepository projetCatalogueRepository;
+    private final SujetProjetRepository sujetProjetRepository;
     private final NoteLevelService noteLevelService;
 
     public IndustrialisationScoreResponse calculate(Long candidatureId) {
         CandidatureIndustrialisation candidature = candidatureRepository.findById(candidatureId)
-                .orElseThrow(() -> new ResourceNotFoundException("Demande industrialisation introuvable avec id: " + candidatureId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Demande industrialisation introuvable avec id: " + candidatureId));
+
+        EvaluationProjectContext project = resolveEvaluationProject(candidature);
 
         List<QuestionIndustrialisation> questions = questionRepository.findByActifTrueOrderByOrdreAsc();
         Map<Long, ReponseIndustrialisation> reponsesByQuestion = reponseRepository
                 .findByCandidatureIndustrialisationId(candidatureId)
                 .stream()
                 .collect(Collectors.toMap(r -> r.getQuestion().getId(), Function.identity()));
-        Optional<Evaluation> latestEvaluation = evaluationRepository
-                .findTopBySujetProjetIdOrderByDateCalculDescIdDesc(candidature.getSujetProjet().getId());
+        Optional<Evaluation> latestEvaluation = project.latestEvaluation();
 
-        if (noCriteriaAvailable(questions, latestEvaluation, candidature.getSujetProjet().getScoreFinalEvaluation())) {
-            return emptyCriteriaResponse(candidature);
+        if (noCriteriaAvailable(questions, latestEvaluation, project.scoreSnapshot())) {
+            return emptyCriteriaResponse(candidature, project.displayProjetId());
         }
 
         List<ScoreBreakdownDto> details = new ArrayList<>();
@@ -66,7 +75,7 @@ public class IndustrialisationScoreService {
 
         ComponentScore questionScore = calculateQuestionScore(questions, reponsesByQuestion, details, blocages, elementsManquants);
         ComponentScore livrableScore = calculateLivrableScore(details);
-        ComponentScore critereScore = calculateCritereNoteScore(candidature, latestEvaluation, details, blocages, elementsManquants);
+        ComponentScore critereScore = calculateCritereNoteScore(project, latestEvaluation, details, blocages, elementsManquants);
 
         double scoreFinal = calculateWeightedFinalScore(List.of(
                 new WeightedComponent(QUESTIONS_WEIGHT, questionScore),
@@ -78,7 +87,7 @@ public class IndustrialisationScoreService {
 
         return new IndustrialisationScoreResponse(
                 candidature.getId(),
-                candidature.getSujetProjet().getId(),
+                project.displayProjetId(),
                 scoreFinal,
                 decision,
                 false,
@@ -93,6 +102,88 @@ public class IndustrialisationScoreService {
                 elementsManquants,
                 recommendationMessage(decision, scoreFinal, blocages)
         );
+    }
+
+    /**
+     * Résout le projet d'évaluation (SujetProjet ou ProjetCatalogue) associé à la candidature.
+     * Les deux entités ne sont pas interchangeables : on lit l'évaluation sur la bonne clé.
+     */
+    EvaluationProjectContext resolveEvaluationProject(CandidatureIndustrialisation candidature) {
+        ProjetCatalogue projetCatalogue = candidature.getProjetCatalogue();
+        SujetProjet sujetProjet = candidature.getSujetProjet();
+
+        if (projetCatalogue != null) {
+            Optional<Evaluation> catalogueEval = evaluationRepository
+                    .findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(projetCatalogue.getId());
+            Optional<Evaluation> latest = catalogueEval.isPresent()
+                    ? catalogueEval
+                    : Optional.ofNullable(projetCatalogue.getSujetId())
+                            .flatMap(evaluationRepository::findTopBySujetProjetIdOrderByDateCalculDescIdDesc);
+
+            Double snapshot = resolveCatalogueScoreSnapshot(projetCatalogue);
+            Boolean bloque = latest.map(Evaluation::getBloqueParEliminatoire)
+                    .orElseGet(() -> resolveSujetBloqueFlag(projetCatalogue.getSujetId()));
+            return new EvaluationProjectContext(
+                    projetCatalogue.getId(),
+                    latest,
+                    snapshot,
+                    bloque,
+                    projetCatalogue.getId()
+            );
+        }
+
+        if (sujetProjet != null) {
+            Optional<Evaluation> sujetEval = evaluationRepository
+                    .findTopBySujetProjetIdOrderByDateCalculDescIdDesc(sujetProjet.getId());
+            Optional<Evaluation> latest = sujetEval.isPresent()
+                    ? sujetEval
+                    : projetCatalogueRepository.findBySujetId(sujetProjet.getId())
+                            .flatMap(pc -> evaluationRepository
+                                    .findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(pc.getId()));
+
+            Double snapshot = sujetProjet.getScoreFinalEvaluation();
+            if (snapshot == null) {
+                snapshot = projetCatalogueRepository.findBySujetId(sujetProjet.getId())
+                        .map(this::resolveCatalogueScoreSnapshot)
+                        .orElse(null);
+            }
+
+            return new EvaluationProjectContext(
+                    sujetProjet.getId(),
+                    latest,
+                    snapshot,
+                    sujetProjet.getBloqueParEliminatoire(),
+                    sujetProjet.getId()
+            );
+        }
+
+        throw new BusinessException(
+                "La demande d'industrialisation n'est associee ni a un sujet ni a un projet catalogue.");
+    }
+
+    private Double resolveCatalogueScoreSnapshot(ProjetCatalogue projetCatalogue) {
+        if (projetCatalogue.getScore() != null && projetCatalogue.getScore() > 0) {
+            return projetCatalogue.getScore().doubleValue();
+        }
+        return resolveSujetScoreSnapshot(projetCatalogue.getSujetId());
+    }
+
+    private Double resolveSujetScoreSnapshot(Long sujetId) {
+        if (sujetId == null) {
+            return null;
+        }
+        return sujetProjetRepository.findById(sujetId)
+                .map(SujetProjet::getScoreFinalEvaluation)
+                .orElse(null);
+    }
+
+    private Boolean resolveSujetBloqueFlag(Long sujetId) {
+        if (sujetId == null) {
+            return null;
+        }
+        return sujetProjetRepository.findById(sujetId)
+                .map(SujetProjet::getBloqueParEliminatoire)
+                .orElse(null);
     }
 
     private boolean noCriteriaAvailable(List<QuestionIndustrialisation> questions,
@@ -123,10 +214,11 @@ public class IndustrialisationScoreService {
                 && (resultat.getNoteValue() != null || resultat.getNoteObtenue() != null);
     }
 
-    private IndustrialisationScoreResponse emptyCriteriaResponse(CandidatureIndustrialisation candidature) {
+    private IndustrialisationScoreResponse emptyCriteriaResponse(CandidatureIndustrialisation candidature,
+                                                                 Long displayProjetId) {
         return new IndustrialisationScoreResponse(
                 candidature.getId(),
-                candidature.getSujetProjet().getId(),
+                displayProjetId,
                 0.0,
                 DecisionRecommandeeIndustrialisation.NO_GO,
                 false,
@@ -233,13 +325,13 @@ public class IndustrialisationScoreService {
         return new ComponentScore(0.0, false);
     }
 
-    private ComponentScore calculateCritereNoteScore(CandidatureIndustrialisation candidature,
+    private ComponentScore calculateCritereNoteScore(EvaluationProjectContext project,
                                                      Optional<Evaluation> latestEvaluation,
                                                      List<ScoreBreakdownDto> details,
                                                      List<BlocageEliminatoireDto> blocages,
                                                      List<String> elementsManquants) {
         if (latestEvaluation.isEmpty()) {
-            Double snapshot = candidature.getSujetProjet().getScoreFinalEvaluation();
+            Double snapshot = project.scoreSnapshot();
             if (snapshot != null) {
                 details.add(new ScoreBreakdownDto(
                         "CRITERES_NOTES",
@@ -251,10 +343,10 @@ public class IndustrialisationScoreService {
                         "Aucune evaluation detaillee trouvee; utilisation du score projet sauvegarde.",
                         true
                 ));
-                if (Boolean.TRUE.equals(candidature.getSujetProjet().getBloqueParEliminatoire())) {
+                if (Boolean.TRUE.equals(project.bloqueParEliminatoire())) {
                     blocages.add(new BlocageEliminatoireDto(
                             "EVALUATION_PROJET",
-                            candidature.getSujetProjet().getId(),
+                            project.eliminatoryReferenceId(),
                             "Critere eliminatoire projet",
                             "Le projet est marque bloque par un critere eliminatoire."
                     ));
@@ -371,7 +463,7 @@ public class IndustrialisationScoreService {
 
     private String recommendationMessage(DecisionRecommandeeIndustrialisation decision,
                                          double scoreFinal,
-        List<BlocageEliminatoireDto> blocages) {
+                                         List<BlocageEliminatoireDto> blocages) {
         if (!blocages.isEmpty()) {
             return "Alerte eliminatoire non bloquante : " + blocages.size()
                     + " critere(s) a examiner par la CI. Decision finale manuelle.";
@@ -404,6 +496,15 @@ public class IndustrialisationScoreService {
 
     private double round(double value) {
         return Math.round(value * 100.0) / 100.0;
+    }
+
+    record EvaluationProjectContext(
+            Long displayProjetId,
+            Optional<Evaluation> latestEvaluation,
+            Double scoreSnapshot,
+            Boolean bloqueParEliminatoire,
+            Long eliminatoryReferenceId
+    ) {
     }
 
     private record ComponentScore(Double score, boolean applicable) {
