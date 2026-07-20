@@ -142,7 +142,7 @@ public class UserService {
     @Transactional
     @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#result.getId()", summaryExpression = "'Modification du profil ' + #result.getEmail()")
     public User updateOwnProfile(UpdateProfileRequest request) {
-        User user = getCurrentUser();
+        User user = loadCurrentUser();
         user.setNom(request.nom());
         user.setPrenom(request.prenom());
         return userRepository.save(user);
@@ -152,7 +152,7 @@ public class UserService {
     @Transactional
     @Historise(action = ActionType.UPDATE, entityType = EntityType.USER, entityIdExpression = "#result.getId()", summaryExpression = "'Changement de mot de passe ' + #result.getEmail()")
     public User changePassword(ChangePasswordRequest request) {
-        User user = getCurrentUser();
+        User user = loadCurrentUser();
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
             throw new BadCredentialsException("Mot de passe actuel incorrect");
         }
@@ -165,7 +165,7 @@ public class UserService {
     @Historise(action = ActionType.DELETE, entityType = EntityType.USER, entityIdExpression = "#id", oldValuesExpression = "@userService.getOldValues(#id)", summaryExpression = "'Suppression utilisateur ' + @userService.getLabelById(#id)")
     public void delete(Long id) {
         User user = findById(id);
-        User current = getCurrentUser();
+        User current = loadCurrentUser();
         if (current.getId().equals(user.getId())) {
             throw new IllegalArgumentException("Vous ne pouvez pas supprimer votre propre compte");
         }
@@ -184,6 +184,15 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public User getCurrentUser() {
+        return loadCurrentUser();
+    }
+
+    /**
+     * Chargement effectif de l'utilisateur courant. Appelee directement par les autres methodes
+     * de la classe : passer par {@link #getCurrentUser()} contournerait le proxy Spring, et
+     * l'appelant fournit de toute facon deja la transaction.
+     */
+    private User loadCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication.getPrincipal() instanceof String) {
@@ -201,7 +210,7 @@ public class UserService {
     /** Profil enrichi de l'utilisateur courant (avec son affiliation), pour /auth/me. */
     @Transactional(readOnly = true)
     public UserResponse getCurrentUserResponse() {
-        return toEnrichedResponse(getCurrentUser());
+        return buildEnrichedResponse(loadCurrentUser());
     }
 
     /**
@@ -212,6 +221,11 @@ public class UserService {
      */
     @Transactional(readOnly = true)
     public UserResponse toEnrichedResponse(User user) {
+        return buildEnrichedResponse(user);
+    }
+
+    /** Construction effective de la reponse enrichie, sans passer par le proxy transactionnel. */
+    private UserResponse buildEnrichedResponse(User user) {
         User managed = userRepository.findById(user.getId()).orElse(user);
         EquipeRecherche equipe = managed.getEquipeRecherche();
         if (equipe == null) {

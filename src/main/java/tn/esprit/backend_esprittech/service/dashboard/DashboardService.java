@@ -136,7 +136,7 @@ public class DashboardService {
         List<UsersByRoleItem> usersByRole = buildUsersByRole();
         List<CatalogueByDomainItem> catalogueByDomain = buildCatalogueByDomain();
         List<CatalogueByDomainItem> sujetsByDomaine = buildSujetsByDomaine();
-        List<RecentActivityItem> recentActivity = buildRecentActivity(recentActivityLimit);
+        List<RecentActivityItem> recentActivity = loadRecentActivity(recentActivityLimit);
 
         return new ExtendedDashboardResponse(
                 kpis, trendsSujets, trendsCandidatures, trendsIndustrialisation, trendsEquipes,
@@ -263,6 +263,11 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<RecentActivityItem> buildRecentActivity(int limit) {
+        return loadRecentActivity(limit);
+    }
+
+    /** Chargement effectif, appele en interne sans repasser par le proxy transactionnel. */
+    private List<RecentActivityItem> loadRecentActivity(int limit) {
         List<Historique> history = historiqueRepository
                 .findByOrderByCreatedAtDesc(PageRequest.of(0, limit))
                 .getContent();

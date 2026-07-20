@@ -124,7 +124,8 @@ public class IndustrialisationScoreService {
 
             Double snapshot = resolveCatalogueScoreSnapshot(projetCatalogue);
             Boolean bloque = latest.map(Evaluation::getBloqueParEliminatoire)
-                    .orElseGet(() -> resolveSujetBloqueFlag(projetCatalogue.getSujetId()));
+                    .or(() -> resolveSujetBloqueFlag(projetCatalogue.getSujetId()))
+                    .orElse(null);
             return new EvaluationProjectContext(
                     projetCatalogue.getId(),
                     latest,
@@ -179,13 +180,17 @@ public class IndustrialisationScoreService {
                 .orElse(null);
     }
 
-    private Boolean resolveSujetBloqueFlag(Long sujetId) {
+    /**
+     * Drapeau "bloque par un critere eliminatoire" du sujet d'origine. Vide lorsque l'information
+     * est inconnue : absence de sujet, sujet introuvable, ou drapeau non renseigne. Cet etat
+     * indetermine est distinct de {@code false} et doit le rester jusqu'a la reponse HTTP.
+     */
+    private Optional<Boolean> resolveSujetBloqueFlag(Long sujetId) {
         if (sujetId == null) {
-            return null;
+            return Optional.empty();
         }
         return sujetProjetRepository.findById(sujetId)
-                .map(SujetProjet::getBloqueParEliminatoire)
-                .orElse(null);
+                .map(SujetProjet::getBloqueParEliminatoire);
     }
 
     private boolean noCriteriaAvailable(List<QuestionIndustrialisation> questions,

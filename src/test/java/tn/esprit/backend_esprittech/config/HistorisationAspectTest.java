@@ -419,6 +419,10 @@ class HistorisationAspectTest {
 
     @Test
     void actorIsNull_whenAuthIsNull() throws Throwable {
+        // Contexte present mais Authentication explicitement nulle : distinct du cas ou
+        // aucun contexte n'a jamais ete renseigne (actorIsNull_returnsEarlyWithoutLogging).
+        SecurityContextHolder.getContext().setAuthentication(null);
+
         Object expectedResult = new Object();
         when(joinPoint.proceed()).thenReturn(expectedResult);
 

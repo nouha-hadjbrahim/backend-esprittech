@@ -80,7 +80,7 @@ public class LivrableCatalogueService {
         validateFile(file);
         validateText(nom, MSG_NOM_LIVRABLE_OBLIGATOIRE);
 
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+        String originalFileName = StringUtils.cleanPath(nomFichierOuDefaut(file));
         String objectName = buildObjectName(projetId, originalFileName);
         MinioStorageService.StoredObject storedObject = storageService.upload(objectName, file);
 
@@ -404,7 +404,7 @@ public class LivrableCatalogueService {
         if (file == null || file.isEmpty()) {
             throw new BusinessException("Le fichier est obligatoire.");
         }
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+        String originalFileName = StringUtils.cleanPath(nomFichierOuDefaut(file));
         if (!StringUtils.hasText(originalFileName)
                 || originalFileName.contains("..")
                 || originalFileName.contains("/")
@@ -504,5 +504,11 @@ public class LivrableCatalogueService {
     }
 
     public record LivrableDownload(InputStream inputStream, String filename, String contentType, long size) {
+    }
+
+    /** Nom d'origine nettoye ; {@code getOriginalFilename()} peut etre null selon le client HTTP. */
+    private String nomFichierOuDefaut(MultipartFile file) {
+        String name = file.getOriginalFilename();
+        return name != null ? name : "fichier";
     }
 }

@@ -157,7 +157,6 @@ public class EvaluationService {
 
     public EvaluationRunResult evaluateProject(Long projectId,
                                                EvaluationTrigger trigger,
-                                               Long requestedBy,
                                                String correlationId) {
         SujetProjet projet = getProjetAndValidateTerminated(projectId);
         User currentUser = userService.getCurrentUser();
@@ -541,7 +540,7 @@ public class EvaluationService {
         MlEvaluationResponse mlResponse = mlEvaluationClient.evaluate(
                 mlRequest
         );
-        validateMlResponse(mlResponse, criteresEliminatoires, criteresNotes, mlRequest, extractedContent, externalSources);
+        validateMlResponse(mlResponse, criteresEliminatoires, criteresNotes, mlRequest, extractedContent);
         Map<Long, MlCriterionResult> mlResults = mlResponse.effectiveResults()
                 .stream()
                 .collect(Collectors.toMap(MlCriterionResult::criterionId, Function.identity()));
@@ -856,8 +855,7 @@ public class EvaluationService {
                     TypeCritere.ELIMINATOIRE,
                     1.0,
                     0.0,
-                    true,
-                    maxActiveNoteValue
+                    true
             ));
         }
 
@@ -868,8 +866,7 @@ public class EvaluationService {
                     TypeCritere.NOTE,
                     maximumScore,
                     positiveWeight(critere.getPoids()),
-                    false,
-                    maxActiveNoteValue
+                    false
             ));
         }
 
@@ -898,8 +895,7 @@ public class EvaluationService {
                                                        TypeCritere typeCritere,
                                                        double maximumScore,
                                                        double weight,
-                                                       boolean eliminatory,
-                                                       int maxActiveNoteValue) {
+                                                       boolean eliminatory) {
         List<String> requiredEvidenceTypes = requiredEvidenceTypes(critere);
         List<String> optionalEvidenceTypes = splitConfigurationValues(critere.getOptionalEvidenceTypes());
         List<String> positiveExpectations = splitConfigurationValues(critere.getPositiveEvidenceExpectations());
@@ -1131,8 +1127,7 @@ public class EvaluationService {
                                     List<CritereEliminatoire> criteresEliminatoires,
                                     List<CritereNote> criteresNotes,
                                     MlEvaluationRequest request,
-                                    List<MlDeliverableContent> deliverables,
-                                    List<MlExternalSourceRequest> externalSources) {
+                                    List<MlDeliverableContent> deliverables) {
         if (response == null || response.effectiveResults() == null) {
             throw new BusinessException("Le moteur ML a retourne une reponse vide.");
         }

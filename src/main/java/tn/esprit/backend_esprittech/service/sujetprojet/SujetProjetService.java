@@ -726,6 +726,14 @@ public class SujetProjetService {
             newValuesExpression = "{'statut': 'REALISATION_TERMINEE'}",
             summaryExpression = "'Déclaration terminaison sujet ' + @sujetProjetService.getTitreById(#id)")
     public SujetProjetResponse declarerTerminaison(Long id, TerminaisonSujetRequest request) {
+        return declarerTerminaisonInterne(id, request);
+    }
+
+    /**
+     * Traitement effectif de la terminaison. Les deux surcharges publiques y deleguent : un appel
+     * direct entre elles contournerait le proxy Spring (transaction et historisation).
+     */
+    private SujetProjetResponse declarerTerminaisonInterne(Long id, TerminaisonSujetRequest request) {
         Long encadrantId = getCurrentEncadrant().getId();
         SujetProjet sujet = sujetProjetRepository.findById(id)
                 .filter(s -> s.getEncadrantId().equals(encadrantId))
@@ -752,6 +760,6 @@ public class SujetProjetService {
 
     @Transactional
     public SujetProjetResponse declarerTerminaison(Long id) {
-        return declarerTerminaison(id, null);
+        return declarerTerminaisonInterne(id, null);
     }
 }

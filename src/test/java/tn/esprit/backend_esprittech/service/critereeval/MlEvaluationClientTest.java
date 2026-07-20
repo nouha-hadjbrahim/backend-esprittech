@@ -128,9 +128,10 @@ class MlEvaluationClientTest {
                 false
         );
 
+        var mlRequest = validRequest();
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> client.evaluate(validRequest())
+                () -> client.evaluate(mlRequest)
         );
 
         assertEquals(
@@ -159,9 +160,10 @@ class MlEvaluationClientTest {
                     true
             );
 
+            var mlRequest = validRequest();
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> client.evaluate(validRequest())
+                    () -> client.evaluate(mlRequest)
             );
 
             assertEquals(
@@ -205,9 +207,10 @@ class MlEvaluationClientTest {
                     ENGINE_VERSION
             );
 
+            var mlRequest = validRequest();
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> client.evaluate(validRequest())
+                    () -> client.evaluate(mlRequest)
             );
 
             assertThat(

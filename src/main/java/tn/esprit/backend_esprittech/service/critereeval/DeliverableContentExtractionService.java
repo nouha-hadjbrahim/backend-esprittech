@@ -12,6 +12,7 @@ import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
 
 import java.io.InputStream;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
@@ -223,8 +224,13 @@ public class DeliverableContentExtractionService {
         return livrable.typeLivrableName() == null ? "UNKNOWN" : livrable.typeLivrableName();
     }
 
-    private String sha256(byte[] bytes) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        return HexFormat.of().formatHex(digest.digest(bytes));
+    private String sha256(byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 est requis par la specification de la plateforme Java : indisponible = JVM cassee.
+            throw new IllegalStateException("Algorithme SHA-256 indisponible sur cette JVM.", e);
+        }
     }
 }

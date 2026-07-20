@@ -307,9 +307,9 @@ class SujetProjetServiceTest {
         entity.setStatut(StatutSujet.VALIDE);
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
 
-        var request = new SujetInvalidationRequest("Motif");
+        var invalidation = new SujetInvalidationRequest("Motif");
         assertThrows(IllegalArgumentException.class,
-                () -> service.invaliderSujet(1L, request));
+                () -> service.invaliderSujet(1L, invalidation));
     }
 
     @Test
@@ -473,7 +473,7 @@ class SujetProjetServiceTest {
 
         assertEquals(response, service.declarerTerminaison(1L));
         assertEquals(StatutSujet.REALISATION_TERMINEE, entity.getStatut());
-        assertTrue(Boolean.TRUE.equals(entity.getCatalogue()));
+        assertEquals(Boolean.TRUE, entity.getCatalogue());
         assertNotNull(entity.getDateTerminaison());
         verify(projetCatalogueService).publierDepuisSujetTermine(entity, null, null);
     }
@@ -519,10 +519,10 @@ class SujetProjetServiceTest {
 
     @Test
     void getTitreById_found_returnsTitre() {
-        SujetProjet entity = new SujetProjet();
-        entity.setId(1L);
-        entity.setTitre("Mon Super Projet");
-        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+        SujetProjet sujet = new SujetProjet();
+        sujet.setId(1L);
+        sujet.setTitre("Mon Super Projet");
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(sujet));
 
         assertEquals("Mon Super Projet", service.getTitreById(1L));
     }

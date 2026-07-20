@@ -179,7 +179,7 @@ class DashboardServiceTest {
     // ================================================================
 
     @Test
-    void getExtendedDashboard_aggregatesAllKpisAndCharts() {
+    void getExtendedDashboard_populatesEverySection() {
         ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertNotNull(response);
@@ -194,6 +194,11 @@ class DashboardServiceTest {
         assertNotNull(response.catalogueByDomain());
         assertNotNull(response.sujetsByDomaine());
         assertNotNull(response.recentActivity());
+    }
+
+    @Test
+    void getExtendedDashboard_computesKpiValues() {
+        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertEquals(50L, response.kpis().usersTotal());
         assertEquals(20L, response.kpis().encadrantsTotal());
@@ -210,6 +215,11 @@ class DashboardServiceTest {
         assertEquals(6L, response.kpis().industrialisationsGo());
         assertEquals(2L, response.kpis().industrialisationsNoGo());
         assertEquals(78.46, response.kpis().scoreMoyen());
+    }
+
+    @Test
+    void getExtendedDashboard_groupsChartsByExpectedBuckets() {
+        ExtendedDashboardResponse response = dashboardService.getExtendedDashboard(15);
 
         assertEquals(3, response.sujetsByStatut().size());
         assertEquals(3, response.sujetsByCategorie().size());

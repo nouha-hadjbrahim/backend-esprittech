@@ -349,10 +349,10 @@ class CritereNoteServiceTest {
     void reorder_invalidOrder_shouldThrowBadRequestException() {
         when(repository.findById(1L)).thenReturn(Optional.of(critere));
 
-        var request = new OrdreCritereRequest(1L, 0);
+        var requests = List.of(new OrdreCritereRequest(1L, 0));
         BadRequestException ex = assertThrows(
                 BadRequestException.class,
-                () -> service.reorder(List.of(request))
+                () -> service.reorder(requests)
         );
 
         assertEquals(
