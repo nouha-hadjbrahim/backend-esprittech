@@ -102,7 +102,7 @@ public class IndustrialisationScoreService {
                 critereScore.score(),
                 details,
                 elementsManquants,
-                recommendationMessage(decision, scoreFinal, blocages)
+                recommendationMessage(decision, blocages)
         );
     }
 
@@ -466,7 +466,6 @@ public class IndustrialisationScoreService {
     }
 
     private String recommendationMessage(DecisionRecommandeeIndustrialisation decision,
-                                         double scoreFinal,
                                          List<BlocageEliminatoireDto> blocages) {
         if (!blocages.isEmpty()) {
             return "Alerte eliminatoire non bloquante : " + blocages.size()

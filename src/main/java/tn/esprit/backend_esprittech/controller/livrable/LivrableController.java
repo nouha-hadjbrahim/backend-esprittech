@@ -104,7 +104,7 @@ public class LivrableController {
     @DeleteMapping("/api/admin/livrables/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteAdmin(@PathVariable Long id) {
-        livrableService.delete(id);
-        return ResponseEntity.noContent().build();
+        // Meme traitement que la route enseignant, restreinte ici aux administrateurs.
+        return delete(id);
     }
 }

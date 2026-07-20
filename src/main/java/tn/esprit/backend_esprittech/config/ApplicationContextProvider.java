@@ -12,6 +12,11 @@ public class ApplicationContextProvider implements ApplicationContextAware {
 
     @Override
     public void setApplicationContext(ApplicationContext context) throws BeansException {
+        storeContext(context);
+    }
+
+    /** Renseigne le contexte partage ; isole l'ecriture du champ statique hors de l'instance. */
+    private static synchronized void storeContext(ApplicationContext context) {
         applicationContext = context;
     }
 

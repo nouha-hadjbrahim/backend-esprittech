@@ -61,8 +61,8 @@ public class AdminIndustrialisationController {
 
     @DeleteMapping("/questions/{id}")
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
-        questionService.deactivate(id);
-        return ResponseEntity.noContent().build();
+        // Suppression = desactivation : on conserve les reponses deja saisies.
+        return deactivateQuestion(id);
     }
 
     @GetMapping

@@ -188,7 +188,8 @@ class ProjetCatalogueServiceTest {
             when(userService.getCurrentUser()).thenReturn(nonAffilie);
             when(userRepository.findById(2L)).thenReturn(Optional.of(nonAffilie));
 
-            assertThrows(ForbiddenException.class, () -> service.creerProjet(validRequest()));
+            var request = validRequest();
+            assertThrows(ForbiddenException.class, () -> service.creerProjet(request));
             verify(projetRepository, never()).save(any());
         }
 
@@ -220,7 +221,8 @@ class ProjetCatalogueServiceTest {
             stubCurrentEnseignantManaged();
             when(domaineRepository.findAllById(any())).thenReturn(List.of());
 
-            assertThrows(ResourceNotFoundException.class, () -> service.creerProjet(validRequest()));
+            var request = validRequest();
+            assertThrows(ResourceNotFoundException.class, () -> service.creerProjet(request));
             verify(projetRepository, never()).save(any());
         }
 
@@ -230,7 +232,8 @@ class ProjetCatalogueServiceTest {
             when(domaineRepository.findAllById(any())).thenReturn(List.of(domaine));
             when(technologieRepository.findAllById(any())).thenReturn(List.of());
 
-            assertThrows(ResourceNotFoundException.class, () -> service.creerProjet(validRequest()));
+            var request = validRequest();
+            assertThrows(ResourceNotFoundException.class, () -> service.creerProjet(request));
             verify(projetRepository, never()).save(any());
         }
 
@@ -240,7 +243,8 @@ class ProjetCatalogueServiceTest {
                     .id(3L).role(Role.ROLE_ETUDIANT).build();
             when(userService.getCurrentUser()).thenReturn(etudiant);
 
-            assertThrows(ForbiddenException.class, () -> service.creerProjet(validRequest()));
+            var request = validRequest();
+            assertThrows(ForbiddenException.class, () -> service.creerProjet(request));
         }
 
         @Test

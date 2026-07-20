@@ -538,7 +538,9 @@ class CandidatureServiceTest {
             var f = Candidature.class.getDeclaredField("id");
             f.setAccessible(true);
             f.set(c, id);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // Helper de test : l'id est optionnel, un echec de reflexion laisse simplement l'entite sans id.
+        }
         return c;
     }
 
@@ -547,7 +549,9 @@ class CandidatureServiceTest {
             var f = Affectation.class.getDeclaredField("id");
             f.setAccessible(true);
             f.set(a, id);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // Helper de test : l'id est optionnel, un echec de reflexion laisse simplement l'entite sans id.
+        }
         return a;
     }
 
