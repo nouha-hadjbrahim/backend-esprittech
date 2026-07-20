@@ -1,5 +1,6 @@
 package tn.esprit.backend_esprittech.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -46,11 +47,31 @@ public class SecurityConfig {
         this.corsConfigurationSource = corsConfigurationSource;
     }
 
+    /**
+     * Dépôt du jeton CSRF selon le pattern « double-submit cookie ».
+     *
+     * <p><strong>HttpOnly est volontairement désactivé.</strong> L'intercepteur Angular
+     * ({@code csrf.interceptor.ts}) lit le cookie {@code XSRF-TOKEN} via {@code document.cookie}
+     * pour le réémettre dans l'en-tête {@code X-XSRF-TOKEN}. Rendre ce cookie HttpOnly le
+     * rendrait illisible par le navigateur et désactiverait donc la protection CSRF.
+     *
+     * <p>Le risque reste borné : ce cookie ne transporte qu'un jeton anti-CSRF, jamais une
+     * identité ni un secret de session. Les jetons d'authentification sont déposés dans des
+     * cookies HttpOnly distincts (voir {@link AuthCookieFactory}), inaccessibles au JavaScript.
+     * Les attributs {@code Secure} et {@code SameSite} suivent la configuration des cookies
+     * d'authentification afin de rester cohérents entre les deux.
+     */
     @Bean
-    public CookieCsrfTokenRepository csrfTokenRepository() {
+    public CookieCsrfTokenRepository csrfTokenRepository(
+            @Value("${app.auth.cookie.secure:false}") boolean secure,
+            @Value("${app.auth.cookie.same-site:Strict}") String sameSite) {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         repository.setCookieName("XSRF-TOKEN");
         repository.setHeaderName("X-XSRF-TOKEN");
+        repository.setCookieCustomizer(cookie -> cookie
+                .secure(secure)
+                .sameSite(sameSite)
+                .path("/"));
         return repository;
     }
 
