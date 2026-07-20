@@ -1607,7 +1607,7 @@ public class EvaluationService {
         }
         LocalDateTime allowedAt = latest.getDateCalcul().plusSeconds(recalculationCooldownSeconds);
         if (allowedAt.isAfter(LocalDateTime.now())) {
-            long retryAfterSeconds = Math.max(1, java.time.Duration.between(LocalDateTime.now(), allowedAt).toSeconds());
+            long retryAfterSeconds = Math.max(1, secondsUntil(allowedAt));
             throw new BusinessConflictException(
                     "Une evaluation vient deja d'etre calculee. Reessayez dans " + retryAfterSeconds + " seconde(s)."
             );
@@ -1690,7 +1690,7 @@ public class EvaluationService {
         }
         LocalDateTime allowedAt = latest.getDateCalcul().plusSeconds(recalculationCooldownSeconds);
         if (allowedAt.isAfter(LocalDateTime.now())) {
-            long retryAfterSeconds = Math.max(1, java.time.Duration.between(LocalDateTime.now(), allowedAt).toSeconds());
+            long retryAfterSeconds = Math.max(1, secondsUntil(allowedAt));
             throw new BusinessConflictException(
                     "Une evaluation vient deja d'etre calculee. Reessayez dans " + retryAfterSeconds + " seconde(s)."
             );
@@ -1702,6 +1702,13 @@ public class EvaluationService {
             return;
         }
         throw new AccessDeniedException("Vous n'etes pas autorise a valider cette evaluation.");
+    }
+
+    private long secondsUntil(LocalDateTime allowedAt) {
+        return java.time.Duration.between(
+                java.time.Instant.now(),
+                allowedAt.atZone(java.time.ZoneId.systemDefault()).toInstant()
+        ).toSeconds();
     }
 
     private void ensureCanOverride(User current) {
