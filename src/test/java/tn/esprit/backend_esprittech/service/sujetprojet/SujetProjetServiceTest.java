@@ -10,6 +10,7 @@ import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetInvalidationReq
 import tn.esprit.backend_esprittech.dto.sujetprojet.request.SujetProjetRequest;
 import tn.esprit.backend_esprittech.dto.sujetprojet.response.SujetProjetResponse;
 import tn.esprit.backend_esprittech.entity.User;
+import tn.esprit.backend_esprittech.entity.candidature.Candidature;
 import tn.esprit.backend_esprittech.entity.equipe.EquipeRecherche;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
@@ -20,6 +21,7 @@ import tn.esprit.backend_esprittech.enums.TypeUtilisateur;
 import tn.esprit.backend_esprittech.mapper.sujetprojet.SujetProjetMapper;
 import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.candidature.AffectationRepository;
+import tn.esprit.backend_esprittech.repository.candidature.CandidatureRepository;
 import tn.esprit.backend_esprittech.repository.equipe.EquipeRechercheRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
@@ -45,6 +47,7 @@ class SujetProjetServiceTest {
     @Mock private SujetReferenceService referenceService;
     @Mock private EquipeRechercheRepository equipeRechercheRepository;
     @Mock private AffectationRepository affectationRepository;
+    @Mock private CandidatureRepository candidatureRepository;
     @Mock private ProjetCatalogueService projetCatalogueService;
     @Mock private NotificationService notificationService;
 
@@ -79,6 +82,8 @@ class SujetProjetServiceTest {
         when(userRepository.findById(10L)).thenReturn(Optional.of(enseignant));
         when(userRepository.findAllById(any())).thenReturn(List.of(enseignant));
         when(affectationRepository.countBySujetIdAndStatut(anyLong(), any())).thenReturn(0L);
+        when(candidatureRepository.findBySujetIdAndEtudiantId(anyLong(), anyLong())).thenReturn(Optional.empty());
+        when(affectationRepository.findBySujetIdAndEtudiantId(anyLong(), anyLong())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -171,6 +176,28 @@ class SujetProjetServiceTest {
         when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
 
         assertThrows(AccessDeniedException.class, () -> service.getSujetById(1L));
+    }
+
+    @Test
+    void getSujetById_studentWithCandidature_canAccessTerminatedSubject() {
+        User etudiant = User.builder().id(50L).nom("Etudiant").prenom("Ali")
+                .email("ali@esprit.tn")
+                .role(Role.ROLE_ETUDIANT).typeUtilisateur(TypeUtilisateur.ETUDIANT).build();
+        when(userService.getCurrentUser()).thenReturn(etudiant);
+
+        entity.setEncadrantId(10L);
+        entity.setStatut(StatutSujet.REALISATION_TERMINEE);
+        entity.setCatalogue(true);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(candidatureRepository.findBySujetIdAndEtudiantId(1L, 50L))
+                .thenReturn(Optional.of(Candidature.builder()
+                        .id(7L)
+                        .sujetId(1L)
+                        .etudiant(etudiant)
+                        .build()));
+        when(sujetProjetMapper.toResponse(entity, "Sami Ben Ali", "sami@esprit.tn", null, 0)).thenReturn(response);
+
+        assertEquals(response, service.getSujetById(1L));
     }
 
     @Test
