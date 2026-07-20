@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.backend_esprittech.annotation.Historise;
 import tn.esprit.backend_esprittech.dto.industrialisation.*;
+import tn.esprit.backend_esprittech.dto.livrable.CataloguePublicLivrableResponse;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.EvaluationResponse;
 import tn.esprit.backend_esprittech.dto.CritereEval.ResultatCritereResponse;
@@ -15,7 +16,6 @@ import tn.esprit.backend_esprittech.entity.CritereEval.ReponseEliminatoire;
 import tn.esprit.backend_esprittech.entity.CritereEval.TypeCritere;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.industrialisation.*;
-import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
 import tn.esprit.backend_esprittech.entity.projetcatalogue.ProjetCatalogue;
 import tn.esprit.backend_esprittech.entity.sujetprojet.SujetProjet;
 import tn.esprit.backend_esprittech.entity.sujetprojet.enums.CategorieSujet;
@@ -32,12 +32,12 @@ import tn.esprit.backend_esprittech.repository.UserRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.CandidatureIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.QuestionIndustrialisationRepository;
 import tn.esprit.backend_esprittech.repository.industrialisation.ReponseIndustrialisationRepository;
-import tn.esprit.backend_esprittech.repository.livrable.LivrableCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRepository;
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 import tn.esprit.backend_esprittech.service.UserService;
 import tn.esprit.backend_esprittech.service.CritereEval.EvaluationService;
 import tn.esprit.backend_esprittech.service.historique.HistoriqueService;
+import tn.esprit.backend_esprittech.service.livrable.LivrableCatalogueService;
 import tn.esprit.backend_esprittech.service.livrable.LivrableService;
 import tn.esprit.backend_esprittech.service.notification.NotificationService;
 import tn.esprit.backend_esprittech.service.storage.MinioStorageService;
@@ -89,7 +89,7 @@ public class IndustrialisationService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final ProjetCatalogueRepository projetCatalogueRepository;
-    private final LivrableCatalogueRepository livrableCatalogueRepository;
+    private final LivrableCatalogueService livrableCatalogueService;
 
     @Historise(action = ActionType.CREATE, entityType = EntityType.CANDIDATURE_INDUSTRIALISATION, entityIdExpression = "#result.id()", newValuesExpression = "{'statut': #result.statut().name(), 'typeIndustrialisation': #result.typeIndustrialisation().name()}", metadataExpression = "{'typeIndustrialisation': #request.typeIndustrialisation().name()}", summaryExpression = "'Création demande industrialisation projet ' + @industrialisationService.getProjetTitreById(#projetId)")
     public CandidatureIndustrialisationResponse create(Long projetId, CandidatureIndustrialisationRequest request) {
@@ -257,7 +257,7 @@ public class IndustrialisationService {
             if (projet.getScoreFinalEvaluation() == null) {
                 throw new BusinessException("Le projet doit etre evalue avant soumission a la CI.");
             }
-            hasActiveLivrables = livrableService.hasActiveLivrables(projet.getId());
+            hasActiveLivrables = hasEffectiveLivrables(candidature);
 
             validateCompleteness(candidature);
             List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
@@ -274,7 +274,7 @@ public class IndustrialisationService {
         } else {
             ProjetCatalogue projet = candidature.getProjetCatalogue();
             projetTitre = projet.getTitre();
-            hasActiveLivrables = livrableCatalogueRepository.existsByProjetIdAndActifTrue(projet.getId());
+            hasActiveLivrables = hasEffectiveLivrables(candidature);
 
             validateCompleteness(candidature);
             List<BlocageEliminatoireDto> warnings = collectEliminatoryWarnings(candidature);
@@ -719,7 +719,7 @@ public class IndustrialisationService {
                     : candidature.getScoreEvaluationProjet();
             eligibleIndustrialisation = sujetProjet.getEligibleIndustrialisation();
             bloqueParEliminatoire = sujetProjet.getBloqueParEliminatoire();
-            livrables = includeDetails ? livrableService.findByProjet(sujetProjet.getId()) : List.of();
+            livrables = includeDetails ? findEffectiveLivrables(candidature) : List.of();
             latestEvaluation = includeDetails ? findLatestEvaluation(sujetProjet.getId()) : null;
         } else if (projetCatalogue != null) {
             projetId = projetCatalogue.getId();
@@ -749,12 +749,7 @@ public class IndustrialisationService {
             bloqueParEliminatoire = catalogueEvaluation != null
                     ? catalogueEvaluation.bloqueParEliminatoire()
                     : null;
-            livrables = includeDetails
-                    ? livrableCatalogueRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(projetCatalogue.getId())
-                        .stream()
-                        .map(this::toLivrableResponse)
-                        .toList()
-                    : List.of();
+            livrables = includeDetails ? findEffectiveLivrables(candidature) : List.of();
             latestEvaluation = catalogueEvaluation;
         } else {
             throw new BusinessException(
@@ -810,31 +805,67 @@ public class IndustrialisationService {
         return noms.sorted().collect(Collectors.joining(", "));
     }
 
-    private LivrableResponse toLivrableResponse(LivrableCatalogue livrable) {
-        User deposant = livrable.getDeposant();
+    private List<LivrableResponse> findEffectiveLivrables(CandidatureIndustrialisation candidature) {
+        ProjetCatalogue projetCatalogue = resolveProjetCatalogue(candidature);
+        if (projetCatalogue != null && StatutProjet.STATUTS_CATALOGUE.contains(projetCatalogue.getStatut())) {
+            return livrableCatalogueService.findPublishedForPublicCatalogue(projetCatalogue.getId())
+                    .stream()
+                    .map(this::toLivrableResponse)
+                    .toList();
+        }
+        SujetProjet sujetProjet = candidature.getSujetProjet();
+        if (sujetProjet != null) {
+            return livrableService.findByProjet(sujetProjet.getId());
+        }
+        return List.of();
+    }
+
+    private boolean hasEffectiveLivrables(CandidatureIndustrialisation candidature) {
+        ProjetCatalogue projetCatalogue = resolveProjetCatalogue(candidature);
+        if (projetCatalogue != null && StatutProjet.STATUTS_CATALOGUE.contains(projetCatalogue.getStatut())) {
+            return !livrableCatalogueService.findPublishedForPublicCatalogue(projetCatalogue.getId()).isEmpty();
+        }
+        SujetProjet sujetProjet = candidature.getSujetProjet();
+        return sujetProjet != null && livrableService.hasActiveLivrables(sujetProjet.getId());
+    }
+
+    private ProjetCatalogue resolveProjetCatalogue(CandidatureIndustrialisation candidature) {
+        if (candidature.getProjetCatalogue() != null) {
+            return candidature.getProjetCatalogue();
+        }
+        SujetProjet sujetProjet = candidature.getSujetProjet();
+        if (sujetProjet == null || sujetProjet.getId() == null) {
+            return null;
+        }
+        return projetCatalogueRepository.findBySujetId(sujetProjet.getId()).orElse(null);
+    }
+
+    private LivrableResponse toLivrableResponse(CataloguePublicLivrableResponse livrable) {
         return new LivrableResponse(
-                livrable.getId(),
-                livrable.getProjet().getId(),
-                livrable.getProjet().getTitre(),
-                livrable.getTypeLivrable(),
-                livrable.getNom(),
-                livrable.getDescription(),
-                livrable.getOriginalFileName(),
-                livrable.getObjectName(),
-                livrable.getContentType(),
-                livrable.getSize(),
-                livrable.getLienExterne(),
-                deposant.getId(),
-                deposant.getPrenom() + " " + deposant.getNom(),
-                livrable.getDateDepot(),
-                livrable.getActif()
+                livrable.id(),
+                null,
+                livrable.projetTitre(),
+                livrable.typeLivrable(),
+                livrable.nom(),
+                livrable.description(),
+                livrable.originalFileName(),
+                livrable.objectName(),
+                livrable.contentType(),
+                livrable.size(),
+                livrable.lienExterne(),
+                livrable.deposantId(),
+                livrable.deposantNom(),
+                livrable.dateDepot(),
+                livrable.actif(),
+                livrable.projetId(),
+                livrable.fromSujet()
         );
     }
 
     private List<String> collectSubmissionWarnings(List<LivrableResponse> livrables,
                                                    boolean includeDetails,
                                                    boolean forceMissingLivrablesWarning) {
-        if (forceMissingLivrablesWarning || (includeDetails && livrables.isEmpty())) {
+        if ((forceMissingLivrablesWarning || includeDetails) && livrables.isEmpty()) {
             return List.of(MISSING_LIVRABLE_WARNING);
         }
         return List.of();
