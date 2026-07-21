@@ -6,6 +6,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
+import tn.esprit.backend_esprittech.dto.livrable.LivrableLinkRequest;
+import tn.esprit.backend_esprittech.enums.Role;
+import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.entity.User;
 import tn.esprit.backend_esprittech.entity.livrable.Livrable;
 import tn.esprit.backend_esprittech.entity.livrable.LivrableCatalogue;
@@ -25,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -194,6 +200,120 @@ class LivrableCatalogueServiceTest {
 
         verify(storageService, never()).download(anyString());
         verifyNoCopyOrMetadataRewrite();
+    }
+
+    // ---- validateFile ----
+
+    @Test
+    void validateFile_nullOrEmpty_shouldReject() {
+        BusinessException empty = assertThrows(BusinessException.class,
+                () -> service.validateFile(new MockMultipartFile("f", "rapport.pdf", "application/pdf", new byte[0])));
+
+        assertEquals("Le fichier est obligatoire.", empty.getMessage());
+        assertEquals("Le fichier est obligatoire.",
+                assertThrows(BusinessException.class, () -> service.validateFile(null)).getMessage());
+    }
+
+    @Test
+    void validateFile_pathTraversalInName_shouldReject() {
+        var file = new MockMultipartFile("f", "../../etc/passwd.pdf", "application/pdf", "x".getBytes());
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.validateFile(file));
+
+        assertEquals("Nom de fichier invalide.", ex.getMessage());
+    }
+
+    @Test
+    void validateFile_disallowedExtension_shouldReject() {
+        var file = new MockMultipartFile("f", "script.exe", "application/pdf", "x".getBytes());
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.validateFile(file));
+
+        assertTrue(ex.getMessage().startsWith("Format non autorise."));
+    }
+
+    @Test
+    void validateFile_disallowedContentType_shouldReject() {
+        var file = new MockMultipartFile("f", "rapport.pdf", "application/x-msdownload", "x".getBytes());
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.validateFile(file));
+
+        assertEquals("Type MIME non autorise.", ex.getMessage());
+    }
+
+    @Test
+    void validateFile_allowedPdf_shouldPass() {
+        var file = new MockMultipartFile("f", "rapport.pdf", "application/pdf", "x".getBytes());
+
+        assertDoesNotThrow(() -> service.validateFile(file));
+    }
+
+    // ---- addLink : validation du lien externe ----
+
+    @Test
+    void addLink_nonHttpUrl_shouldReject() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        var request = new LivrableLinkRequest(TypeLivrable.DOCUMENTATION, "Depot Git", null, "ftp://serveur/depot");
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.addLink(100L, request));
+
+        assertEquals("Le lien externe doit etre une URL http(s) valide.", ex.getMessage());
+        verify(livrableRepository, never()).save(any());
+    }
+
+    @Test
+    void addLink_blankName_shouldReject() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        var request = new LivrableLinkRequest(TypeLivrable.DOCUMENTATION, "  ", null, "https://git.example.tn/depot");
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.addLink(100L, request));
+
+        assertEquals("Le nom du livrable est obligatoire.", ex.getMessage());
+        verify(livrableRepository, never()).save(any());
+    }
+
+    @Test
+    void addLink_validHttpsUrl_shouldPersistLink() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(livrableRepository.save(any(LivrableCatalogue.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        var request = new LivrableLinkRequest(
+                TypeLivrable.DOCUMENTATION, "Depot Git", "Sources", "https://git.example.tn/depot");
+
+        var response = service.addLink(100L, request);
+
+        assertEquals("Depot Git", response.nom());
+        assertEquals("https://git.example.tn/depot", response.lienExterne());
+        verify(livrableRepository).save(any(LivrableCatalogue.class));
+    }
+
+    // ---- Controle d'acces au depot ----
+
+    @Test
+    void addLink_studentRole_shouldBeDenied() {
+        deposant.setRole(Role.ROLE_ETUDIANT);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        var request = new LivrableLinkRequest(TypeLivrable.DOCUMENTATION, "Depot", null, "https://git.example.tn/d");
+
+        assertThrows(AccessDeniedException.class, () -> service.addLink(100L, request));
+        verify(livrableRepository, never()).save(any());
+    }
+
+    @Test
+    void addLink_unknownProject_shouldReportNotFound() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(999L)).thenReturn(Optional.empty());
+        var request = new LivrableLinkRequest(TypeLivrable.DOCUMENTATION, "Depot", null, "https://git.example.tn/d");
+
+        assertThrows(ResourceNotFoundException.class, () -> service.addLink(999L, request));
     }
 
     private Livrable sujetLivrable(Long id, String nom, String objectName, LocalDateTime dateDepot) {
