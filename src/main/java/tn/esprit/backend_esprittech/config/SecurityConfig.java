@@ -19,7 +19,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -88,12 +87,12 @@ public class SecurityConfig {
                         // establish the session, refresh/logout are guarded by the SameSite=Strict
                         // refresh-token cookie. Every authenticated /api/** mutation IS CSRF-checked.
                         .ignoringRequestMatchers(
-                                new AntPathRequestMatcher("/api/auth/login"),
-                                new AntPathRequestMatcher("/api/auth/register"),
-                                new AntPathRequestMatcher("/api/auth/register/verify"),
-                                new AntPathRequestMatcher("/api/auth/register/resend"),
-                                new AntPathRequestMatcher("/api/auth/refresh"),
-                                new AntPathRequestMatcher("/api/auth/logout")))
+                                "/api/auth/login",
+                                "/api/auth/register",
+                                "/api/auth/register/verify",
+                                "/api/auth/register/resend",
+                                "/api/auth/refresh",
+                                "/api/auth/logout"))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -123,8 +122,7 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         return provider;
     }

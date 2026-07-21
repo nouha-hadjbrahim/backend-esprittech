@@ -219,7 +219,9 @@ public class IndustrialisationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question industrialisation introuvable: " + questionId));
         livrableService.validateFile(file);
 
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename() == null ? "" : file.getOriginalFilename());
+        // getOriginalFilename() peut etre null selon le client HTTP ; on le capture une seule fois.
+        String rawFileName = file.getOriginalFilename();
+        String originalFileName = StringUtils.cleanPath(rawFileName != null ? rawFileName : "");
         String objectName = "industrialisation-preuves/" + candidatureId + "/" + questionId + "/"
                 + UUID.randomUUID() + "-" + originalFileName.replaceAll("[^A-Za-z0-9._-]", "_");
         MinioStorageService.StoredObject storedObject = storageService.upload(objectName, file);
