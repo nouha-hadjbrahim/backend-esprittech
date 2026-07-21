@@ -17,6 +17,11 @@ import tn.esprit.backend_esprittech.repository.critereeval.ResultatCritereReposi
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -143,6 +148,123 @@ class NoteLevelServiceTest {
 
         assertEquals("Ce niveau de note est deja utilise. Vous pouvez le desactiver au lieu de le supprimer.", ex.getMessage());
         verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void findAll_shouldReturnLevelsOrderedByIndex() {
+        when(repository.findAllByOrderByOrderIndexAsc())
+                .thenReturn(List.of(level(1L, 1, 1), level(2L, 5, 2)));
+
+        var levels = service.findAll();
+
+        assertEquals(2, levels.size());
+        assertEquals(1, levels.get(0).value());
+        assertEquals(5, levels.get(1).value());
+    }
+
+    @Test
+    void activeLabelsByValue_shouldIndexLabelsByValue() {
+        when(repository.findByActiveTrueOrderByOrderIndexAsc())
+                .thenReturn(List.of(level(1L, 1, 1), level(2L, 5, 2)));
+
+        var labels = service.activeLabelsByValue();
+
+        assertEquals("Niveau 1", labels.get(1));
+        assertEquals("Niveau 5", labels.get(5));
+    }
+
+    @Test
+    void maxActiveNoteValue_withoutActiveLevel_shouldThrowConflict() {
+        when(repository.findTopByActiveTrueOrderByValueDesc()).thenReturn(Optional.empty());
+
+        BusinessConflictException ex = assertThrows(BusinessConflictException.class,
+                () -> service.maxActiveNoteValue());
+
+        assertEquals(NoteLevelService.NO_ACTIVE_NOTE_LEVEL_MESSAGE, ex.getMessage());
+    }
+
+    @Test
+    void requireActiveValue_nullValue_shouldReportMandatoryField() {
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.requireActiveValue(null, "La note"));
+
+        assertEquals("La note est obligatoire.", ex.getMessage());
+    }
+
+    @Test
+    void requireActiveValue_belowOne_shouldReject() {
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.requireActiveValue(0, "La note"));
+
+        assertEquals("La note doit etre superieure ou egale a 1.", ex.getMessage());
+    }
+
+    @Test
+    void requireActiveValue_notAmongActiveLevels_shouldReject() {
+        when(repository.findByActiveTrueOrderByOrderIndexAsc()).thenReturn(List.of(level(1L, 1, 1)));
+        when(repository.findByValueAndActiveTrue(4)).thenReturn(Optional.empty());
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.requireActiveValue(4, "La note"));
+
+        assertEquals("La note doit correspondre a un niveau de note actif configure.", ex.getMessage());
+    }
+
+    @Test
+    void requireActiveValue_activeLevel_shouldPass() {
+        when(repository.findByActiveTrueOrderByOrderIndexAsc()).thenReturn(List.of(level(1L, 4, 1)));
+        when(repository.findByValueAndActiveTrue(4)).thenReturn(Optional.of(level(1L, 4, 1)));
+
+        assertDoesNotThrow(() -> service.requireActiveValue(4, "La note"));
+    }
+
+    @Test
+    void safeDefaultValue_configuredValueActive_shouldKeepIt() {
+        when(repository.findByActiveTrueOrderByOrderIndexAsc())
+                .thenReturn(List.of(level(1L, 1, 1), level(2L, 3, 2)));
+
+        assertEquals(3, service.safeDefaultValue(3, 1));
+    }
+
+    @Test
+    void safeDefaultValue_configuredInactive_shouldFallBackToPreferred() {
+        when(repository.findByActiveTrueOrderByOrderIndexAsc())
+                .thenReturn(List.of(level(1L, 1, 1), level(2L, 3, 2)));
+
+        assertEquals(1, service.safeDefaultValue(9, 1));
+    }
+
+    @Test
+    void safeDefaultValue_neitherAvailable_shouldFallBackToLowestActive() {
+        when(repository.findByActiveTrueOrderByOrderIndexAsc())
+                .thenReturn(List.of(level(1L, 2, 1), level(2L, 5, 2)));
+
+        assertEquals(2, service.safeDefaultValue(9, 7));
+    }
+
+    @Test
+    void labelFor_shouldUseConfiguredLabelThenFallback() {
+        when(repository.findByValue(3)).thenReturn(Optional.of(level(1L, 3, 1)));
+        assertEquals("Niveau 3", service.labelFor(3));
+
+        when(repository.findByValue(42)).thenReturn(Optional.empty());
+        assertEquals("Niveau 42", service.labelFor(42));
+
+        assertNull(service.labelFor(null));
+    }
+
+    @Test
+    void activateAndDeactivate_shouldPersistNewState() {
+        NoteLevel level = level(6L, 6, 6);
+        when(repository.findById(6L)).thenReturn(Optional.of(level));
+
+        service.deactivate(6L);
+        assertFalse(level.getActive());
+
+        service.activate(6L);
+        assertTrue(level.getActive());
+
+        verify(repository, times(2)).save(level);
     }
 
     private NoteLevel saved(NoteLevel level, Long id) {
