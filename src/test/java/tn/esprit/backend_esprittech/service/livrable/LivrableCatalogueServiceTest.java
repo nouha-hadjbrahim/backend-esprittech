@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.AccessDeniedException;
 import tn.esprit.backend_esprittech.dto.livrable.LivrableLinkRequest;
+import tn.esprit.backend_esprittech.dto.livrable.LivrableUpdateRequest;
 import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.exception.BusinessException;
 import tn.esprit.backend_esprittech.entity.User;
@@ -32,6 +33,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -315,6 +317,246 @@ class LivrableCatalogueServiceTest {
         var request = new LivrableLinkRequest(TypeLivrable.DOCUMENTATION, "Depot", null, "https://git.example.tn/d");
 
         assertThrows(ResourceNotFoundException.class, () -> service.addLink(999L, request));
+    }
+
+    // ---- upload ----
+
+    @Test
+    void upload_shouldStoreFileAndPersistMetadata() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(storageService.upload(anyString(), any()))
+                .thenReturn(new MinioStorageService.StoredObject("livrables-catalogue/100/x-rapport.pdf",
+                        "application/pdf", 42L));
+        when(livrableRepository.save(any(LivrableCatalogue.class))).thenAnswer(i -> i.getArgument(0));
+        var file = new MockMultipartFile("f", "rapport.pdf", "application/pdf", "contenu".getBytes());
+
+        var response = service.upload(100L, TypeLivrable.RAPPORT, " Rapport final ", " Version 1 ", file);
+
+        assertEquals("Rapport final", response.nom());
+        assertEquals("rapport.pdf", response.originalFileName());
+        assertEquals("livrables-catalogue/100/x-rapport.pdf", response.objectName());
+        assertEquals(42L, response.size());
+    }
+
+    @Test
+    void upload_blankName_shouldRejectBeforeStoring() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        var file = new MockMultipartFile("f", "rapport.pdf", "application/pdf", "x".getBytes());
+
+        assertThrows(BusinessException.class,
+                () -> service.upload(100L, TypeLivrable.RAPPORT, "  ", null, file));
+
+        verify(storageService, never()).upload(anyString(), any());
+    }
+
+    @Test
+    void upload_onUnvalidatedProject_shouldBeRejected() {
+        projet.setStatut(StatutProjet.SOUMIS_EN_VALIDATION);
+        deposant.setRole(Role.ROLE_ENSEIGNANT);
+        projet.setEncadrant(deposant);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        var file = new MockMultipartFile("f", "rapport.pdf", "application/pdf", "x".getBytes());
+
+        assertThrows(BusinessException.class,
+                () -> service.upload(100L, TypeLivrable.RAPPORT, "Rapport", null, file));
+    }
+
+    // ---- findByProjet / findById / hasActiveLivrables ----
+
+    @Test
+    void findByProjet_shouldPreferCatalogueDeliverables() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(100L))
+                .thenReturn(List.of(catalogueLivrable(20L, "Doc", "livrables-catalogue/100/doc.pdf",
+                        LocalDateTime.of(2026, 4, 1, 10, 0))));
+
+        var result = service.findByProjet(100L);
+
+        assertEquals(1, result.size());
+        assertEquals("Doc", result.get(0).nom());
+        verify(sujetLivrableRepository, never()).findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(any());
+    }
+
+    @Test
+    void findByProjet_withoutCatalogueDeliverables_shouldFallBackToSujet() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(100L)).thenReturn(List.of());
+        when(sujetLivrableRepository.findBySujetProjetIdAndActifTrueOrderByDateDepotDesc(42L))
+                .thenReturn(List.of(sujetLivrable(10L, "Rapport sujet", "livrables/42/rapport.pdf",
+                        LocalDateTime.of(2026, 3, 1, 10, 0))));
+
+        var result = service.findByProjet(100L);
+
+        assertEquals(1, result.size());
+        assertEquals(100L, result.get(0).projetId());
+    }
+
+    @Test
+    void findByProjet_withoutOriginSujet_shouldReturnEmptyList() {
+        projet.setSujetId(null);
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(livrableRepository.findByProjetIdAndActifTrueOrderByDateDepotDesc(100L)).thenReturn(List.of());
+
+        assertTrue(service.findByProjet(100L).isEmpty());
+    }
+
+    @Test
+    void findById_inactiveDeliverable_shouldReportNotFound() {
+        LivrableCatalogue inactif = catalogueLivrable(20L, "Doc", "obj", LocalDateTime.now());
+        inactif.setActif(false);
+        when(livrableRepository.findById(20L)).thenReturn(Optional.of(inactif));
+
+        assertThrows(ResourceNotFoundException.class, () -> service.findById(20L));
+    }
+
+    @Test
+    void hasActiveLivrables_shouldFallBackToOriginSujet() {
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(livrableRepository.existsByProjetIdAndActifTrue(100L)).thenReturn(false);
+        when(sujetLivrableRepository.existsBySujetProjetIdAndActifTrue(42L)).thenReturn(true);
+
+        assertTrue(service.hasActiveLivrables(100L));
+    }
+
+    @Test
+    void hasActiveLivrables_catalogueDeliverablePresent_shouldReturnTrueImmediately() {
+        when(projetRepository.findById(100L)).thenReturn(Optional.of(projet));
+        when(livrableRepository.existsByProjetIdAndActifTrue(100L)).thenReturn(true);
+
+        assertTrue(service.hasActiveLivrables(100L));
+        verify(sujetLivrableRepository, never()).existsBySujetProjetIdAndActifTrue(any());
+    }
+
+    // ---- update / delete ----
+
+    @Test
+    void update_shouldApplyNewValues() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        LivrableCatalogue existing = catalogueLivrable(20L, "Doc", "obj", LocalDateTime.now());
+        when(livrableRepository.findById(20L)).thenReturn(Optional.of(existing));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(livrableRepository.save(any(LivrableCatalogue.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.update(20L, new LivrableUpdateRequest(
+                TypeLivrable.DOCUMENTATION, " Doc revisee ", " Nouvelle version ",
+                "https://git.example.tn/depot", true));
+
+        assertEquals("Doc revisee", response.nom());
+        assertEquals("Nouvelle version", response.description());
+        assertEquals("https://git.example.tn/depot", response.lienExterne());
+    }
+
+    @Test
+    void update_invalidExternalLink_shouldReject() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        when(livrableRepository.findById(20L))
+                .thenReturn(Optional.of(catalogueLivrable(20L, "Doc", "obj", LocalDateTime.now())));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        var request = new LivrableUpdateRequest(TypeLivrable.DOCUMENTATION, "Doc", null, "ftp://x/y", true);
+
+        assertThrows(BusinessException.class, () -> service.update(20L, request));
+        verify(livrableRepository, never()).save(any());
+    }
+
+    @Test
+    void update_byUnrelatedTeacher_shouldBeDenied() {
+        deposant.setRole(Role.ROLE_ENSEIGNANT);
+        projet.setEncadrant(autreEnseignant());
+        when(livrableRepository.findById(20L))
+                .thenReturn(Optional.of(catalogueLivrable(20L, "Doc", "obj", LocalDateTime.now())));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        var request = new LivrableUpdateRequest(TypeLivrable.DOCUMENTATION, "Doc", null, null, true);
+
+        assertThrows(AccessDeniedException.class, () -> service.update(20L, request));
+    }
+
+    @Test
+    void delete_shouldSoftDeleteDeliverable() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        LivrableCatalogue existing = catalogueLivrable(20L, "Doc", "obj", LocalDateTime.now());
+        when(livrableRepository.findById(20L)).thenReturn(Optional.of(existing));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+
+        service.delete(20L);
+
+        assertFalse(existing.getActif());
+        verify(livrableRepository).save(existing);
+    }
+
+    // ---- download ----
+
+    @Test
+    void download_shouldReturnStoredFile() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        LivrableCatalogue existing = catalogueLivrable(20L, "Doc", "livrables-catalogue/100/doc.pdf",
+                LocalDateTime.now());
+        when(livrableRepository.findById(20L)).thenReturn(Optional.of(existing));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(storageService.download("livrables-catalogue/100/doc.pdf")).thenReturn(
+                new MinioStorageService.DownloadedObject(
+                        new ByteArrayInputStream("x".getBytes()), "application/pdf", 1L));
+
+        var download = service.download(20L);
+
+        assertEquals("doc.pdf", download.filename());
+        assertEquals("application/pdf", download.contentType());
+    }
+
+    @Test
+    void download_externalLink_shouldReject() {
+        deposant.setRole(Role.ROLE_ADMIN);
+        LivrableCatalogue lien = catalogueLivrable(20L, "Depot", null, LocalDateTime.now());
+        lien.setLienExterne("https://git.example.tn/depot");
+        when(livrableRepository.findById(20L)).thenReturn(Optional.of(lien));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.download(20L));
+
+        assertEquals("Ce livrable est un lien externe et ne contient pas de fichier.", ex.getMessage());
+        verify(storageService, never()).download(anyString());
+    }
+
+    @Test
+    void download_byStudentOnPublishedProject_shouldBeAllowed() {
+        deposant.setRole(Role.ROLE_ETUDIANT);
+        LivrableCatalogue existing = catalogueLivrable(20L, "Doc", "livrables-catalogue/100/doc.pdf",
+                LocalDateTime.now());
+        when(livrableRepository.findById(20L)).thenReturn(Optional.of(existing));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+        when(storageService.download("livrables-catalogue/100/doc.pdf")).thenReturn(
+                new MinioStorageService.DownloadedObject(
+                        new ByteArrayInputStream("x".getBytes()), "application/pdf", 1L));
+
+        assertNotNull(service.download(20L));
+    }
+
+    @Test
+    void findById_onUnpublishedProjectByStudent_shouldBeDenied() {
+        projet.setStatut(StatutProjet.SOUMIS_EN_VALIDATION);
+        deposant.setRole(Role.ROLE_ETUDIANT);
+        when(livrableRepository.findById(20L))
+                .thenReturn(Optional.of(catalogueLivrable(20L, "Doc", "obj", LocalDateTime.now())));
+        when(userService.getCurrentUser()).thenReturn(deposant);
+
+        assertThrows(AccessDeniedException.class, () -> service.findById(20L));
+    }
+
+    private User autreEnseignant() {
+        User autre = new User();
+        autre.setId(999L);
+        autre.setRole(Role.ROLE_ENSEIGNANT);
+        return autre;
     }
 
     private Livrable sujetLivrable(Long id, String nom, String objectName, LocalDateTime dateDepot) {
