@@ -206,8 +206,9 @@ class LivrableCatalogueServiceTest {
 
     @Test
     void validateFile_nullOrEmpty_shouldReject() {
+        var fichierVide = new MockMultipartFile("f", "rapport.pdf", "application/pdf", new byte[0]);
         BusinessException empty = assertThrows(BusinessException.class,
-                () -> service.validateFile(new MockMultipartFile("f", "rapport.pdf", "application/pdf", new byte[0])));
+                () -> service.validateFile(fichierVide));
 
         assertEquals("Le fichier est obligatoire.", empty.getMessage());
         assertEquals("Le fichier est obligatoire.",

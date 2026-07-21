@@ -38,6 +38,7 @@ import tn.esprit.backend_esprittech.enums.Role;
 import tn.esprit.backend_esprittech.enums.StatutProjet;
 import tn.esprit.backend_esprittech.enums.TypeProjet;
 import tn.esprit.backend_esprittech.exception.BusinessException;
+import tn.esprit.backend_esprittech.exception.critereeval.ResourceNotFoundException;
 import tn.esprit.backend_esprittech.exception.EvaluationPersistenceException;
 import tn.esprit.backend_esprittech.exception.critereeval.BadRequestException;
 import tn.esprit.backend_esprittech.repository.critereeval.CritereEliminatoireRepository;
@@ -59,6 +60,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -805,6 +807,151 @@ class EvaluationServiceTest {
                 evidenceNature,
                 List.of()
         );
+    }
+
+    // ---- Libelles utilises par l'historisation ----
+
+    @Test
+    void getProjetTitreById_shouldFallBackToInconnu() {
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        assertEquals("Plateforme IoT", evaluationService.getProjetTitreById(1L));
+
+        when(sujetProjetRepository.findById(404L)).thenReturn(Optional.empty());
+        assertEquals("Inconnu", evaluationService.getProjetTitreById(404L));
+    }
+
+    @Test
+    void getProjetCatalogueTitreById_shouldFallBackToInconnu() {
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        assertEquals("Projet catalogue IA", evaluationService.getProjetCatalogueTitreById(7L));
+
+        when(projetCatalogueRepository.findById(404L)).thenReturn(Optional.empty());
+        assertEquals("Inconnu", evaluationService.getProjetCatalogueTitreById(404L));
+    }
+
+    @Test
+    void getOldValues_shouldExposeValidationSnapshotOrEmptyMap() {
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(1L))
+                .thenReturn(Optional.empty());
+        assertTrue(evaluationService.getOldValues(1L).isEmpty());
+
+        Evaluation evaluation = savedEvaluation();
+        evaluation.setFinalValidatedScore(88.0);
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(2L))
+                .thenReturn(Optional.of(evaluation));
+
+        var values = evaluationService.getOldValues(2L);
+
+        assertEquals("PENDING", values.get("validationStatus"));
+        assertEquals(88.0, values.get("finalValidatedScore"));
+    }
+
+    // ---- Consultation des evaluations d'un sujet ----
+
+    @Test
+    void getLatestEvaluationByProjet_unknownProject_shouldReportNotFound() {
+        when(sujetProjetRepository.findById(404L)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> evaluationService.getLatestEvaluationByProjet(404L));
+
+        assertEquals("Projet introuvable avec id: 404", ex.getMessage());
+    }
+
+    @Test
+    void getLatestEvaluationByProjet_withoutEvaluation_shouldReportNotFound() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(1L))
+                .thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> evaluationService.getLatestEvaluationByProjet(1L));
+
+        assertTrue(ex.getMessage().startsWith("Aucune evaluation trouvee pour le projet id: "));
+    }
+
+    @Test
+    void getEvaluationHistoryByProjet_shouldReturnOrderedResponses() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(sujetProjetRepository.findById(1L)).thenReturn(Optional.of(projet));
+        when(evaluationRepository.findBySujetProjetIdOrderByDateCalculDescIdDesc(1L))
+                .thenReturn(List.of(savedEvaluation()));
+
+        var history = evaluationService.getEvaluationHistoryByProjet(1L);
+
+        assertEquals(1, history.size());
+    }
+
+    // ---- Consultation des evaluations d'un projet catalogue ----
+
+    @Test
+    void getEvaluationDetailByProjetCatalogue_unknownEvaluation_shouldReportNotFound() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findByIdAndProjetCatalogueId(404L, 7L)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> evaluationService.getEvaluationDetailByProjetCatalogue(7L, 404L));
+
+        assertTrue(ex.getMessage().contains("Evaluation introuvable avec id: 404"));
+    }
+
+    @Test
+    void getEvaluationDetailByProjetCatalogue_shouldReturnEvaluation() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findByIdAndProjetCatalogueId(80L, 7L))
+                .thenReturn(Optional.of(catalogueEvaluation(80L, LocalDateTime.now(), 74.0)));
+
+        var response = evaluationService.getEvaluationDetailByProjetCatalogue(7L, 80L);
+
+        assertEquals(80L, response.id());
+        assertEquals(74.0, response.scoreFinal());
+    }
+
+    @Test
+    void getEvaluationHistoryByProjetCatalogue_shouldReturnResponses() {
+        when(userService.getCurrentUser()).thenReturn(ci);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(List.of(catalogueEvaluation(80L, LocalDateTime.now(), 74.0)));
+
+        assertEquals(1, evaluationService.getEvaluationHistoryByProjetCatalogue(7L).size());
+    }
+
+    @Test
+    void getLatestEvaluationForPublishedCatalogue_unpublishedProject_shouldReportNotFound() {
+        catalogueProjet.setStatut(StatutProjet.SOUMIS_EN_VALIDATION);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> evaluationService.getLatestEvaluationForPublishedCatalogue(7L));
+
+        assertTrue(ex.getMessage().contains("Projet introuvable dans le catalogue"));
+    }
+
+    @Test
+    void getLatestEvaluationForPublishedCatalogue_shouldFallBackToOriginSujetEvaluation() {
+        catalogueProjet.setSujetId(1L);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findTopBySujetProjetIdOrderByDateCalculDescIdDesc(1L))
+                .thenReturn(Optional.of(savedEvaluation()));
+
+        assertNotNull(evaluationService.getLatestEvaluationForPublishedCatalogue(7L));
+    }
+
+    @Test
+    void getLatestEvaluationForPublishedCatalogue_withoutAnyEvaluation_shouldReportNotFound() {
+        catalogueProjet.setSujetId(null);
+        when(projetCatalogueRepository.findById(7L)).thenReturn(Optional.of(catalogueProjet));
+        when(evaluationRepository.findTopByProjetCatalogueIdOrderByDateCalculDescIdDesc(7L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> evaluationService.getLatestEvaluationForPublishedCatalogue(7L));
     }
 
     private Evaluation savedEvaluation() {
