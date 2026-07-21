@@ -21,7 +21,9 @@ import tn.esprit.backend_esprittech.repository.projetcatalogue.ProjetCatalogueRe
 import tn.esprit.backend_esprittech.repository.sujetprojet.SujetProjetRepository;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -283,7 +285,10 @@ public class DashboardService {
     }
 
     private String computeRelativeTime(LocalDateTime dateTime) {
-        Duration duration = Duration.between(dateTime, LocalDateTime.now());
+        Duration duration = Duration.between(
+                dateTime.atZone(ZoneId.systemDefault()).toInstant(),
+                Instant.now()
+        );
         long seconds = duration.getSeconds();
         if (seconds < 60) return "À l'instant";
         long minutes = seconds / 60;

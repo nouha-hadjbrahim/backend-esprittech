@@ -76,6 +76,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @SuppressWarnings("java:S4502")
     public SecurityFilterChain filterChain(HttpSecurity http, CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))

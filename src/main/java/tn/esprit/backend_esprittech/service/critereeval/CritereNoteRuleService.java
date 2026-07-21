@@ -75,14 +75,16 @@ public class CritereNoteRuleService {
         if (request.metadataKey() == null || request.metadataKey().isBlank()) {
             throw new BadRequestException("La cle metadata est obligatoire.");
         }
-        if (request.noteValue() < 1) {
+        RuleOperator operator = requirePresent(request.operator(), "L'operateur est obligatoire.");
+        Integer noteValue = requirePresent(request.noteValue(), "La note de regle est obligatoire.");
+        if (noteValue < 1) {
             throw new BadRequestException("La note de regle doit etre superieure ou egale a 1.");
         }
-        noteLevelService.requireActiveValue(request.noteValue(), "La note de regle");
-        if (request.priority() < 1) {
+        noteLevelService.requireActiveValue(noteValue, "La note de regle");
+        Integer priority = requirePresent(request.priority(), "La priorite est obligatoire.");
+        if (priority < 1) {
             throw new BadRequestException("La priorite doit etre superieure ou egale a 1.");
         }
-        RuleOperator operator = request.operator();
         if (operator == RuleOperator.BETWEEN
                 && (request.minValue() == null || request.maxValue() == null)) {
             throw new BadRequestException("Les valeurs min et max sont obligatoires pour BETWEEN.");
@@ -96,6 +98,13 @@ public class CritereNoteRuleService {
                 && (request.expectedValue() == null || request.expectedValue().isBlank())) {
             throw new BadRequestException("Une valeur numerique est obligatoire pour cet operateur.");
         }
+    }
+
+    private <T> T requirePresent(T value, String message) {
+        if (value == null) {
+            throw new BadRequestException(message);
+        }
+        return value;
     }
 
     private void ensureCritereExists(Long critereId) {
