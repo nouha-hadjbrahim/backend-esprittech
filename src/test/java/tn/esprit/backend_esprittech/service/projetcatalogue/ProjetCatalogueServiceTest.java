@@ -45,6 +45,7 @@ import tn.esprit.backend_esprittech.service.sujetprojet.SujetReferenceService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
@@ -607,6 +608,195 @@ class ProjetCatalogueServiceTest {
         assertEquals(42L, saved.getSujetId());
         assertEquals(StatutProjet.VALIDE, saved.getStatut());
         assertEquals(85, saved.getScore());
+    }
+
+    // ---- Image de couverture (applyCover / detectImageContentType) ----
+
+    @Test
+    void publierDepuisSujetTermine_pngCover_shouldBeStoredWithDetectedType() {
+        byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2};
+        ProjetCatalogue saved = publishWithCover(Base64.getEncoder().encodeToString(png), null);
+
+        assertEquals("image/png", saved.getCoverImageContentType());
+        assertArrayEquals(png, saved.getCoverImage());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_jpegCoverWithDataUriPrefix_shouldStripPrefix() {
+        byte[] jpeg = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 1, 2, 3};
+        String base64 = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(jpeg);
+
+        ProjetCatalogue saved = publishWithCover(base64, "image/jpeg; charset=utf-8");
+
+        assertEquals("image/jpeg", saved.getCoverImageContentType());
+        assertArrayEquals(jpeg, saved.getCoverImage());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_jpgAliasContentType_shouldBeNormalisedToJpeg() {
+        byte[] jpeg = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1};
+        ProjetCatalogue saved = publishWithCover(Base64.getEncoder().encodeToString(jpeg), "image/jpg");
+
+        assertEquals("image/jpeg", saved.getCoverImageContentType());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_coverWithWhitespace_shouldStillDecode() {
+        byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        String base64 = Base64.getEncoder().encodeToString(png);
+        ProjetCatalogue saved = publishWithCover(base64.substring(0, 4) + "\n " + base64.substring(4), null);
+
+        assertEquals("image/png", saved.getCoverImageContentType());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_blankCover_shouldLeaveNoImage() {
+        ProjetCatalogue saved = publishWithCover("   ", null);
+
+        assertNull(saved.getCoverImage());
+        assertNull(saved.getCoverImageContentType());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_emptyDecodedCover_shouldLeaveNoImage() {
+        ProjetCatalogue saved = publishWithCover(Base64.getEncoder().encodeToString(new byte[0]), null);
+
+        assertNull(saved.getCoverImage());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_invalidBase64_shouldReject() {
+        SujetProjet sujet = sujetPourPublication();
+        mockPublicationReferences();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.publierDepuisSujetTermine(sujet, "!!!pas-du-base64!!!", null));
+
+        assertEquals("Image de couverture invalide.", ex.getMessage());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_unknownImageFormat_shouldReject() {
+        SujetProjet sujet = sujetPourPublication();
+        mockPublicationReferences();
+        String gif = Base64.getEncoder().encodeToString(new byte[]{0x47, 0x49, 0x46, 0x38, 1, 2, 3, 4});
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.publierDepuisSujetTermine(sujet, gif, null));
+
+        assertTrue(ex.getMessage().startsWith("Format d'image non autorisé"));
+    }
+
+    // ---- Publication : cas limites ----
+
+    @Test
+    void publierDepuisSujetTermine_nullSujet_shouldReject() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.publierDepuisSujetTermine(null, null, null));
+
+        assertEquals("Sujet introuvable pour publication au catalogue.", ex.getMessage());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_alreadyPublished_shouldReturnExistingProject() {
+        SujetProjet sujet = sujetPourPublication();
+        when(projetRepository.existsBySujetId(42L)).thenReturn(true);
+        when(projetRepository.findBySujetId(42L)).thenReturn(Optional.of(projet));
+        when(mapper.toResponse(projet)).thenReturn(dummyResponse());
+
+        assertNotNull(service.publierDepuisSujetTermine(sujet, null, null));
+        verify(projetRepository, never()).save(any());
+    }
+
+    @Test
+    void publierDepuisSujetTermine_encadrantWithoutTeam_shouldBeForbidden() {
+        SujetProjet sujet = sujetPourPublication();
+        enseignant.setEquipeRecherche(null);
+        when(projetRepository.existsBySujetId(42L)).thenReturn(false);
+        when(userRepository.findById(enseignant.getId())).thenReturn(Optional.of(enseignant));
+        when(equipeRepository.findByChefId(enseignant.getId())).thenReturn(Optional.empty());
+
+        assertThrows(ForbiddenException.class,
+                () -> service.publierDepuisSujetTermine(sujet, null, null));
+    }
+
+    @Test
+    void publierDepuisSujetTermine_unknownEncadrant_shouldReportNotFound() {
+        SujetProjet sujet = sujetPourPublication();
+        when(projetRepository.existsBySujetId(42L)).thenReturn(false);
+        when(userRepository.findById(enseignant.getId())).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.publierDepuisSujetTermine(sujet, null, null));
+    }
+
+    // ---- mettreAJourScoreParSujetId ----
+
+    @Test
+    void mettreAJourScoreParSujetId_shouldClampNegativeScoreToZero() {
+        when(projetRepository.findBySujetId(42L)).thenReturn(Optional.of(projet));
+
+        service.mettreAJourScoreParSujetId(42L, -10);
+
+        assertEquals(0, projet.getScore());
+        verify(projetRepository).save(projet);
+    }
+
+    @Test
+    void mettreAJourScoreParSujetId_nullArguments_shouldDoNothing() {
+        service.mettreAJourScoreParSujetId(null, 50);
+        service.mettreAJourScoreParSujetId(42L, null);
+
+        verify(projetRepository, never()).findBySujetId(any());
+    }
+
+    private ProjetCatalogue publishWithCover(String base64, String contentType) {
+        SujetProjet sujet = sujetPourPublication();
+        mockPublicationReferences();
+        when(projetRepository.save(any(ProjetCatalogue.class))).thenAnswer(invocation -> {
+            ProjetCatalogue saved = invocation.getArgument(0);
+            saved.setId(100L);
+            return saved;
+        });
+        when(mapper.toResponse(any(ProjetCatalogue.class))).thenReturn(dummyResponse());
+
+        service.publierDepuisSujetTermine(sujet, base64, contentType);
+
+        ArgumentCaptor<ProjetCatalogue> captor = ArgumentCaptor.forClass(ProjetCatalogue.class);
+        verify(projetRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private void mockPublicationReferences() {
+        when(projetRepository.existsBySujetId(42L)).thenReturn(false);
+        when(userRepository.findById(enseignant.getId())).thenReturn(Optional.of(enseignant));
+        when(sujetReferenceService.findOrCreateDomaine("IA"))
+                .thenReturn(new ReferenceItemResponse(1L, "IA", null));
+        when(domaineRepository.findById(1L)).thenReturn(Optional.of(domaine));
+        when(sujetReferenceService.findOrCreateTechnologie("Spring Boot"))
+                .thenReturn(new ReferenceItemResponse(1L, "Spring Boot", null));
+        when(technologieRepository.findById(1L)).thenReturn(Optional.of(technologie));
+        when(sujetReferenceService.findOrCreatePrerequis("Java"))
+                .thenReturn(new ReferenceItemResponse(2L, "Java", null));
+        when(prerequisRepository.findById(2L))
+                .thenReturn(Optional.of(SujetPrerequis.builder().id(2L).nom("Java").build()));
+    }
+
+    private SujetProjet sujetPourPublication() {
+        SujetProjet sujet = new SujetProjet();
+        sujet.setId(42L);
+        sujet.setTitre("Sujet IA");
+        sujet.setCategorie(CategorieSujet.RDI);
+        sujet.setDescription("Description du sujet");
+        sujet.setObjectifs("Objectifs du sujet");
+        sujet.setDomaine("IA");
+        sujet.setTechnologies("Spring Boot");
+        sujet.setPrerequis("Java");
+        sujet.setEncadrantId(enseignant.getId());
+        sujet.setDateDebutRealisation(LocalDateTime.of(2026, 1, 1, 9, 0));
+        sujet.setDateTerminaison(LocalDateTime.of(2026, 3, 1, 18, 0));
+        sujet.setScoreFinalEvaluation(84.6);
+        return sujet;
     }
 
     @Nested
