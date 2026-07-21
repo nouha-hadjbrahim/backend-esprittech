@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -220,6 +221,158 @@ class MlEvaluationClientTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void evaluate_whenDisabled_shouldRejectWithoutCallingEngine() {
+        MlEvaluationClient client = newClient("http://127.0.0.1:1", false);
+        var request = validRequest();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> client.evaluate(request));
+
+        assertEquals("Le moteur ML d'evaluation est desactive.", exception.getMessage());
+    }
+
+    @Test
+    void evaluate_withoutCriteria_shouldRejectBeforeAnyCall() {
+        MlEvaluationClient client = newClient("http://127.0.0.1:1", true);
+        var request = new MlEvaluationRequest(
+                7L, "corr", "2026-07", ENGINE_VERSION, "hash", "projet", "livrables",
+                new MlProjectContext(7L, "Titre", "Domaine", "Java", "RDI"),
+                List.of(), List.of(), List.of());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> client.evaluate(request));
+
+        assertEquals("La requete ML doit contenir au moins un critere.", exception.getMessage());
+    }
+
+    @Test
+    void evaluate_withNullProject_shouldReportInvalidRequest() {
+        MlEvaluationClient client = newClient("http://127.0.0.1:1", true);
+        var request = new MlEvaluationRequest(
+                7L, "corr", "2026-07", ENGINE_VERSION, "hash", "projet", "livrables",
+                null, List.of(), List.of(), List.of());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> client.evaluate(request));
+
+        assertEquals("La requete d'evaluation ML est invalide.", exception.getMessage());
+    }
+
+    @Test
+    void evaluate_retryableStatus_shouldRetryThenSucceed() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/v1/evaluations", exchange -> {
+            boolean first = attempts.incrementAndGet() == 1;
+            byte[] body = (first ? "{}" : validResponseJson()).getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+            exchange.sendResponseHeaders(first ? 503 : 200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+
+        try {
+            MlEvaluationClient client = newClientWithAttempts(
+                    "http://127.0.0.1:" + server.getAddress().getPort(), 2);
+
+            assertNotNull(client.evaluate(validRequest()));
+            assertEquals(2, attempts.get(), "le statut 503 doit declencher une seconde tentative");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void evaluate_retryableStatusExhausted_shouldReportUnavailable() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/v1/evaluations", exchange -> {
+            attempts.incrementAndGet();
+            byte[] body = "moteur indisponible".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(502, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+
+        try {
+            MlEvaluationClient client = newClientWithAttempts(
+                    "http://127.0.0.1:" + server.getAddress().getPort(), 2);
+            var request = validRequest();
+
+            BusinessException exception = assertThrows(BusinessException.class,
+                    () -> client.evaluate(request));
+
+            assertThat(exception.getMessage(), containsString("Evaluation ML indisponible: 502"));
+            assertEquals(2, attempts.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void evaluate_nonRetryableStatus_shouldFailOnFirstAttempt() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/v1/evaluations", exchange -> {
+            attempts.incrementAndGet();
+            byte[] body = "requete invalide".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(400, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+
+        try {
+            MlEvaluationClient client = newClientWithAttempts(
+                    "http://127.0.0.1:" + server.getAddress().getPort(), 3);
+            var request = validRequest();
+
+            assertThrows(BusinessException.class, () -> client.evaluate(request));
+            assertEquals(1, attempts.get(), "un statut non reessayable ne doit pas etre retente");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void evaluate_networkFailure_shouldReportUnavailableAfterRetries() {
+        // port ferme : provoque une IOException a chaque tentative
+        MlEvaluationClient client = newClientWithAttempts("http://127.0.0.1:1", 2);
+        var request = validRequest();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> client.evaluate(request));
+
+        assertThat(exception.getMessage(), containsString("Evaluation ML indisponible"));
+    }
+
+    @Test
+    void evaluate_baseUrlWithTrailingSlashes_shouldStillReachEngine() throws Exception {
+        AtomicReference<String> ignored = new AtomicReference<>();
+        HttpServer server = httpServer(ignored, ignored, ignored, ignored, ignored, 200, validResponseJson());
+        server.start();
+
+        try {
+            MlEvaluationClient client = newClient(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "///", true);
+
+            assertNotNull(client.evaluate(validRequest()));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private MlEvaluationClient newClientWithAttempts(String baseUrl, int maxAttempts) {
+        return new MlEvaluationClient(
+                objectMapper, baseUrl, true, 10, 300, maxAttempts, 0, 20_000_000, ENGINE_VERSION);
     }
 
     private MlEvaluationClient newClient(

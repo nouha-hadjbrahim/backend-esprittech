@@ -7,6 +7,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tn.esprit.backend_esprittech.dto.industrialisation.DecisionRecommandeeIndustrialisation;
+import tn.esprit.backend_esprittech.dto.industrialisation.IndustrialisationScoreResponse;
+import tn.esprit.backend_esprittech.dto.industrialisation.ScoreBreakdownDto;
 import tn.esprit.backend_esprittech.entity.critereeval.Evaluation;
 import tn.esprit.backend_esprittech.entity.critereeval.ModeEvaluation;
 import tn.esprit.backend_esprittech.entity.critereeval.ReponseEliminatoire;
@@ -33,6 +35,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -327,6 +330,138 @@ class IndustrialisationScoreServiceTest {
 
         assertEquals(66.0, score.scoreFinal());
         assertEquals(55L, score.projetId());
+    }
+
+    // ---- Questions eliminatoires du questionnaire ----
+
+    @Test
+    void calculate_eliminatoryQuestionAnsweredNo_shouldRaiseBlocageAndScoreZero() {
+        QuestionIndustrialisation question = eliminatoryQuestion(5L, true);
+        ReponseIndustrialisation reponse = response(question, false);
+        mockSujetBase(List.of(question), List.of(reponse), Optional.empty());
+
+        var score = service.calculate(11L);
+
+        assertTrue(score.hasEliminatoryWarnings());
+        var blocage = score.blocagesEliminatoires().get(0);
+        assertEquals("Question 5", blocage.libelle());
+        assertEquals("Reponse non conforme pour une question eliminatoire.", blocage.raison());
+        var detail = detailFor(score, "QUESTIONNAIRE_ELIMINATOIRE");
+        assertEquals("NOT_OK", detail.statut());
+        assertEquals(0.0, detail.score());
+    }
+
+    @Test
+    void calculate_eliminatoryQuestionMandatoryUnanswered_shouldReportMissingElement() {
+        QuestionIndustrialisation question = eliminatoryQuestion(6L, true);
+        mockSujetBase(List.of(question), List.of(), Optional.empty());
+
+        var score = service.calculate(11L);
+
+        assertEquals("Question eliminatoire obligatoire sans reponse.",
+                score.blocagesEliminatoires().get(0).raison());
+        assertTrue(score.elementsManquants().stream()
+                .anyMatch(item -> item.contains("Question 6")));
+        assertEquals("NOT_OK", detailFor(score, "QUESTIONNAIRE_ELIMINATOIRE").statut());
+    }
+
+    @Test
+    void calculate_eliminatoryQuestionAnsweredYes_shouldScoreFullWithoutBlocage() {
+        QuestionIndustrialisation question = eliminatoryQuestion(7L, true);
+        ReponseIndustrialisation reponse = response(question, true);
+        mockSujetBase(List.of(question), List.of(reponse), Optional.empty());
+
+        var score = service.calculate(11L);
+
+        assertFalse(score.hasEliminatoryWarnings());
+        var detail = detailFor(score, "QUESTIONNAIRE_ELIMINATOIRE");
+        assertEquals("OK", detail.statut());
+        assertEquals(100.0, detail.score());
+    }
+
+    @Test
+    void calculate_optionalEliminatoryQuestionUnanswered_shouldStayPending() {
+        QuestionIndustrialisation question = eliminatoryQuestion(8L, false);
+        mockSujetBase(List.of(question), List.of(), Optional.empty());
+
+        var score = service.calculate(11L);
+
+        assertFalse(score.hasEliminatoryWarnings());
+        var detail = detailFor(score, "QUESTIONNAIRE_ELIMINATOIRE");
+        assertEquals("EN_ATTENTE", detail.statut());
+        assertNull(detail.score());
+    }
+
+    // ---- Agregation des criteres notes de l'evaluation ----
+
+    @Test
+    void calculate_noteResultWithoutNormalizedScore_shouldFallBackToNoteValue() {
+        Evaluation evaluation = evaluationWithNote(80.0, sujet);
+        ResultatCritere result = evaluation.getResultats().get(0);
+        result.setNormalizedScore(null);
+        result.setNoteValue(4);
+        result.setBareme(5.0);
+        mockSujetBase(List.of(), List.of(), Optional.of(evaluation));
+
+        var score = service.calculate(11L);
+
+        // 4/5 ramene sur 100
+        assertEquals(80.0, score.scoreCriteresNotes());
+    }
+
+    @Test
+    void calculate_noteResultWithoutNoteValue_shouldFallBackToNoteObtenue() {
+        Evaluation evaluation = evaluationWithNote(60.0, sujet);
+        ResultatCritere result = evaluation.getResultats().get(0);
+        result.setNormalizedScore(null);
+        result.setNoteValue(null);
+        result.setNoteObtenue(3.0);
+        result.setBareme(5.0);
+        mockSujetBase(List.of(), List.of(), Optional.of(evaluation));
+
+        var score = service.calculate(11L);
+
+        assertEquals(60.0, score.scoreCriteresNotes());
+    }
+
+    @Test
+    void calculate_noteResultNotConfigured_shouldBeIgnoredAndUseGlobalScore() {
+        Evaluation evaluation = evaluationWithNote(70.0, sujet);
+        evaluation.getResultats().get(0).setRuleConfigured(false);
+        mockSujetBase(List.of(), List.of(), Optional.of(evaluation));
+
+        var score = service.calculate(11L);
+
+        assertEquals(70.0, score.scoreCriteresNotes());
+        assertEquals("SCORE_GLOBAL", detailFor(score, "CRITERES_NOTES").statut());
+    }
+
+    @Test
+    void calculate_noExploitableNoteAndNoGlobalScore_shouldReportNonApplicable() {
+        Evaluation evaluation = evaluationWithNote(0.0, sujet);
+        evaluation.setScoreFinal(null);
+        evaluation.getResultats().get(0).setRuleConfigured(false);
+        sujet.setScoreFinalEvaluation(null);
+        mockSujetBase(List.of(), List.of(), Optional.of(evaluation));
+
+        var score = service.calculate(11L);
+
+        assertEquals(0.0, score.scoreFinal());
+        assertEquals(DecisionRecommandeeIndustrialisation.NO_GO, score.decisionRecommandee());
+    }
+
+    private ScoreBreakdownDto detailFor(IndustrialisationScoreResponse score, String categorie) {
+        return score.detailsCalcul().stream()
+                .filter(detail -> categorie.equals(detail.composant()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Aucun detail pour la categorie " + categorie));
+    }
+
+    private QuestionIndustrialisation eliminatoryQuestion(Long id, boolean obligatoire) {
+        QuestionIndustrialisation question = question(id);
+        question.setTypeCritere(TypeCritere.ELIMINATOIRE);
+        question.setObligatoire(obligatoire);
+        return question;
     }
 
     private void mockSujetBase(List<QuestionIndustrialisation> questions,
