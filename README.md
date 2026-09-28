@@ -11,6 +11,7 @@ JWT (access + refresh) et gestion des **équipes de recherche** (chef désigné 
 - JWT via **jjwt 0.12.x** (access + refresh stateless)
 - Secrets dans `.env` (chargé par **spring-dotenv**) ou variables d'environnement — jamais en dur dans Java
 - Validation Jakarta, BCrypt, Lombok
+- Quality test - SonarQube
 - Documentation **OpenAPI / Swagger UI** (springdoc)
 - Import CSV via parsing natif (java.io, séparateur virgule, UTF-8)
 
